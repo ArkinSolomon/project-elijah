@@ -1,5 +1,6 @@
 #include "i2c_util.h"
 #include "pin_outs.h"
+#include "stdio.h"
 
 bool i2c_util::read_byte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int8_t &output)
 {
@@ -47,23 +48,16 @@ bool i2c_util::read_ushort(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, 
  */
 bool i2c_util::read_bytes(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint8_t output[], uint8_t len)
 {
-  uint8_t read_bytes = 0;
-  for (uint8_t offset = 0; offset < len; ++offset)
+  const int bytes_written = i2c_write_blocking(I2C_BUS, dev_addr, &reg_addr, 1, true);
+  if (bytes_written == PICO_ERROR_GENERIC)
   {
-    const uint8_t read_addr = reg_addr + offset;
-    const int bytes_written = i2c_write_blocking(I2C_BUS, dev_addr, &read_addr, 1, true);
-    if (bytes_written != 1)
-    {
-      return false;
-    }
+    return false;
+  }
 
-    const int bytes_read = i2c_read_blocking(I2C_BUS, dev_addr, output + offset, len, offset == len - 1);
-    if (bytes_read != 1)
-    {
-      return false;
-    }
-
-    ++read_bytes;
+  const int bytes_read = i2c_read_blocking(I2C_BUS, dev_addr, output, len, false);
+  if (bytes_read != len)
+  {
+    return false;
   }
 
   return true;

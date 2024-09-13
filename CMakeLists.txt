@@ -35,6 +35,9 @@ pico_sdk_init()
 file(GLOB elijah_SRC CONFIGURE_DEPENDS "src/*.h" "src/*.cpp")
 add_executable(elijah-payload ${elijah_SRC} )
 
+# file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
+# pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
+
 pico_set_program_name(elijah-payload "elijah-payload")
 pico_set_program_version(elijah-payload "0.1")
 
@@ -56,6 +59,7 @@ target_include_directories(elijah-payload PRIVATE
 target_link_libraries(elijah-payload 
         hardware_i2c
         hardware_adc
+        hardware_pio
         pico_multicore
         )
 

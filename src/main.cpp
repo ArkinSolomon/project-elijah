@@ -30,27 +30,23 @@ int main()
 
   adc_select_input(ONBOARD_TEMP_PIN);
 
-  bool status_ok = true;
+  multicore_launch_core1(core_1_main);
+  multicore_fifo_push_blocking(MC_FLAG_VALUE);
 
+  bool calib_recieved = false;
   bmp_180::CalibrationData bmp_180_calib_data;
-  if (!bmp_180::check_device_id() || !bmp_180::read_calibration_data(bmp_180_calib_data))
-  {
-    status_ok = false;
-  }
-
-  if (status_ok)
-  {
-    multicore_launch_core1(core_1_main);
-    multicore_fifo_push_blocking(MC_FLAG_VALUE);
-  }
-
   while (true)
   {
-    if (multicore_fifo_rvalid() && multicore_fifo_pop_blocking() == MC_FLAG_VALUE)
+    if (calib_recieved && multicore_fifo_rvalid() && multicore_fifo_pop_blocking() == MC_FLAG_VALUE)
     {
       power_led_on = true;
       gpio_put(POWER_PIN, power_led_on);
       break;
+    }
+
+    if (!calib_recieved)
+    {
+      calib_recieved = bmp_180::check_device_id() && bmp_180::read_calibration_data(bmp_180_calib_data);
     }
 
     gpio_put(POWER_PIN, power_led_on);
@@ -58,16 +54,34 @@ int main()
     sleep_ms(100);
   }
 
+  static const float pio_freq = 100;
+
   while (true)
   {
     // const float conversion_factor = 3.3f / 0x1000;
     // uint16_t adc_raw = adc_read();
     // float voltage = adc_raw * conversion_factor;
-    // float temp = 27 - (voltage - 0.706) / 0.001721;
-    // printf("Raw value: 0x%03x, voltage: %f V, temperature %f C\n", adc_raw, voltage, temp);
+    // float t = 27 - (voltage - 0.706) / 0.001721;
+    // printf("Raw value: 0x%03x, voltage: %f V, temperature %f C\n", adc_raw, voltage, t);
 
-    long temp, press;
-    bmp_180::read_press_temp(bmp_180::oss_setting::STANDARD, bmp_180_calib_data, temp, press);
-    printf("temp : %d press : %d\n", temp, press);
+    // bmp_180_calib_data.AC1 = 408;
+    // bmp_180_calib_data.AC2 = -72;
+    // bmp_180_calib_data.AC3 = -14383;
+    // bmp_180_calib_data.AC4 = 32741;
+    // bmp_180_calib_data.AC5 = 32757;
+    // bmp_180_calib_data.AC6 = 23153;
+    // bmp_180_calib_data.B1 = 6190;
+    // bmp_180_calib_data.B2 = 4;
+    // bmp_180_calib_data.MB = -32768;
+    // bmp_180_calib_data.MC = -8711;
+    // bmp_180_calib_data.MD = 2868;
+
+    int32_t press;
+    double temp, altitude;
+    bmp_180::read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, bmp_180_calib_data, temp, press, altitude);
+    //bmp_180::print_calib_data(bmp_180_calib_data);
+    double alt_ft = altitude * 3.2808;
+    double temp_f = temp * ((double) 9 / 5) + 32;
+    printf("temp (C): %.1f temp: (F): %.2f press (Pa): %d, altitude (m): %.3f altitude (ft): %.3f\n", temp, temp_f, press, altitude, alt_ft);
   }
 }

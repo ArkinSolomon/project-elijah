@@ -8,6 +8,9 @@
 namespace bmp_180
 {
 
+  // constexpr double SEA_LEVEL_PRESS = 101325;
+  constexpr double SEA_LEVEL_PRESS = 101896.43;
+
   namespace __reg_defs
   {
     // 2-byte registers
@@ -52,6 +55,9 @@ namespace bmp_180
 
   bool check_device_id();
   bool read_calibration_data(CalibrationData &calib_data);
-  bool read_press_temp(bmp_180::oss_setting oss_setting, const bmp_180::CalibrationData &calib_data, long &temperature, long &pressure);
+  bool read_press_temp_alt(oss_setting oss_setting, const CalibrationData &calib_data, double &temperature, int32_t &pressure, double &altitude);
   void soft_reset();
+  bool is_conversion_complete();
+
+  void print_calib_data(const CalibrationData &calib_data);
 }
