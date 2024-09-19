@@ -32,7 +32,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-file(GLOB elijah_SRC CONFIGURE_DEPENDS "src/*.h" "src/*.cpp")
+file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
 add_executable(elijah-payload ${elijah_SRC} )
 
 # file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")

@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include "hardware/i2c.h"
 #include "pico/float.h"
+#include <stdio.h>
 
-#include "pin_outs.h"
-#include "i2c_util.h"
+#include "../../pin_outs.h"
+#include "../i2c/i2c_util.h"
 #include "bmp_180.h"
 
 /**

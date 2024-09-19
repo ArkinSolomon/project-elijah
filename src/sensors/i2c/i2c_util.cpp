@@ -1,5 +1,5 @@
 #include "i2c_util.h"
-#include "pin_outs.h"
+#include "../../pin_outs.h"
 #include "stdio.h"
 
 bool i2c_util::read_byte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int8_t &output)

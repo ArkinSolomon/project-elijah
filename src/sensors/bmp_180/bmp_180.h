@@ -8,8 +8,7 @@
 namespace bmp_180
 {
 
-  // constexpr double SEA_LEVEL_PRESS = 101325;
-  constexpr double SEA_LEVEL_PRESS = 101896.43;
+  constexpr double SEA_LEVEL_PRESS = 101325;
 
   namespace __reg_defs
   {
