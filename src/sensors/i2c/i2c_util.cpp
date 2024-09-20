@@ -48,7 +48,8 @@ bool i2c_util::read_ushort(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, 
  */
 bool i2c_util::read_bytes(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint8_t output[], uint8_t len)
 {
-  const int bytes_written = i2c_write_blocking(I2C_BUS, dev_addr, &reg_addr, 1, true);
+
+  const int bytes_written = i2c_write_blocking_until(I2C_BUS, dev_addr, &reg_addr, 1, true,   get_absolute_time() + 1000);
   if (bytes_written == PICO_ERROR_GENERIC)
   {
     return false;

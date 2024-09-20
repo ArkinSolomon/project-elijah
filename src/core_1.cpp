@@ -21,10 +21,9 @@ void core_1_main()
 
   while (true)
   {
-    gpio_put(TEMP_LED_PIN, 1);
+    gpio_put(TEMP_LED_PIN, true);
     sleep_ms(200);
-    gpio_put(TEMP_LED_PIN, 0);
-
+    gpio_put(TEMP_LED_PIN, false);
     sleep_ms(800);
   }
 }

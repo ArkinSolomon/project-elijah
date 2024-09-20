@@ -32,10 +32,12 @@ pico_sdk_init()
 
 file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
 add_executable(elijah-payload ${elijah_SRC}
-        src/main.h)
+        src/main.h
+        src/status_manager.h
+        src/status_manager.cpp)
 
-# file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
-# pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
+file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
+pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
 
 pico_set_program_name(elijah-payload "elijah-payload")
 pico_set_program_version(elijah-payload "0.1")
@@ -48,7 +50,6 @@ pico_enable_stdio_usb(elijah-payload 1)
 target_link_libraries(elijah-payload
         pico_stdlib)
 
-# Add the standard include files to the build
 target_include_directories(elijah-payload PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
