@@ -1,18 +1,18 @@
 #include "i2c_util.h"
 #include "../../pin_outs.h"
-#include "stdio.h"
+#include <cstdio>
 
 bool i2c_util::read_byte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int8_t &output)
 {
   uint8_t read_byte;
-  const bool success = i2c_util::read_ubyte(i2c, dev_addr, reg_addr, read_byte);
+  const bool success = read_ubyte(i2c, dev_addr, reg_addr, read_byte);
   output = read_byte;
   return success;
 }
 
 bool i2c_util::read_ubyte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint8_t &output)
 {
-  return i2c_util::read_bytes(i2c, dev_addr, reg_addr, &output, 1);
+  return read_bytes(i2c, dev_addr, reg_addr, &output, 1);
 }
 
 bool i2c_util::read_short(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int16_t &output)
@@ -31,7 +31,7 @@ bool i2c_util::read_short(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, i
 bool i2c_util::read_ushort(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint16_t &output)
 {
   uint8_t read_data[2];
-  const bool success = i2c_util::read_bytes(i2c, dev_addr, reg_addr, read_data, 2);
+  const bool success = read_bytes(i2c, dev_addr, reg_addr, read_data, 2);
   if (!success)
   {
     return false;

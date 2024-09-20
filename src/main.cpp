@@ -34,22 +34,26 @@ int main()
   multicore_launch_core1(core_1_main);
   multicore_fifo_push_blocking(MC_FLAG_VALUE);
 
-  bool calib_recieved = false;
+  bool calib_received = false;
   bool clock_ready = false;
 
   bmp_180::CalibrationData bmp_180_calib_data{};
   while (true)
   {
-    if (clock_ready && calib_recieved && multicore_fifo_rvalid() && multicore_fifo_pop_blocking() == MC_FLAG_VALUE)
+    if (clock_ready && calib_received && multicore_fifo_rvalid() && multicore_fifo_pop_blocking() == MC_FLAG_VALUE)
     {
       power_led_on = true;
       gpio_put(POWER_PIN, power_led_on);
       break;
     }
 
-    if (!calib_recieved)
+    if (!calib_received)
     {
-      calib_recieved = bmp_180::check_device_id() && bmp_180::read_calibration_data(bmp_180_calib_data);
+      calib_received = bmp_180::check_device_id();// && read_calibration_data(bmp_180_calib_data);
+      if (!calib_received)
+      {
+        printf("FAULT: BMP 180\n");
+      }
     }
 
     if (!clock_ready)
@@ -57,8 +61,12 @@ int main()
       clock_ready = ds_1307::verify_clock();
       if (!clock_ready)
       {
-        clock_ready = ds_1307::set_clock(2024, ds_1307::month_of_year::SEPTEMBER, ds_1307::day_of_week::FRIDAY,
+        clock_ready = set_clock(2024, ds_1307::month_of_year::SEPTEMBER, ds_1307::day_of_week::FRIDAY,
                                          13, 5, 21, 30);
+        if (!clock_ready)
+        {
+          printf("FAULT: DS 1307\n");
+        }
       }
     }
 
@@ -89,13 +97,13 @@ int main()
 
     int32_t press;
     double temp, altitude;
-    bmp_180::read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, bmp_180_calib_data, temp, press, altitude);
+    read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, bmp_180_calib_data, temp, press, altitude);
     // bmp_180::print_calib_data(bmp_180_calib_data);
     const double alt_ft = altitude * 3.2808;
-    const double temp_f = temp * ((double)9 / 5) + 32;
+    const double temp_f = temp * (static_cast<double>(9) / 5) + 32;
 
     ds_1307::TimeInstance time_inst{};
-    ds_1307::get_time_instance(time_inst);
+    get_time_instance(time_inst);
 
     printf(
       "[%d/%d/%d %d:%d:%d] temp (C): %.1f temp: (F): %.2f press (Pa): %d, altitude (m): %.3f altitude (ft): %.3f\n",

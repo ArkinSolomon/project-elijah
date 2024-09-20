@@ -10,7 +10,7 @@ namespace bmp_180
 
   constexpr double SEA_LEVEL_PRESS = 101325;
 
-  namespace __reg_defs
+  namespace _reg_defs
   {
     // 2-byte registers
     constexpr uint8_t REG_CALIB_AC1 = 0xAA;

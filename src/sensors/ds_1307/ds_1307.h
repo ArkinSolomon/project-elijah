@@ -1,13 +1,13 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 #define DS_1307_ADDR 0b1101000
 
 namespace ds_1307
 {
 
-  namespace __reg_defs
+  namespace _reg_defs
   {
     constexpr uint8_t REG_SECONDS = 0x00;
     constexpr uint8_t REG_MINUTES = 0x01;
