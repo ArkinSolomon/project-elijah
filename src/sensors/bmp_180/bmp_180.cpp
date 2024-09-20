@@ -39,10 +39,10 @@ bool bmp_180::read_calibration_data(CalibrationData& calib_data)
  * Read true temperature and true pressure.
  *
  * Has about a 9-30ms delay. Returns false if read fails. See datasheet for
- * implementation details. Temperature is in celsius, pressure is in pascals.
+ * implementation details. Temperature is in Celsius, pressure is in pascals.
  * Altitude is in meters.
  */
-bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData& calib_data, double& temperature,
+bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, const CalibrationData& calib_data, double& temperature,
                                   int32_t& pressure, double& altitude)
 {
   uint8_t write_data[2] = {_reg_defs::REG_CTRL_MEAS, 0x2E};
