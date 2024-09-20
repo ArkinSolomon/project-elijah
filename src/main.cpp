@@ -14,7 +14,6 @@
 int main()
 {
   pin_init();
-  sleep_ms(5000);
   status_manager::status_manager_pio_init();
   launch_core_1();
 
