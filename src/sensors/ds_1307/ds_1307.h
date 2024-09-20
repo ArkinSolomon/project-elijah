@@ -35,7 +35,7 @@ namespace ds_1307
   {
     MONTH_NOT_SET = 0,
     JANUARY = 1,
-    FEBURARY = 2,
+    FEBRUARY = 2,
     MARCH = 3,
     APRIL = 4,
     MAY = 5,
@@ -59,7 +59,8 @@ namespace ds_1307
     day_of_week day;
   };
 
-  bool verify_clock();
+  bool check_clock(bool& clock_set);
   bool set_clock(uint16_t year, month_of_year month, day_of_week day, uint8_t date, uint8_t hours, uint8_t minutes, uint8_t seconds);
   bool get_time_instance(TimeInstance &time_inst);
+  void load_blank_inst(TimeInstance &time_inst);
 }

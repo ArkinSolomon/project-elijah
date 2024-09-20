@@ -7,24 +7,26 @@
 #include "hardware/i2c.h"
 
 /**
- * Check if the clock is enabled and set.
+ * Check if the clock is detected,
  *
- * Returns false if the device is not detected, or if the clock needs to be set.
+ * Returns false if the device is not detected. Set is set to true if the clock is detected AND has been set.
  */
-bool ds_1307::verify_clock()
+bool ds_1307::check_clock(bool& clock_set)
 {
   uint8_t seconds_reg;
   const bool seconds_read_success = i2c_util::read_ubyte(I2C_BUS, DS_1307_ADDR, _reg_defs::REG_SECONDS,
                                                          seconds_reg);
   if (!seconds_read_success)
   {
+    clock_set = false;
     return false;
   }
 
   TimeInstance time_inst{};
   get_time_instance(time_inst);
 
-  return (seconds_reg & 0x80) == 0 && time_inst.year > 0;
+  clock_set = (seconds_reg & 0x80) == 0 && time_inst.year > 0;
+  return true;
 }
 
 /**
@@ -81,4 +83,18 @@ bool ds_1307::get_time_instance(TimeInstance& time_inst)
   time_inst.year = 2000 + (year >> 4) * 10 + (year & 0xF);
 
   return true;
+}
+
+/**
+ * Reset all values in the instance to 0.
+ */
+void ds_1307::load_blank_inst(TimeInstance& time_inst)
+{
+  time_inst.year = 0;
+  time_inst.month = MONTH_NOT_SET;
+  time_inst.date = 0;
+  time_inst.hours = 0;
+  time_inst.minutes = 0;
+  time_inst.seconds = 0;
+  time_inst.day = DAY_NOT_SET;
 }
