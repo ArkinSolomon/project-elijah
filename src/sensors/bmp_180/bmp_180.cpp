@@ -19,19 +19,19 @@ bool bmp_180::check_device_id()
 /**
  * Read the calibration data from the device.
  */
-bool bmp_180::read_calibration_data(CalibrationData &calib_data)
+bool bmp_180::read_calibration_data(CalibrationData& calib_data)
 {
   bool success = i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC1, calib_data.AC1) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC2, calib_data.AC2) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC3, calib_data.AC3) &&
-                 i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC4, calib_data.AC4) &&
-                 i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC5, calib_data.AC5) &&
-                 i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC6, calib_data.AC6) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B1, calib_data.B1) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B2, calib_data.B2) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MB, calib_data.MB) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MC, calib_data.MC) &&
-                 i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MD, calib_data.MD);
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC2, calib_data.AC2) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC3, calib_data.AC3) &&
+    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC4, calib_data.AC4) &&
+    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC5, calib_data.AC5) &&
+    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC6, calib_data.AC6) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B1, calib_data.B1) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B2, calib_data.B2) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MB, calib_data.MB) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MC, calib_data.MC) &&
+    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MD, calib_data.MD);
   return success;
 }
 
@@ -39,13 +39,14 @@ bool bmp_180::read_calibration_data(CalibrationData &calib_data)
  * Read true temperature and true pressure.
  *
  * Has about a 9-30ms delay. Returns false if read fails. See datasheet for
- * implementation details. Temperature is in celcius, pressure is in pascals.
+ * implementation details. Temperature is in celsius, pressure is in pascals.
  * Altitude is in meters.
  */
-bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData &calib_data, double &temperature, int32_t &pressure, double &altitude)
+bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData& calib_data, double& temperature,
+                                  int32_t& pressure, double& altitude)
 {
   uint8_t write_data[2] = {_reg_defs::REG_CTRL_MEAS, 0x2E};
-  bool success = i2c_write_blocking(I2C_BUS, BMP_180_ADDR, write_data, 2, true);
+  bool success = i2c_write_blocking(I2C_BUS, BMP_180_ADDR, write_data, 2, false);
   if (!success)
   {
     return false;
@@ -59,9 +60,9 @@ bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData
   {
     return false;
   }
-  int32_t uncompensated_temp = data;
+  const int32_t uncompensated_temp = data;
 
-  uint32_t sleep_time;
+  uint32_t sleep_time = 1000;
   switch (oss_setting)
   {
   case ULTRA_LOW:
@@ -79,10 +80,22 @@ bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData
   }
   sleep_us(sleep_time);
 
-  while (!is_conversion_complete())
+  bool is_complete;
+  do
   {
-    sleep_us(500);
+    success = is_conversion_complete(is_complete);
+
+    if (!success)
+    {
+      return false;
+    }
+
+    if (!is_complete)
+    {
+      sleep_us(100);
+    }
   }
+  while (!is_complete);
 
   uint8_t uncomp_press_raw[3];
   success = i2c_util::read_bytes(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_OUT_MSB, uncomp_press_raw, 3);
@@ -91,14 +104,17 @@ bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData
     return false;
   }
 
-  int32_t uncomp_press = ((uncomp_press_raw[0] << 16) + (uncomp_press_raw[1] << 8) + uncomp_press_raw[2]) >> (8 - oss_setting);
+  const int32_t uncomp_press = ((uncomp_press_raw[0] << 16) + (uncomp_press_raw[1] << 8) + uncomp_press_raw[2]) >> (8 -
+    oss_setting);
 
   int32_t x1 = (uncompensated_temp - calib_data.AC6) * calib_data.AC5 / 0x8000;
   int32_t x2 = calib_data.MC * 0x800 / (x1 + calib_data.MD);
   int32_t b5 = x1 + x2;
-  int32_t temperature_dc = (b5 + 8) / 0x10;       // in dC°
+  int32_t temperature_dc = (b5 + 8) / 0x10; // in dC°
   temperature = static_cast<double>(temperature_dc) / 10; // temperature to C°
 
+  // Because we operate so close to integer limits, we must be very careful not to go over the limit.
+  // ReSharper disable CppRedundantParentheses
   int32_t b6 = b5 - 4000;
   x1 = (calib_data.B2 * (b6 * b6 / 0x1000)) / 0x800;
   x2 = calib_data.AC2 * b6 / 0x800;
@@ -114,6 +130,7 @@ bool bmp_180::read_press_temp_alt(oss_setting oss_setting, const CalibrationData
   x1 = (x1 * 3038) / 0x10000;
   x2 = (-7357 * pressure) / 0x10000;
   pressure = pressure + (x1 + x2 + 3791) / 0x10; // pressure in pA
+  // ReSharper restore CppRedundantParentheses
 
   altitude = static_cast<double>(44330) * (1 - pow(pressure / SEA_LEVEL_PRESS, 1.0 / 5.255));
 
@@ -129,22 +146,30 @@ void bmp_180::soft_reset()
   i2c_write_blocking(I2C_BUS, BMP_180_ADDR, data, 2, false);
 }
 
-bool bmp_180::is_conversion_complete()
+/**
+ * Check if conversion is complete. Note that the return value IS NOT indicative of a complete conversion.
+ *
+ * @param is_complete The output to determine if conversion is complete.
+ * @return True if the device was read from successfully.
+ */
+bool bmp_180::is_conversion_complete(bool& is_complete)
 {
   uint8_t ctrl;
   const bool success = i2c_util::read_ubyte(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CTRL_MEAS, ctrl);
   if (!success)
   {
+    is_complete = false;
     return false;
   }
 
-  return (ctrl & 0x20) == 0;
+  is_complete = (ctrl & 0x20) == 0;
+  return true;
 }
 
 /**
  * Print calibration data out.
  */
-void bmp_180::print_calib_data(const CalibrationData &calib_data)
+void bmp_180::print_calib_data(const CalibrationData& calib_data)
 {
   printf("--- Calibration Data ---\n");
   printf("AC1: %d\n", calib_data.AC1);

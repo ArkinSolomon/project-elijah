@@ -15,15 +15,15 @@ int main()
   pin_init();
   launch_core_1();
 
-  ds_1307::TimeInstance time_inst{};
-  int32_t press = 0;
-  double temp = 0, altitude = 0;
-  double alt_ft = 0, temp_f = 0;
+  CollectionData collection_data{{}};
 
   while (true)
   {
-    clock_loop(time_inst);
-    pressure_loop(press, temp, altitude, alt_ft, temp_f);
+    clock_loop(collection_data);
+    pressure_loop(collection_data);
+
+    const double alt_ft = collection_data.altitude * 3.2808;
+    const double temp_f = collection_data.temperature * (static_cast<double>(9) / 5) + 32;
 
     // const float conversion_factor = 3.3f / 0x1000;
     // uint16_t adc_raw = adc_read();
@@ -32,8 +32,9 @@ int main()
 
     printf(
       "[%02d/%02d/%04d %02d:%02d:%02d] temp (C): %.1f temp: (F): %.2f press (Pa): %d, altitude (m): %.3f altitude (ft): %.3f\n",
-      time_inst.month, time_inst.date, time_inst.year, time_inst.hours, time_inst.minutes, time_inst.seconds,
-      temp, temp_f, press, altitude, alt_ft);
+      collection_data.time_inst.month, collection_data.time_inst.date, collection_data.time_inst.year,
+      collection_data.time_inst.hours, collection_data.time_inst.minutes, collection_data.time_inst.seconds,
+      collection_data.temperature, temp_f, collection_data.pressure, collection_data.altitude, alt_ft);
   }
 }
 
@@ -59,7 +60,7 @@ void pin_init()
   adc_select_input(ONBOARD_TEMP_PIN);
 }
 
-void clock_loop(ds_1307::TimeInstance& time_inst)
+void clock_loop(CollectionData& collection_data)
 {
   static bool clock_detected = false, clock_set = false;
 
@@ -68,40 +69,49 @@ void clock_loop(ds_1307::TimeInstance& time_inst)
     clock_detected = ds_1307::check_clock(clock_set);
     if (!clock_detected)
     {
-      printf("FAULT DETECTED: DS 1307\n");
+      printf("Fault: DS 1307 [NO_DETECT]\n");
       return;
     }
 
     if (!clock_set)
     {
-      printf("Clock not set");
+      printf("Fault: DS 1307 [NOT_SET]");
       clock_detected = set_clock(2024, ds_1307::month_of_year::SEPTEMBER, ds_1307::day_of_week::FRIDAY,
                                  13, 5, 21, 30);
       if (!clock_detected)
       {
         clock_set = false;
-        printf("FAULT DETECTED: DS 1307\n");
+        printf("Fault: DS 1307 [NO_DETECT]\n");
       }
     }
 
     return;
   }
 
-  clock_detected = get_time_instance(time_inst);
+  clock_detected = get_time_instance(collection_data.time_inst);
   if (!clock_detected)
   {
-    load_blank_inst(time_inst);
+    load_blank_inst(collection_data.time_inst);
   }
 }
 
-void pressure_loop(int32_t& press, double& temp, double& altitude, double& alt_ft, double& temp_f)
+void pressure_loop(CollectionData& collection_data)
 {
   static bmp_180::CalibrationData bmp_180_calib_data{};
   static bool bmp_180_calib_received = false;
 
   if (!bmp_180_calib_received)
   {
-    bmp_180_calib_received = bmp_180::check_device_id() && read_calibration_data(bmp_180_calib_data);
+    const bool device_detected = bmp_180::check_device_id();
+
+    if (!device_detected || !read_calibration_data(bmp_180_calib_data))
+    {
+      printf("Fault: BMP 180 [ND_OR_RCD_FAIL]\n");
+      collection_data.pressure = -1;
+      collection_data.temperature = collection_data.altitude = -1;
+      bmp_180_calib_received = false;
+      return;
+    }
 
     // bmp_180_calib_data.AC1 = 408;
     // bmp_180_calib_data.AC2 = -72;
@@ -115,23 +125,17 @@ void pressure_loop(int32_t& press, double& temp, double& altitude, double& alt_f
     // bmp_180_calib_data.MC = -8711;
     // bmp_180_calib_data.MD = 2868;
 
-    printf("FAULT DETECTED: BMP 180\n");
-    press = -1;
-    temp = altitude = alt_ft = temp_f = -1;
-    return;
+    bmp_180_calib_received = true;
   }
 
-  const bool success = read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, bmp_180_calib_data, temp, press,
-                                           altitude);
+  const bool success = read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, bmp_180_calib_data,
+                                           collection_data.temperature, collection_data.pressure,
+                                           collection_data.altitude);
   if (!success)
   {
+    printf("Fault: BMP 180 [READ_FAIL]\n");
     bmp_180_calib_received = false;
-    press = 0;
-    temp = altitude = alt_ft = temp_f = 0;
-    printf("FAULT DETECTED: BMP 180\n");
-    return;
+    collection_data.pressure = -1;
+    collection_data.temperature = collection_data.altitude = -1;
   }
-
-  alt_ft = altitude * 3.2808;
-  temp_f = temp * (static_cast<double>(9) / 5) + 32;
 }
