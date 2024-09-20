@@ -94,7 +94,7 @@ void clock_loop(CollectionData& collection_data)
       if (!clock_detected)
       {
         clock_set = false;
-        printf("Fault: DS 1307 [NO_DETECT]\n");
+        printf("Fault: DS 1307 [NO_DETECT_AFTER_SET]\n");
         set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
       }
     }
