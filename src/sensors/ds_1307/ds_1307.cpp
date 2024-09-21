@@ -49,7 +49,7 @@ bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_w
     _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(day), date_data, month_data,
     year_data
   };
-  const bool success = i2c_write_blocking(I2C_BUS, DS_1307_ADDR, write_data, 8, false);
+  const bool success = i2c_write_blocking_until(I2C_BUS, DS_1307_ADDR, write_data, 8, false, delayed_by_ms(get_absolute_time(), 100));
 
   return success;
 }

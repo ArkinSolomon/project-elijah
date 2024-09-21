@@ -10,10 +10,12 @@
 #include "pico/stdlib.h"
 #include "sensors/bmp_180/bmp_180.h"
 #include "sensors/ds_1307/ds_1307.h"
+#include "sensors/i2c/i2c_util.h"
 
 int main()
 {
   pin_init();
+  sleep_ms(5000);
   status_manager::status_manager_pio_init();
   launch_core_1();
 
@@ -55,13 +57,7 @@ void pin_init()
 {
   stdio_init_all();
 
-  // i2c@400kHz
-  i2c_init(I2C_BUS, 400 * 1000);
-
-  gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
-  gpio_set_function(I2C_SCL_PIN, GPIO_FUNC_I2C);
-  gpio_pull_up(I2C_SDA_PIN);
-  gpio_pull_up(I2C_SCL_PIN);
+  i2c_util::i2c_init(I2C_BUS, I2C_SDA_PIN, I2C_SCL_PIN);
 
   gpio_init(TEMP_LED_PIN);
   gpio_set_dir(TEMP_LED_PIN, true);
@@ -86,7 +82,7 @@ void clock_loop(CollectionData& collection_data)
 
     if (!clock_set)
     {
-      printf("Fault: DS 1307 [NOT_SET]");
+      printf("Fault: DS 1307 [NOT_SET]\n");
       set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
       clock_detected = set_clock(2024, ds_1307::month_of_year::SEPTEMBER, ds_1307::day_of_week::FRIDAY,
                                  13, 5, 21, 30);

@@ -55,7 +55,7 @@ namespace bmp_180
   bool check_device_id();
   bool read_calibration_data(CalibrationData &calib_data);
   bool read_press_temp_alt(oss_setting oss_setting, const CalibrationData &calib_data, double &temperature, int32_t &pressure, double &altitude);
-  void soft_reset();
+  bool soft_reset();
   bool is_conversion_complete(bool& is_complete);
 
   void print_calib_data(const CalibrationData &calib_data);

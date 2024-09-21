@@ -7,6 +7,7 @@
 
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
+#include "sensors/i2c/i2c_util.h"
 
 void status_manager::status_manager_pio_init()
 {
@@ -67,9 +68,34 @@ status_manager::device_status status_manager::get_current_status()
 void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
 {
   const bool current_fault = faults[fault_id];
-  if (current_fault == fault_state)
+  const bool is_i2c_device = is_i2c_fault_id(fault_id);
+
+  if (!fault_state && is_i2c_device)
+  {
+    i2c_fault_detect_cycles = 0;
+    faults[_i2c_bus] = false;
+  }
+
+  if (current_fault == fault_state && !is_i2c_device)
   {
     return;
+  }
+  if (current_fault && is_i2c_device)
+  {
+    i2c_fault_detect_cycles++;
+  }
+
+  if (i2c_fault_detect_cycles >= I2C_MAX_CONSISTENT_FAILS)
+  {
+    i2c_fault_detect_cycles = I2C_MAX_CONSISTENT_FAILS;
+    if (check_i2c_bus_fault())
+    {
+      faults[_i2c_bus] = true;
+      set_status(check_faults());
+      printf("Fault: I2C Bus fail [I2C_BUS_FAIL]\n");
+      i2c_util::recover_i2c(I2C_BUS, I2C_SDA_PIN, I2C_SCL_PIN);
+      sleep_ms(1000);
+    }
   }
 
   faults[fault_id] = fault_state;
@@ -92,5 +118,35 @@ status_manager::device_status status_manager::check_faults()
     }
   }
   while (faults[++i] != END_OF_FAULT_LIST);
- return new_state;
+  return new_state;
+}
+
+bool status_manager::is_i2c_fault_id(fault_id id)
+{
+  size_t i = 0;
+  do
+  {
+    if (i2c_fault_ids[i] == id)
+    {
+      return true;
+    }
+  }
+  while (i2c_fault_ids[++i] != _end_of_device_list);
+  return false;
+}
+
+
+bool status_manager::check_i2c_bus_fault()
+{
+  size_t i = 0;
+
+  do
+  {
+    if (!faults[i2c_fault_ids[i]])
+    {
+      return false;
+    }
+  }
+  while (i2c_fault_ids[++i] != _end_of_device_list);
+  return true;
 }
