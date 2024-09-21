@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Initialise pico_sdk from installed location
@@ -34,7 +34,9 @@ file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
 add_executable(elijah-payload ${elijah_SRC}
         src/main.h
         src/status_manager.h
-        src/status_manager.cpp)
+        src/status_manager.cpp
+        src/usb_communication.h
+        src/usb_communication.cpp)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})

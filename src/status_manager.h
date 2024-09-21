@@ -31,7 +31,8 @@ namespace status_manager
     BOOTING = 0xFFFF0000,
     NORMAL = 0xFFFFFFFF,
     FAULT = 0xAAAAAAAA,
-    DONE = 0xF0000A00
+    DONE = 0xF0000A00,
+    USB = 0xFFFFFFB
   };
 
   inline device_status current_status = STATUS_NOT_SET;

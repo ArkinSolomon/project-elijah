@@ -3,7 +3,7 @@
 #define BMP_180_ADDR 0b1110111
 
 #define BMP_180_RESET_VALUE 0xB6
-#define BMP_180_DEVICEID 0x55
+#define BMP_180_DEVICE_ID 0x55
 
 namespace bmp_180
 {
@@ -34,7 +34,7 @@ namespace bmp_180
     constexpr uint8_t REG_OSS = 0xF4;
 
     constexpr uint8_t REG_SOFT_RESET = 0xE0;
-    constexpr uint8_t REG_DEVICEID = 0xD0;
+    constexpr uint8_t REG_DEVICE_ID = 0xD0;
   }
 
   struct CalibrationData
@@ -52,11 +52,13 @@ namespace bmp_180
     ULTRA_HIGH = 0x3
   };
 
+  inline CalibrationData bmp_180_calib_data{};
+
   bool check_device_id();
-  bool read_calibration_data(CalibrationData &calib_data);
-  bool read_press_temp_alt(oss_setting oss_setting, const CalibrationData &calib_data, double &temperature, int32_t &pressure, double &altitude);
+  bool read_calibration_data();
+  bool read_press_temp_alt(oss_setting oss_setting, double& temperature, int32_t& pressure, double& altitude);
   bool soft_reset();
   bool is_conversion_complete(bool& is_complete);
 
-  void print_calib_data(const CalibrationData &calib_data);
+  void send_calib_data();
 }

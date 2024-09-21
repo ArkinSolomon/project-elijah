@@ -63,4 +63,5 @@ namespace ds_1307
   bool set_clock(uint16_t year, month_of_year month, day_of_week day, uint8_t date, uint8_t hours, uint8_t minutes, uint8_t seconds);
   bool get_time_instance(TimeInstance &time_inst);
   void load_blank_inst(TimeInstance &time_inst);
+  void handle_time_set_packet(const uint8_t* packet_data);
 }

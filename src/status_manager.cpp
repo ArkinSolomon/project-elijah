@@ -1,17 +1,19 @@
 #include "status_manager.h"
 
 #include <cstdio>
+#include <format>
 #include <iostream>
 #include <hardware/clocks.h>
 #include <hardware/pio.h>
 
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
+#include "usb_communication.h"
 #include "sensors/i2c/i2c_util.h"
 
 void status_manager::status_manager_pio_init()
 {
-  static constexpr float pio_freq = 2000;
+  static constexpr float pio_freq = 10;
   const float div = static_cast<float>(clock_get_hz(clk_sys)) / pio_freq;
 
   const bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&status_led_controller_program, &pio, &sm,
@@ -23,7 +25,7 @@ void status_manager::status_manager_pio_init()
     gpio_set_dir(STATUS_LED_PIN, true);
     while (err_pattern_count <= 10)
     {
-      printf("Fault: PIO not started [NO_FREE]");
+      usb_communication::send_string("Fault: PIO not started [NO_FREE]");
       gpio_put(STATUS_LED_PIN, true);
       sleep_ms(500);
       gpio_put(STATUS_LED_PIN, false);
@@ -43,19 +45,14 @@ void status_manager::status_manager_pio_init()
   set_status(BOOTING);
 }
 
-void status_manager::set_status(device_status status)
+void status_manager::set_status(const device_status status)
 {
   if (current_status == status || current_status == DONE)
   {
     return;
   }
 
-  if (current_status == FAULT || current_status == NORMAL)
-  {
-    status = check_faults();
-  }
-
-  printf("Device status: %#010X\n", status);
+  usb_communication::send_string(std::format("Device status changed: {:x}", static_cast<uint32_t>(status)));
   current_status = status;
   pio_sm_put_blocking(pio, sm, status);
 }
@@ -91,8 +88,11 @@ void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
     if (check_i2c_bus_fault())
     {
       faults[_i2c_bus] = true;
-      set_status(check_faults());
-      printf("Fault: I2C Bus fail [I2C_BUS_FAIL]\n");
+      if (current_status == NORMAL)
+      {
+        set_status(FAULT);
+      }
+      usb_communication::send_string("Fault: I2C Bus fail [I2C_BUS_FAIL]");
       i2c_util::recover_i2c(I2C_BUS, I2C_SDA_PIN, I2C_SCL_PIN);
       sleep_ms(1000);
     }

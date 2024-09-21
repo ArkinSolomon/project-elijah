@@ -5,6 +5,8 @@
 #include "../i2c/i2c_util.h"
 #include "../../pin_outs.h"
 #include "hardware/i2c.h"
+#include "src/status_manager.h"
+#include "src/usb_communication.h"
 
 /**
  * Check if the clock is detected,
@@ -49,7 +51,8 @@ bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_w
     _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(day), date_data, month_data,
     year_data
   };
-  const bool success = i2c_write_blocking_until(I2C_BUS, DS_1307_ADDR, write_data, 8, false, delayed_by_ms(get_absolute_time(), 100));
+  const bool success = i2c_write_blocking_until(I2C_BUS, DS_1307_ADDR, write_data, 8, false,
+                                                delayed_by_ms(get_absolute_time(), 100));
 
   return success;
 }
@@ -97,4 +100,29 @@ void ds_1307::load_blank_inst(TimeInstance& time_inst)
   time_inst.minutes = 0;
   time_inst.seconds = 0;
   time_inst.day = DAY_NOT_SET;
+}
+
+void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
+{
+  const uint8_t seconds = packet_data[0];
+  const uint8_t minutes = packet_data[1];
+  const uint8_t hours = packet_data[2];
+  const auto day = static_cast<day_of_week>(packet_data[3]);
+  const uint8_t date = packet_data[4];
+  const auto month = static_cast<month_of_year>(packet_data[5]);
+  const uint16_t year = packet_data[6] << 8 | packet_data[7];
+
+  const bool clock_did_set = set_clock(year, month, day, date, hours, minutes, seconds);
+  if (!clock_did_set)
+  {
+    usb_communication::send_string("Fault: DS 1307 [SET_FAIL]");
+    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+    send_packet(usb_communication::TIME_SET_FAIL);
+  }
+  else
+  {
+    set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
+    send_packet(usb_communication::TIME_SET_SUCCESS);
+  }
+
 }

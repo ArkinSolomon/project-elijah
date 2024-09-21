@@ -1,4 +1,5 @@
 #pragma once
+#include "usb_communication.h"
 #include "sensors/ds_1307/ds_1307.h"
 
 struct CollectionData
