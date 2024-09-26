@@ -23,8 +23,6 @@ int main()
   status_manager::status_manager_pio_init();
   launch_core_1();
 
-  sleep_ms(5000);
-
   CollectionData collection_data{{}};
   while (true)
   {
@@ -35,7 +33,7 @@ int main()
     {
       if (status_manager::get_current_status() != status_manager::USB)
       {
-        usb_communication::send_string("Hello!");
+        usb_communication::say_hello();
       }
 
       set_status(status_manager::USB);

@@ -19,7 +19,7 @@ void usb_communication::init_usb_com()
 
 void usb_communication::scan_for_packets()
 {
-  char packet_type = 0xAA;
+  char packet_type = 0xFF;
   int num_read = stdio_get_until(&packet_type, 1, delayed_by_ms(get_absolute_time(), 100));
   if (num_read != 1)
   {
@@ -83,6 +83,9 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   case REQ_CALIBRATION_DATA:
     bmp_180::send_calib_data();
     break;
+  case HELLO:
+    say_hello();
+    break;
   default: ;
   }
 
@@ -111,4 +114,9 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
   memcpy(&serialized_data[20], &collection_data.altitude, sizeof(collection_data.altitude));
 
   send_packet(COLLECTION_DATA, serialized_data);
+}
+
+void usb_communication::say_hello()
+{
+  send_string("Hello, computer \u263a");
 }

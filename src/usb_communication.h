@@ -16,7 +16,8 @@ namespace usb_communication
     COLLECTION_DATA = 0x04,
     STRING = 0x05,
     REQ_CALIBRATION_DATA = 0x06,
-    CALIBRATION_DATA = 0x07
+    CALIBRATION_DATA = 0x07,
+    HELLO = 0x08
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -42,6 +43,9 @@ namespace usb_communication
     },
     {
       CALIBRATION_DATA, 23
+    },
+    {
+      HELLO, 0
     }
   };
 
@@ -53,4 +57,5 @@ namespace usb_communication
 
   void handle_usb_packet(packet_type_id packet_type_id, const uint8_t* packet_data);
   void send_collection_data(const CollectionData& collection_data);
+  void say_hello();
 }
