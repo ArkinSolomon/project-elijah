@@ -36,7 +36,9 @@ add_executable(elijah-payload ${elijah_SRC}
         src/status_manager.h
         src/status_manager.cpp
         src/usb_communication.h
-        src/usb_communication.cpp)
+        src/usb_communication.cpp
+        src/sensors/bmp_280/bmp_280.cpp
+        src/sensors/bmp_280/bmp_280.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})

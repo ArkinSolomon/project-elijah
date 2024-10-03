@@ -1,10 +1,12 @@
 #include "ds_1307.h"
 
 #include <cstdio>
+#include <format>
 
 #include "../i2c/i2c_util.h"
 #include "../../pin_outs.h"
 #include "hardware/i2c.h"
+#include "src/main.h"
 #include "src/status_manager.h"
 #include "src/usb_communication.h"
 
@@ -51,10 +53,10 @@ bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_w
     _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(day), date_data, month_data,
     year_data
   };
-  const bool success = i2c_write_blocking_until(I2C_BUS, DS_1307_ADDR, write_data, 8, false,
+  const int success = i2c_write_blocking_until(I2C_BUS, DS_1307_ADDR, write_data, 8, false,
                                                 delayed_by_ms(get_absolute_time(), 100));
 
-  return success;
+  return success == 8;
 }
 
 /**
@@ -82,7 +84,7 @@ bool ds_1307::get_time_instance(TimeInstance& time_inst)
   time_inst.hours = (hours >> 4 & 0x3) * 10 + (hours & 0xF);
   time_inst.date = (date >> 4 & 0x3) * 10 + (date & 0xF);
   time_inst.day = static_cast<day_of_week>(day);
-  time_inst.month = static_cast<month_of_year>(((month & 0x1) >> 4) * 10 + (month & 0xF));
+  time_inst.month = static_cast<month_of_year>(((month & 0x10) >> 4) * 10 + (month & 0xF));
   time_inst.year = 2000 + (year >> 4) * 10 + (year & 0xF);
 
   return true;
@@ -115,7 +117,7 @@ void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
   const bool clock_did_set = set_clock(year, month, day, date, hours, minutes, seconds);
   if (!clock_did_set)
   {
-    usb_communication::send_string("Fault: DS 1307 [SET_FAIL]");
+    usb_communication::send_string("Fault: DS 1307, failed to set clock");
     set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
     send_packet(usb_communication::TIME_SET_FAIL);
   }
@@ -124,5 +126,43 @@ void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
     set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
     send_packet(usb_communication::TIME_SET_SUCCESS);
   }
+}
 
+void ds_1307::clock_loop(CollectionData& collection_data)
+{
+  static bool clock_detected = false, clock_set = false;
+
+  if (!clock_detected || !clock_set)
+  {
+    clock_detected = check_clock(clock_set);
+    if (!clock_detected)
+    {
+      usb_communication::send_string("Fault: DS 1307, device not detected");
+      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+      return;
+    }
+
+    if (!clock_set)
+    {
+      usb_communication::send_string("Fault: DS 1307, clock not set");
+      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+
+      if (!clock_detected)
+      {
+        clock_set = false;
+        usb_communication::send_string("Fault: DS 1307, clock not detected after being set");
+        set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+      }
+      return;
+    }
+  }
+
+  clock_detected = get_time_instance(collection_data.time_inst);
+  if (!clock_detected)
+  {
+    load_blank_inst(collection_data.time_inst);
+    return;
+  }
+
+  set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
 }

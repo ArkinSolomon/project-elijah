@@ -16,8 +16,9 @@ namespace usb_communication
     COLLECTION_DATA = 0x04,
     STRING = 0x05,
     REQ_CALIBRATION_DATA = 0x06,
-    CALIBRATION_DATA = 0x07,
-    HELLO = 0x08
+    CALIBRATION_DATA_BMP_180 = 0x07,
+    HELLO = 0x08,
+    CALIBRATION_DATA_BMP_280 = 0x09,
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -42,10 +43,13 @@ namespace usb_communication
       REQ_CALIBRATION_DATA, 0
     },
     {
-      CALIBRATION_DATA, 23
+      CALIBRATION_DATA_BMP_180, 23
     },
     {
       HELLO, 0
+    },
+    {
+      CALIBRATION_DATA_BMP_280, 26
     }
   };
 

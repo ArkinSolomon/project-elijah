@@ -10,6 +10,7 @@
 #include "main.h"
 #include "status_manager.h"
 #include "sensors/bmp_180/bmp_180.h"
+#include "sensors/bmp_280/bmp_280.h"
 #include "sensors/ds_1307/ds_1307.h"
 
 void usb_communication::init_usb_com()
@@ -64,6 +65,11 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
 
 void usb_communication::send_string(const std::string& str)
 {
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
   const uint16_t str_len = str.size();
   const uint8_t meta_data[3] = {
     STRING, static_cast<uint8_t>(str_len >> 8), static_cast<uint8_t>(str_len & 0xFF)
@@ -81,7 +87,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     ds_1307::handle_time_set_packet(packet_data);
     break;
   case REQ_CALIBRATION_DATA:
-    bmp_180::send_calib_data();
+    bmp_280::send_calibration_data();
     break;
   case HELLO:
     say_hello();

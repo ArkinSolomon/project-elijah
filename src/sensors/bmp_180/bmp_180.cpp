@@ -8,6 +8,8 @@
 
 #include <format>
 
+#include "src/main.h"
+#include "src/status_manager.h"
 #include "src/usb_communication.h"
 
 /**
@@ -51,7 +53,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
 {
   constexpr uint8_t write_data[2] = {_reg_defs::REG_CTRL_MEAS, 0x2E};
   bool success = i2c_write_blocking_until(I2C_BUS, BMP_180_ADDR, write_data, 2, false,
-                                          delayed_by_ms(get_absolute_time(), 100));
+                                          delayed_by_ms(get_absolute_time(), 100)) == 2;
   if (!success)
   {
     return false;
@@ -180,14 +182,14 @@ void bmp_180::send_calib_data()
 {
   uint8_t packet_data[23];
 
-  packet_data[0] = bmp_180_calib_data.AC1 >= 0 << 7 |
-    bmp_180_calib_data.AC2 >= 0 << 6 |
-    bmp_180_calib_data.AC3 >= 0 << 5 |
-    bmp_180_calib_data.B1 >= 0 << 4 |
-    bmp_180_calib_data.B2 >= 0 << 3 |
-    bmp_180_calib_data.MB >= 0 << 2 |
-    bmp_180_calib_data.MC >= 0 << 1 |
-    bmp_180_calib_data.MD >= 0;
+  packet_data[0] = (bmp_180_calib_data.AC1 < 0) << 7 |
+    (bmp_180_calib_data.AC2 < 0) << 6 |
+    (bmp_180_calib_data.AC3 < 0) << 5 |
+    (bmp_180_calib_data.B1 < 0) << 4 |
+    (bmp_180_calib_data.B2 < 0) << 3 |
+    (bmp_180_calib_data.MB < 0) << 2 |
+    (bmp_180_calib_data.MC < 0) << 1 |
+    bmp_180_calib_data.MD < 0;
 
   const uint16_t AC1 = abs(bmp_180_calib_data.AC1);
   const uint16_t AC2 = abs(bmp_180_calib_data.AC2);
@@ -221,5 +223,58 @@ void bmp_180::send_calib_data()
   packet_data[21] = MD >> 8;
   packet_data[22] = MD;
 
-  send_packet(usb_communication::CALIBRATION_DATA, packet_data);
+  send_packet(usb_communication::CALIBRATION_DATA_BMP_180, packet_data);
 }
+
+/**
+ * Loop function for the BMP 180.
+ *
+ * @param collection_data Where to put the data.
+ */
+void bmp_180::pressure_loop(CollectionData& collection_data)
+{
+  static bool bmp_180_calib_received = false;
+
+  if (!bmp_180_calib_received)
+  {
+    const bool device_detected = check_device_id();
+    if (!device_detected || !read_calibration_data())
+    {
+      usb_communication::send_string("Fault: BMP 180 [ND_OR_RCD_FAIL]");
+      set_fault(status_manager::fault_id::DEVICE_BMP_180, true);
+      collection_data.pressure = -1;
+      collection_data.temperature = collection_data.altitude = -1;
+      bmp_180_calib_received = false;
+      return;
+    }
+
+    // bmp_180_calib_data.AC1 = 408;
+    // bmp_180_calib_data.AC2 = -72;
+    // bmp_180_calib_data.AC3 = -14383;
+    // bmp_180_calib_data.AC4 = 32741;
+    // bmp_180_calib_data.AC5 = 32757;
+    // bmp_180_calib_data.AC6 = 23153;
+    // bmp_180_calib_data.B1 = 6190;
+    // bmp_180_calib_data.B2 = 4;
+    // bmp_180_calib_data.MB = -32768;
+    // bmp_180_calib_data.MC = -8711;
+    // bmp_180_calib_data.MD = 2868;
+
+    bmp_180_calib_received = true;
+  }
+
+  const bool success = read_press_temp_alt(ULTRA_HIGH, collection_data.temperature,
+                                           collection_data.pressure, collection_data.altitude);
+  if (!success)
+  {
+    usb_communication::send_string("Fault: BMP 180 [READ_FAIL]");
+    set_fault(status_manager::fault_id::DEVICE_BMP_180, true);
+    bmp_180_calib_received = false;
+    collection_data.pressure = -1;
+    collection_data.temperature = collection_data.altitude = -1;
+    return;
+  }
+
+  set_fault(status_manager::fault_id::DEVICE_BMP_180, false);
+}
+

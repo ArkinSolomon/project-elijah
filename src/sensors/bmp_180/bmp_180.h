@@ -5,9 +5,10 @@
 #define BMP_180_RESET_VALUE 0xB6
 #define BMP_180_DEVICE_ID 0x55
 
+struct CollectionData;
+
 namespace bmp_180
 {
-
   constexpr double SEA_LEVEL_PRESS = 101325;
 
   namespace _reg_defs
@@ -61,4 +62,5 @@ namespace bmp_180
   bool is_conversion_complete(bool& is_complete);
 
   void send_calib_data();
+  void pressure_loop(CollectionData & collection_data);
 }

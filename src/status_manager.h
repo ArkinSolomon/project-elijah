@@ -13,17 +13,18 @@ namespace status_manager
 
   inline uint8_t i2c_fault_detect_cycles = 0;
 
-  inline uint8_t faults[4] = {false, false, false, END_OF_FAULT_LIST};
+  inline uint8_t faults[5] = {false, false, false, false, END_OF_FAULT_LIST};
 
   enum fault_id
   {
     DEVICE_BMP_180 = 0,
     DEVICE_DS_1307 = 1,
     _i2c_bus = 2,
+    DEVICE_BMP_280 = 3,
     _end_of_device_list = END_OF_FAULT_LIST
   };
 
-  constexpr fault_id i2c_fault_ids[3] = {DEVICE_BMP_180, DEVICE_DS_1307, _end_of_device_list};
+  constexpr fault_id i2c_fault_ids[3] = {/*DEVICE_BMP_180,*/ DEVICE_DS_1307, DEVICE_BMP_280, _end_of_device_list};
 
   enum device_status
   {

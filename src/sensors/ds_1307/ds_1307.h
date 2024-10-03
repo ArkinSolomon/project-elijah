@@ -4,6 +4,8 @@
 
 #define DS_1307_ADDR 0b1101000
 
+struct CollectionData;
+
 namespace ds_1307
 {
 
@@ -64,4 +66,6 @@ namespace ds_1307
   bool get_time_instance(TimeInstance &time_inst);
   void load_blank_inst(TimeInstance &time_inst);
   void handle_time_set_packet(const uint8_t* packet_data);
+
+  void clock_loop(CollectionData& collection_data);
 }

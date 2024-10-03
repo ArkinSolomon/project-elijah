@@ -52,7 +52,7 @@ void status_manager::set_status(const device_status status)
     return;
   }
 
-  usb_communication::send_string(std::format("Device status changed: {:x}", static_cast<uint32_t>(status)));
+  usb_communication::send_string(std::format("Device status changed: 0x{:08x}", static_cast<uint32_t>(status)));
   current_status = status;
   pio_sm_put_blocking(pio, sm, status);
 }

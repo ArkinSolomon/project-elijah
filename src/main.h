@@ -11,5 +11,3 @@ struct CollectionData
 };
 
 void pin_init();
-void clock_loop(CollectionData& collection_data);
-void pressure_loop(CollectionData& collection_data);

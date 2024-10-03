@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <format>
 #include <hardware/clocks.h>
 
 #include "core_1.h"
@@ -11,7 +12,7 @@
 #include "hardware/adc.h"
 #include "hardware/i2c.h"
 #include "pico/stdlib.h"
-#include "sensors/bmp_180/bmp_180.h"
+#include "sensors/bmp_280/bmp_280.h"
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
 
@@ -26,8 +27,8 @@ int main()
   CollectionData collection_data{{}};
   while (true)
   {
-    clock_loop(collection_data);
-    pressure_loop(collection_data);
+    ds_1307::clock_loop(collection_data);
+    bmp_280::data_collection_loop(collection_data);
 
     if (stdio_usb_connected())
     {
@@ -71,91 +72,4 @@ void pin_init()
 
   adc_init();
   adc_select_input(ONBOARD_TEMP_PIN);
-}
-
-void clock_loop(CollectionData& collection_data)
-{
-  static bool clock_detected = false, clock_set = false;
-
-  if (!clock_detected || !clock_set)
-  {
-    clock_detected = ds_1307::check_clock(clock_set);
-    if (!clock_detected)
-    {
-      usb_communication::send_string("Fault: DS 1307 [NO_DETECT]");
-      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-      return;
-    }
-
-    if (!clock_set)
-    {
-      usb_communication::send_string("Fault: DS 1307 [NOT_SET]");
-      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-
-      if (!clock_detected)
-      {
-        clock_set = false;
-        usb_communication::send_string("Fault: DS 1307 [NO_DETECT_AFTER_SET]");
-        set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-      }
-      return;
-    }
-  }
-
-  clock_detected = get_time_instance(collection_data.time_inst);
-  if (!clock_detected)
-  {
-    load_blank_inst(collection_data.time_inst);
-    return;
-  }
-
-  set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
-}
-
-void pressure_loop(CollectionData& collection_data)
-{
-  static bool bmp_180_calib_received = false;
-
-  if (!bmp_180_calib_received)
-  {
-    const bool device_detected = bmp_180::check_device_id();
-    if (!device_detected || !bmp_180::read_calibration_data())
-    {
-      usb_communication::send_string("Fault: BMP 180 [ND_OR_RCD_FAIL]");
-      set_fault(status_manager::fault_id::DEVICE_BMP_180, true);
-      collection_data.pressure = -1;
-      collection_data.temperature = collection_data.altitude = -1;
-      bmp_180_calib_received = false;
-      return;
-    }
-
-    // bmp_180_calib_data.AC1 = 408;
-    // bmp_180_calib_data.AC2 = -72;
-    // bmp_180_calib_data.AC3 = -14383;
-    // bmp_180_calib_data.AC4 = 32741;
-    // bmp_180_calib_data.AC5 = 32757;
-    // bmp_180_calib_data.AC6 = 23153;
-    // bmp_180_calib_data.B1 = 6190;
-    // bmp_180_calib_data.B2 = 4;
-    // bmp_180_calib_data.MB = -32768;
-    // bmp_180_calib_data.MC = -8711;
-    // bmp_180_calib_data.MD = 2868;
-
-    bmp_180_calib_received = true;
-  }
-
-  const bool success = read_press_temp_alt(bmp_180::oss_setting::ULTRA_HIGH, collection_data.temperature,
-                                           collection_data.pressure, collection_data.altitude);
-  collection_data.temperature = 10.5;
-  if (!success)
-  {
-    usb_communication::send_string("Fault: BMP 180 [READ_FAIL]");
-    set_fault(status_manager::fault_id::DEVICE_BMP_180, true);
-    bmp_180_calib_received = false;
-    collection_data.pressure = -1;
-    collection_data.temperature = collection_data.altitude = -1;
-    return;
-  }
-
-  set_fault(status_manager::fault_id::DEVICE_BMP_180, false);
 }
