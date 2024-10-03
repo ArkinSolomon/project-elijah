@@ -38,7 +38,9 @@ add_executable(elijah-payload ${elijah_SRC}
         src/usb_communication.h
         src/usb_communication.cpp
         src/sensors/bmp_280/bmp_280.cpp
-        src/sensors/bmp_280/bmp_280.h)
+        src/sensors/bmp_280/bmp_280.h
+        src/sensors/hmc_5883l/hmc_5883l.cpp
+        src/sensors/hmc_5883l/hmc_5883l.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
@@ -61,7 +63,6 @@ target_include_directories(elijah-payload PRIVATE
 # Add any user requested libraries
 target_link_libraries(elijah-payload
         hardware_i2c
-        hardware_adc
         hardware_pio
         pico_multicore
 )

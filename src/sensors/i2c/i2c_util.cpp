@@ -2,6 +2,8 @@
 #include "../../pin_outs.h"
 #include <format>
 
+#include "src/usb_communication.h"
+
 void i2c_util::i2c_init(i2c_inst_t* i2c, const uint sda_pin, const uint scl_pin)
 {
   // i2c@400kHz
@@ -108,12 +110,15 @@ bool i2c_util::read_bytes(i2c_inst_t *i2c, const uint8_t dev_addr, const uint8_t
 {
 
   const int bytes_written = i2c_write_blocking_until(i2c, dev_addr, &reg_addr, 1, true, delayed_by_ms(get_absolute_time(), 100));
+  usb_communication::send_string(std::format("BYTES WRITTEN: {}", bytes_written));
   if (bytes_written != 1)
   {
     return false;
   }
 
   const int bytes_read = i2c_read_blocking_until(I2C_BUS, dev_addr, output, len, false, delayed_by_ms(get_absolute_time(), 100));
+  usb_communication::send_string(std::format("BYTES READ: {}", bytes_read));
+
   if (bytes_read != len)
   {
     return false;
