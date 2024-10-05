@@ -10,7 +10,7 @@
 bool hmc_5883l::check_device_id()
 {
   uint8_t read_data[3];
-  const bool success = i2c_util::read_bytes(I2C_BUS, 0x3D, _reg_defs::REG_IDENT_A,
+  const bool success = i2c_util::read_bytes(I2C_BUS0, 0x3D, _reg_defs::REG_IDENT_A,
                                             read_data, 3);
   if (!success)
   {
@@ -32,7 +32,7 @@ bool hmc_5883l::configure(samples_averaged samples_averaged, data_output_rate da
   const uint8_t mode_data = (isHighSpeedI2c ? 0x80 : 0x00) | static_cast<uint8_t>(operating_mode);
 
   const uint8_t write_data[4] = {_reg_defs::REG_CONFIG_A, config_a, config_b, mode_data};
-  const int success = i2c_write_blocking_until(I2C_BUS, HMC_5883L_ADDR, write_data, 4, false,
+  const int success = i2c_write_blocking_until(I2C_BUS0, HMC_5883L_ADDR, write_data, 4, false,
                                                delayed_by_ms(get_absolute_time(), 100));
 
   return success == 4;
@@ -43,7 +43,7 @@ void hmc_5883l::accel_loop(CollectionData& collection_data)
   static bool is_configured = false;
   if (!check_device_id())
   {
-    set_fault(status_manager::DEVICE_HMC5883L, true);
+    set_fault(status_manager::DEVICE_HMC_5883L, true);
     usb_communication::send_string("Fault: HMC 5883L, device not detected");
     return;
   }
@@ -56,17 +56,17 @@ void hmc_5883l::accel_loop(CollectionData& collection_data)
 
     if (!is_configured)
     {
-      set_fault(status_manager::DEVICE_HMC5883L, true);
+      set_fault(status_manager::DEVICE_HMC_5883L, true);
       usb_communication::send_string("Fault: HMC 5883L, unable to configure");
       return;
     }
   }
 
-  if (!gpio_get(HMC_5883L_RDY_PIN))
-  {
-    set_fault(status_manager::DEVICE_HMC5883L, false);
-    return;
-  }
+  // if (!gpio_get(HMC_5883L_RDY_PIN))
+  // {
+  //   set_fault(status_manager::DEVICE_HMC_5883L, false);
+  //   return;
+  // }
 
-  set_fault(status_manager::DEVICE_HMC5883L, false);
+  set_fault(status_manager::DEVICE_HMC_5883L, false);
 }

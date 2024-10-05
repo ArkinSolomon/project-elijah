@@ -21,6 +21,11 @@ namespace ds_1307
     constexpr uint8_t REG_CTRL = 0x07;
   }
 
+  enum class custom_register
+  {
+     SEA_LEVEL_PRESS = 0x08,
+  };
+
   enum day_of_week
   {
     DAY_NOT_SET = 0,
@@ -66,6 +71,11 @@ namespace ds_1307
   bool get_time_instance(TimeInstance &time_inst);
   void load_blank_inst(TimeInstance &time_inst);
   void handle_time_set_packet(const uint8_t* packet_data);
+
+  bool read_custom_register(custom_register addr, uint8_t* output, uint8_t size);
+  bool write_custom_register(custom_register addr, const uint8_t* data, uint8_t size);
+  void reg_dump();
+  void erase_data();
 
   void clock_loop(CollectionData& collection_data);
 }

@@ -10,8 +10,6 @@ struct CollectionData;
 
 namespace bmp_280
 {
-  constexpr double SEA_LEVEL_PRESS = 101325;
-
   namespace _reg_defs
   {
     // 2-byte registers
@@ -93,22 +91,30 @@ namespace bmp_280
 
   struct CalibrationData
   {
-    uint16_t dig_T1;
-    int16_t dig_T2, dig_T3;
-    uint16_t dig_P1;
-    int16_t dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
+    uint16_t dig_T1 = 0;
+    int16_t dig_T2 = -1 , dig_T3 = -1;
+    uint16_t dig_P1 = 0;
+    int16_t dig_P2 = -1, dig_P3 = -1, dig_P4 = -1, dig_P5 = -1, dig_P6 = -1, dig_P7 = -1, dig_P8 = -1, dig_P9 = -1;
+    double sea_level_pressure = 101325; // Pascals
   };
 
   inline CalibrationData bmp_280_calib_data{};
 
   bool check_chip_id();
   bool soft_reset();
+
+  bool update_sea_level_pressure();
+  bool update_sea_level_pressure(double pressure, bool write = true);
+  bool read_stored_sea_level_pressure(double& pressure);
+
   bool check_status(bool& measuring, bool& updating);
   bool change_settings(device_mode mode, standby_time_setting standby_time, filter_coefficient_setting filter_setting,
                        oss_setting_pressure pressure_oss, oss_setting_temperature temperature_oss);
   bool read_calibration_data();
   void send_calibration_data();
   bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude);
+
+
 
   void data_collection_loop(CollectionData& collection_data);
 }

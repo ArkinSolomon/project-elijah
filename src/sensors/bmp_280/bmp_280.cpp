@@ -4,10 +4,12 @@
 #include <ranges>
 #include <cmath>
 
+#include "src/byte_util.h"
 #include "src/main.h"
 #include "src/pin_outs.h"
 #include "src/status_manager.h"
 #include "src/usb_communication.h"
+#include "src/sensors/bmp_180/bmp_180.h"
 #include "src/sensors/i2c/i2c_util.h"
 
 /**
@@ -18,8 +20,7 @@
 bool bmp_280::check_chip_id()
 {
   uint8_t read_id;
-  const bool success = i2c_util::read_ubyte(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_CHIP_ID, read_id);
-  usb_communication::send_string(std::format("Chip ID: 0b{:08b}", read_id));
+  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_CHIP_ID, read_id);
   return success && read_id == BMP_280_CHIP_ID;
 }
 
@@ -31,7 +32,55 @@ bool bmp_280::check_chip_id()
 bool bmp_280::soft_reset()
 {
   constexpr uint8_t data[2] = {_reg_defs::REG_SOFT_RESET, BMP_280_RESET_VALUE};
-  return i2c_write_blocking_until(I2C_BUS, BMP_280_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
+  return i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
+}
+
+/**
+ * Update the sea level pressure stored in the DS1307 with the one stored in the calibration data.
+ *
+ * @return True if the pressure is updated successfully.
+ */
+bool bmp_280::update_sea_level_pressure()
+{
+  uint8_t encoded_press[8];
+  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, encoded_press);
+  return write_custom_register(ds_1307::custom_register::SEA_LEVEL_PRESS, encoded_press, 8);
+}
+
+/**
+ * Update the sea level pressure used for calculations in RAM and optionally in the DS 1307.
+ *
+ * @param pressure The pressure to set.
+ * @param write True if the DS 1307 should be written to.
+ * @return True if the pressure was stored successfully.
+ */
+bool bmp_280::update_sea_level_pressure(const double pressure, const bool write)
+{
+  bmp_280_calib_data.sea_level_pressure = pressure;
+  if (write)
+  {
+    return update_sea_level_pressure();
+  }
+  return true;
+}
+
+/**
+ * Read the stored pressure from the DS 1307.
+ *
+ * @param pressure The output to put the stored pressure.
+ * @return True if the pressure was read successfully.
+ */
+bool bmp_280::read_stored_sea_level_pressure(double& pressure)
+{
+  uint8_t read_pressure[8];
+  const bool success = read_custom_register(ds_1307::custom_register::SEA_LEVEL_PRESS, read_pressure, 8);
+  if (!success)
+  {
+    return false;
+  }
+
+  pressure = byte_util::decode_double(read_pressure);
+  return true;
 }
 
 /**
@@ -44,7 +93,7 @@ bool bmp_280::soft_reset()
 bool bmp_280::check_status(bool& measuring, bool& updating)
 {
   uint8_t read_status;
-  const bool success = i2c_util::read_ubyte(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_STATUS, read_status);
+  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_STATUS, read_status);
   if (!success)
   {
     return false;
@@ -63,7 +112,7 @@ bool bmp_280::change_settings(const device_mode mode, const standby_time_setting
   const uint8_t config_data = standby_time << 5 | filter_setting << 2;
 
   const uint8_t write_data[3] = {_reg_defs::REG_CTRL_MEAS, ctrl_meas, config_data};
-  const bool success = i2c_write_blocking_until(I2C_BUS, BMP_280_ADDR, write_data, 3, false,
+  const bool success = i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, write_data, 3, false,
                                                 delayed_by_ms(get_absolute_time(), 50)) == 3;
   return success;
 }
@@ -75,19 +124,19 @@ bool bmp_280::change_settings(const device_mode mode, const standby_time_setting
  */
 bool bmp_280::read_calibration_data()
 {
-  const bool success = i2c_util::read_ushort_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_T1,
+  const bool success = i2c_util::read_ushort_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_T1,
                                                       bmp_280_calib_data.dig_T1) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_T2, bmp_280_calib_data.dig_T2) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_T3, bmp_280_calib_data.dig_T3) &&
-    i2c_util::read_ushort_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P1, bmp_280_calib_data.dig_P1) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P2, bmp_280_calib_data.dig_P2) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P3, bmp_280_calib_data.dig_P3) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P4, bmp_280_calib_data.dig_P4) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P5, bmp_280_calib_data.dig_P5) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P6, bmp_280_calib_data.dig_P6) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P7, bmp_280_calib_data.dig_P7) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P8, bmp_280_calib_data.dig_P8) &&
-    i2c_util::read_short_reversed(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_DIG_P9, bmp_280_calib_data.dig_P9);
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_T2, bmp_280_calib_data.dig_T2) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_T3, bmp_280_calib_data.dig_T3) &&
+    i2c_util::read_ushort_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P1, bmp_280_calib_data.dig_P1) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P2, bmp_280_calib_data.dig_P2) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P3, bmp_280_calib_data.dig_P3) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P4, bmp_280_calib_data.dig_P4) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P5, bmp_280_calib_data.dig_P5) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P6, bmp_280_calib_data.dig_P6) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P7, bmp_280_calib_data.dig_P7) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P8, bmp_280_calib_data.dig_P8) &&
+    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P9, bmp_280_calib_data.dig_P9);
 
   // bmp_280_calib_data.dig_T1 = 27504;
   // bmp_280_calib_data.dig_T2 = 26435;
@@ -109,43 +158,21 @@ bool bmp_280::read_calibration_data()
  */
 void bmp_280::send_calibration_data()
 {
-  uint8_t packet_data[26];
+  uint8_t packet_data[34];
 
-  packet_data[0] = (bmp_280_calib_data.dig_T2 < 0) << 7 |
-    (bmp_280_calib_data.dig_T3 < 0) << 6 |
-    (bmp_280_calib_data.dig_P2 < 0) << 5 |
-    (bmp_280_calib_data.dig_P3 < 0) << 4 |
-    (bmp_280_calib_data.dig_P4 < 0) << 3 |
-    (bmp_280_calib_data.dig_P5 < 0) << 2 |
-    (bmp_280_calib_data.dig_P6 < 0) << 1 |
-    bmp_280_calib_data.dig_P7 < 0;
-
-  packet_data[1] = (bmp_280_calib_data.dig_P8 < 0) << 1 | bmp_280_calib_data.dig_P9 < 0;
-
-  packet_data[2] = (bmp_280_calib_data.dig_T1 & 0xFF00) >> 8;
-  packet_data[3] = bmp_280_calib_data.dig_T1 & 0xFF;
-  packet_data[4] = (abs(bmp_280_calib_data.dig_T2) & 0xFF00) >> 8;
-  packet_data[5] = abs(bmp_280_calib_data.dig_T2) & 0xFF;
-  packet_data[6] = (abs(bmp_280_calib_data.dig_T3) & 0xFF00) >> 8;
-  packet_data[7] = abs(bmp_280_calib_data.dig_T3) & 0xFF;
-  packet_data[8] = (bmp_280_calib_data.dig_P1 & 0xFF00) >> 8;
-  packet_data[9] = bmp_280_calib_data.dig_P1 & 0xFF;
-  packet_data[10] = (abs(bmp_280_calib_data.dig_P2) & 0xFF00) >> 8;
-  packet_data[11] = abs(bmp_280_calib_data.dig_P2) & 0xFF;
-  packet_data[12] = (abs(bmp_280_calib_data.dig_P3) & 0xFF00) >> 8;
-  packet_data[13] = abs(bmp_280_calib_data.dig_P3) & 0xFF;
-  packet_data[14] = (abs(bmp_280_calib_data.dig_P4) & 0xFF00) >> 8;
-  packet_data[15] = abs(bmp_280_calib_data.dig_P4) & 0xFF;
-  packet_data[16] = (abs(bmp_280_calib_data.dig_P5) & 0xFF00) >> 8;
-  packet_data[17] = abs(bmp_280_calib_data.dig_P5) & 0xFF;
-  packet_data[18] = (abs(bmp_280_calib_data.dig_P6) & 0xFF00) >> 8;
-  packet_data[19] = abs(bmp_280_calib_data.dig_P6) & 0xFF;
-  packet_data[20] = (abs(bmp_280_calib_data.dig_P7) & 0xFF00) >> 8;
-  packet_data[21] = abs(bmp_280_calib_data.dig_P7) & 0xFF;
-  packet_data[22] = (abs(bmp_280_calib_data.dig_P8) & 0xFF00) >> 8;
-  packet_data[23] = abs(bmp_280_calib_data.dig_P8) & 0xFF;
-  packet_data[24] = (abs(bmp_280_calib_data.dig_P9) & 0xFF00) >> 8;
-  packet_data[25] = abs(bmp_280_calib_data.dig_P9) & 0xFF;
+  byte_util::encode_uint16(bmp_280_calib_data.dig_T1, &packet_data[2]);
+  byte_util::encode_int16(bmp_280_calib_data.dig_T2, &packet_data[4], packet_data[0], 7);
+  byte_util::encode_int16(bmp_280_calib_data.dig_T3, &packet_data[6], packet_data[0], 6);
+  byte_util::encode_uint16(bmp_280_calib_data.dig_P1, &packet_data[8]);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P2, &packet_data[10], packet_data[0], 5);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P3, &packet_data[12], packet_data[0], 4);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P4, &packet_data[14], packet_data[0], 3);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P5, &packet_data[16], packet_data[0], 2);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P6, &packet_data[18], packet_data[0], 1);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P7, &packet_data[20], packet_data[0], 0);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P8, &packet_data[22], packet_data[1], 1);
+  byte_util::encode_int16(bmp_280_calib_data.dig_P9, &packet_data[24], packet_data[1], 0);
+  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, &packet_data[26]);
 
   send_packet(usb_communication::CALIBRATION_DATA_BMP_280, packet_data);
 }
@@ -179,7 +206,7 @@ bool bmp_280::read_press_temp_alt(int32_t& pressure, double& temperature, double
   }
 
   uint8_t raw_data[6];
-  success = i2c_util::read_bytes(I2C_BUS, BMP_280_ADDR, _reg_defs::REG_PRESS_MSB, raw_data, 6);
+  success = i2c_util::read_bytes(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_PRESS_MSB, raw_data, 6);
   if (!success)
   {
     return false;
@@ -196,7 +223,7 @@ bool bmp_280::read_press_temp_alt(int32_t& pressure, double& temperature, double
   const auto t_fine = static_cast<int32_t>(var1 + var2);
   temperature = (var1 + var2) / 5120.0;
 
-  var1 = ((double) t_fine / 2.0) - 64000.0;
+  var1 = ((double)t_fine / 2.0) - 64000.0;
   var2 = var1 * var1 * ((double)bmp_280_calib_data.dig_P6) / 32768.0;
   var2 = var2 + var1 * ((double)bmp_280_calib_data.dig_P5) * 2.0;
   var2 = (var2 / 4.0) + (((double)bmp_280_calib_data.dig_P4) * 65536.0);
@@ -210,7 +237,7 @@ bool bmp_280::read_press_temp_alt(int32_t& pressure, double& temperature, double
   p = p + (var1 + var2 + ((double)bmp_280_calib_data.dig_P7)) / 16.0;
 
   pressure = static_cast<int32_t>(std::round(p));
-  altitude = 44330.0 * (1 - std::pow(p / SEA_LEVEL_PRESS, 1 / 5.255));
+  altitude = 44330.0 * (1 - std::pow(p / bmp_280_calib_data.sea_level_pressure, 1 / 5.255));
   // ReSharper restore All
 
   return true;

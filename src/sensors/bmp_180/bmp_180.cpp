@@ -18,7 +18,7 @@
 bool bmp_180::check_device_id()
 {
   uint8_t read_id;
-  const bool success = i2c_util::read_ubyte(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_DEVICE_ID, read_id);
+  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_DEVICE_ID, read_id);
   return success && read_id == BMP_180_DEVICE_ID;
 }
 
@@ -27,17 +27,17 @@ bool bmp_180::check_device_id()
  */
 bool bmp_180::read_calibration_data()
 {
-  const bool success = i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC1, bmp_180_calib_data.AC1) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC2, bmp_180_calib_data.AC2) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC3, bmp_180_calib_data.AC3) &&
-    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC4, bmp_180_calib_data.AC4) &&
-    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC5, bmp_180_calib_data.AC5) &&
-    i2c_util::read_ushort(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_AC6, bmp_180_calib_data.AC6) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B1, bmp_180_calib_data.B1) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_B2, bmp_180_calib_data.B2) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MB, bmp_180_calib_data.MB) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MC, bmp_180_calib_data.MC) &&
-    i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CALIB_MD, bmp_180_calib_data.MD);
+  const bool success = i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC1, bmp_180_calib_data.AC1) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC2, bmp_180_calib_data.AC2) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC3, bmp_180_calib_data.AC3) &&
+    i2c_util::read_ushort(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC4, bmp_180_calib_data.AC4) &&
+    i2c_util::read_ushort(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC5, bmp_180_calib_data.AC5) &&
+    i2c_util::read_ushort(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_AC6, bmp_180_calib_data.AC6) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_B1, bmp_180_calib_data.B1) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_B2, bmp_180_calib_data.B2) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_MB, bmp_180_calib_data.MB) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_MC, bmp_180_calib_data.MC) &&
+    i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CALIB_MD, bmp_180_calib_data.MD);
   return success;
 }
 
@@ -52,7 +52,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
                                   int32_t& pressure, double& altitude)
 {
   constexpr uint8_t write_data[2] = {_reg_defs::REG_CTRL_MEAS, 0x2E};
-  bool success = i2c_write_blocking_until(I2C_BUS, BMP_180_ADDR, write_data, 2, false,
+  bool success = i2c_write_blocking_until(I2C_BUS0, BMP_180_ADDR, write_data, 2, false,
                                           delayed_by_ms(get_absolute_time(), 100)) == 2;
   if (!success)
   {
@@ -62,7 +62,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
   sleep_us(4500);
 
   int16_t data;
-  success = i2c_util::read_short(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_OUT_MSB, data);
+  success = i2c_util::read_short(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_OUT_MSB, data);
   if (!success)
   {
     return false;
@@ -105,7 +105,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
   while (!is_complete);
 
   uint8_t uncomp_press_raw[3];
-  success = i2c_util::read_bytes(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_OUT_MSB, uncomp_press_raw, 3);
+  success = i2c_util::read_bytes(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_OUT_MSB, uncomp_press_raw, 3);
   if (!success)
   {
     return false;
@@ -151,8 +151,8 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
  */
 bool bmp_180::soft_reset()
 {
-  const uint8_t data[2] = {_reg_defs::REG_SOFT_RESET, BMP_180_RESET_VALUE};
-  return i2c_write_blocking_until(I2C_BUS, BMP_180_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
+  constexpr uint8_t data[2] = {_reg_defs::REG_SOFT_RESET, BMP_180_RESET_VALUE};
+  return i2c_write_blocking_until(I2C_BUS0, BMP_180_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
 }
 
 /**
@@ -164,7 +164,7 @@ bool bmp_180::soft_reset()
 bool bmp_180::is_conversion_complete(bool& is_complete)
 {
   uint8_t ctrl;
-  const bool success = i2c_util::read_ubyte(I2C_BUS, BMP_180_ADDR, _reg_defs::REG_CTRL_MEAS, ctrl);
+  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_180_ADDR, _reg_defs::REG_CTRL_MEAS, ctrl);
   if (!success)
   {
     is_complete = false;

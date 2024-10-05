@@ -19,6 +19,14 @@ namespace usb_communication
     CALIBRATION_DATA_BMP_180 = 0x07,
     HELLO = 0x08,
     CALIBRATION_DATA_BMP_280 = 0x09,
+    LOOP_TIME = 0x0A,
+    I2C_SCAN_0 = 0x0B,
+    I2C_SCAN_1 = 0x0C,
+    SET_SEA_LEVEL_PRESS = 0x0D,
+    DS_1307_REG_DUMP = 0x0E,
+    DS_1307_ERASE = 0x0F,
+    SEA_LEVEL_PRESS_ACK_SUCCESS = 0x10,
+    SEA_LEVEL_PRESS_ACK_FAIL = 0x11
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -49,7 +57,31 @@ namespace usb_communication
       HELLO, 0
     },
     {
-      CALIBRATION_DATA_BMP_280, 26
+      CALIBRATION_DATA_BMP_280, 34
+    },
+    {
+      LOOP_TIME, 4
+    },
+    {
+      I2C_SCAN_0, 0
+    },
+    {
+      I2C_SCAN_1, 1
+    },
+    {
+      SET_SEA_LEVEL_PRESS, 8
+    },
+    {
+      DS_1307_REG_DUMP, 0
+    },
+    {
+      DS_1307_ERASE, 0
+    },
+    {
+      SEA_LEVEL_PRESS_ACK_SUCCESS, 0
+    },
+    {
+      SEA_LEVEL_PRESS_ACK_FAIL, 0
     }
   };
 

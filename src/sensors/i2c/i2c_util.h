@@ -13,4 +13,6 @@ namespace i2c_util
   bool read_short_reversed(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int16_t &output);
   bool read_ushort_reversed(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint16_t &output);
   bool read_bytes(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint8_t output[], uint8_t len);
+
+  void scan_for_devices(i2c_inst_t *i2c);
 }

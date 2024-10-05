@@ -2,9 +2,9 @@
 
 #include <cstdio>
 #include <format>
-#include <iostream>
 #include <hardware/clocks.h>
 #include <hardware/pio.h>
+#include <pico/mutex.h>
 
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
@@ -18,6 +18,7 @@ void status_manager::status_manager_pio_init()
 
   const bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&status_led_controller_program, &pio, &sm,
                                                                         &offset, STATUS_LED_PIN, 1, true);
+
   if (!success)
   {
     uint8_t err_pattern_count = 0;
@@ -64,44 +65,81 @@ status_manager::device_status status_manager::get_current_status()
 
 void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
 {
-  const bool current_fault = faults[fault_id];
-  const bool is_i2c_device = is_i2c_fault_id(fault_id);
-
-  if (!fault_state && is_i2c_device)
+  static mutex mtx;
+  if (!mutex_is_initialized(&mtx))
   {
-    i2c_fault_detect_cycles = 0;
-    faults[_i2c_bus] = false;
+    mutex_init(&mtx);
   }
-
-  if (current_fault == fault_state && !is_i2c_device)
-  {
-    return;
-  }
-  if (current_fault && is_i2c_device)
-  {
-    i2c_fault_detect_cycles++;
-  }
-
-  if (i2c_fault_detect_cycles >= I2C_MAX_CONSISTENT_FAILS)
-  {
-    i2c_fault_detect_cycles = I2C_MAX_CONSISTENT_FAILS;
-    if (check_i2c_bus_fault())
-    {
-      faults[_i2c_bus] = true;
-      if (current_status == NORMAL)
-      {
-        set_status(FAULT);
-      }
-      usb_communication::send_string("Fault: I2C Bus fail [I2C_BUS_FAIL]");
-      i2c_util::recover_i2c(I2C_BUS, I2C_SDA_PIN, I2C_SCL_PIN);
-      sleep_ms(1000);
-    }
-  }
+  mutex_enter_blocking(&mtx);
 
   faults[fault_id] = fault_state;
+  detect_i2c_bus_fault(fault_id);
   if (current_status == FAULT || current_status == NORMAL)
   {
     set_status(check_faults());
+  }
+
+  mutex_exit(&mtx);
+}
+
+void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
+{
+  static uint8_t fault_detect_cycles_bus0 = 0;
+  static uint8_t fault_detect_cycles_bus1 = 0;
+
+  const bool is_faulted = faults[fault_id];
+  auto fault_on_bus = i2c_bus::NONE;
+  if (is_i2c_fault_id(i2c_fault_ids_bus0, fault_id))
+  {
+    fault_on_bus = i2c_bus::BUS0;
+  }
+  else if (is_i2c_fault_id(i2c_fault_ids_bus1, fault_id))
+  {
+    fault_on_bus = i2c_bus::BUS1;
+  }
+
+  uint8_t* fault_detect_cycles = fault_on_bus == i2c_bus::BUS0
+                                   ? &fault_detect_cycles_bus0
+                                   : &fault_detect_cycles_bus1;
+
+  if (fault_on_bus == i2c_bus::NONE)
+  {
+    return;
+  }
+
+  if (!is_faulted)
+  {
+    *fault_detect_cycles = 0;
+    faults[static_cast<uint8_t>(fault_on_bus)] = false;
+    return;
+  }
+
+  (*fault_detect_cycles)++;
+
+
+  if (*fault_detect_cycles < I2C_MAX_FAULT_CYCLES)
+  {
+    return;
+  }
+  *fault_detect_cycles = I2C_MAX_FAULT_CYCLES;
+
+  if (check_i2c_bus_fault(fault_on_bus == i2c_bus::BUS0 ? i2c_fault_ids_bus0 : i2c_fault_ids_bus1))
+  {
+    faults[static_cast<uint8_t>(fault_on_bus)] = true;
+    if (current_status == NORMAL)
+    {
+      set_status(FAULT);
+    }
+    usb_communication::send_string(std::format("Fault: I2C Bus fail, bus {}", fault_on_bus == i2c_bus::BUS0 ? 0 : 1));
+    if (fault_on_bus == i2c_bus::BUS0)
+    {
+      i2c_util::recover_i2c(I2C_BUS0, I2C0_SDA_PIN, I2C0_SCL_PIN);
+    }
+    else
+    {
+      i2c_util::recover_i2c(I2C_BUS1, I2C1_SDA_PIN, I2C1_SCL_PIN);
+    }
+    sleep_ms(100);
   }
 }
 
@@ -121,7 +159,7 @@ status_manager::device_status status_manager::check_faults()
   return new_state;
 }
 
-bool status_manager::is_i2c_fault_id(fault_id id)
+bool status_manager::is_i2c_fault_id(const fault_id i2c_fault_ids[], const fault_id id)
 {
   size_t i = 0;
   do
@@ -136,7 +174,7 @@ bool status_manager::is_i2c_fault_id(fault_id id)
 }
 
 
-bool status_manager::check_i2c_bus_fault()
+bool status_manager::check_i2c_bus_fault(const fault_id i2c_fault_ids[])
 {
   size_t i = 0;
 

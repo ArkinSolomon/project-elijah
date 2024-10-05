@@ -3,15 +3,19 @@
 #include <cstdio>
 #include <cstring>
 #include <format>
+#include <sstream>
 #include <string>
+#include <pico/mutex.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 
+#include "byte_util.h"
 #include "main.h"
+#include "pin_outs.h"
 #include "status_manager.h"
-#include "sensors/bmp_180/bmp_180.h"
 #include "sensors/bmp_280/bmp_280.h"
 #include "sensors/ds_1307/ds_1307.h"
+#include "sensors/i2c/i2c_util.h"
 
 void usb_communication::init_usb_com()
 {
@@ -54,13 +58,27 @@ void usb_communication::send_packet(const packet_type_id type_id)
 
 void usb_communication::send_packet(const packet_type_id type_id, const uint8_t packet_data[])
 {
-  stdio_putchar_raw(type_id);
+  static mutex mtx;
+  if (!mutex_is_initialized(&mtx))
+  {
+    mutex_init(&mtx);
+  }
 
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
+  mutex_enter_blocking(&mtx);
+
+  stdio_putchar_raw(type_id);
   const uint8_t write_len = packet_type_lens.at(type_id);
   if (write_len > 0)
   {
     stdio_put_string(reinterpret_cast<const char*>(packet_data), write_len, false, false);
   }
+
+  mutex_exit(&mtx);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -92,6 +110,31 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   case HELLO:
     say_hello();
     break;
+  case I2C_SCAN_0:
+    i2c_util::scan_for_devices(I2C_BUS0);
+    break;
+  case I2C_SCAN_1:
+    i2c_util::scan_for_devices(I2C_BUS1);
+    break;
+  case SET_SEA_LEVEL_PRESS:
+    {
+      const double pressure = byte_util::decode_double(packet_data);
+      if (bmp_280::update_sea_level_pressure(pressure))
+      {
+        send_packet(SEA_LEVEL_PRESS_ACK_SUCCESS);
+      }
+      else
+      {
+        send_packet(SEA_LEVEL_PRESS_ACK_FAIL);
+      }
+      break;
+    }
+  case DS_1307_REG_DUMP:
+    ds_1307::reg_dump();
+    break;
+  case DS_1307_ERASE:
+    ds_1307::erase_data();
+    break;
   default: ;
   }
 
@@ -108,16 +151,12 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
   serialized_data[3] = collection_data.time_inst.day;
   serialized_data[4] = collection_data.time_inst.date;
   serialized_data[5] = collection_data.time_inst.month;
-  serialized_data[6] = collection_data.time_inst.year >> 8;
-  serialized_data[7] = collection_data.time_inst.year & 0xFF;
 
-  for (size_t i = 0; i < 4; i++)
-  {
-    serialized_data[8 + i] = collection_data.pressure >> 32 - 8 * (i + 1) & 0xFF;
-  }
+  byte_util::encode_uint16(collection_data.time_inst.year, &serialized_data[6]);
+  byte_util::encode_uint32(collection_data.pressure, &serialized_data[8]);
 
-  memcpy(&serialized_data[12], &collection_data.temperature, sizeof(collection_data.temperature));
-  memcpy(&serialized_data[20], &collection_data.altitude, sizeof(collection_data.altitude));
+  byte_util::encode_double(collection_data.temperature, &serialized_data[12]);
+  byte_util::encode_double(collection_data.altitude, &serialized_data[20]);
 
   send_packet(COLLECTION_DATA, serialized_data);
 }

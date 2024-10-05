@@ -1,6 +1,7 @@
 #include "i2c_util.h"
 #include "../../pin_outs.h"
 #include <format>
+#include <sys/unistd.h>
 
 #include "src/usb_communication.h"
 
@@ -110,19 +111,39 @@ bool i2c_util::read_bytes(i2c_inst_t *i2c, const uint8_t dev_addr, const uint8_t
 {
 
   const int bytes_written = i2c_write_blocking_until(i2c, dev_addr, &reg_addr, 1, true, delayed_by_ms(get_absolute_time(), 100));
-  usb_communication::send_string(std::format("BYTES WRITTEN: {}", bytes_written));
   if (bytes_written != 1)
   {
     return false;
   }
 
-  const int bytes_read = i2c_read_blocking_until(I2C_BUS, dev_addr, output, len, false, delayed_by_ms(get_absolute_time(), 100));
-  usb_communication::send_string(std::format("BYTES READ: {}", bytes_read));
-
+  const int bytes_read = i2c_read_blocking_until(I2C_BUS0, dev_addr, output, len, false, delayed_by_ms(get_absolute_time(), 100));
   if (bytes_read != len)
   {
     return false;
   }
 
   return true;
+}
+
+// See https://github.com/raspberrypi/pico-examples/blob/master/i2c/bus_scan/bus_scan.c
+void i2c_util::scan_for_devices(i2c_inst_t* i2c)
+{
+  bool found_one = false;
+  for (int addr = 0; addr < 1 << 7; ++addr) {
+    uint8_t data;
+    if ((addr & 0x78) == 0 || (addr & 0x78) == 0x78)
+      continue;
+
+    const int read_bytes = i2c_read_blocking_until(i2c, addr, &data, 1, false, delayed_by_ms(get_absolute_time(), 100));
+    if (read_bytes == 1)
+    {
+      found_one = true;
+      usb_communication::send_string(std::format("Found I2C device at 0x{:02x} on bus {}", addr, i2c == I2C_BUS0 ? 0 : 1));
+    }
+  }
+
+  if (!found_one)
+  {
+    usb_communication::send_string("No I2C devices found :(");
+  }
 }

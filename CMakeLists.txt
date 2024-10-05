@@ -40,7 +40,11 @@ add_executable(elijah-payload ${elijah_SRC}
         src/sensors/bmp_280/bmp_280.cpp
         src/sensors/bmp_280/bmp_280.h
         src/sensors/hmc_5883l/hmc_5883l.cpp
-        src/sensors/hmc_5883l/hmc_5883l.h)
+        src/sensors/hmc_5883l/hmc_5883l.h
+        src/byte_util.cpp
+        src/byte_util.h
+        src/sensors/mpu_6050/mpu_6050.cpp
+        src/sensors/mpu_6050/mpu_6050.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
