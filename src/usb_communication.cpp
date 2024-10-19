@@ -16,6 +16,7 @@
 #include "sensors/bmp_280/bmp_280.h"
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
+#include "sensors/mpu_6050/mpu_6050.h"
 
 void usb_communication::init_usb_com()
 {
@@ -135,6 +136,25 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   case DS_1307_ERASE:
     ds_1307::erase_data();
     break;
+  case GET_BUILD_INFO:
+    send_string(std::format("Elijah Payload compiled {} at {}", __DATE__, __TIME__));
+    break;
+  case MPU_6050_ST:
+    {
+      const bool success = mpu_6050::self_test();
+      if (!success)
+      {
+        send_string("MPU 6050 self-test failed");
+        break;
+      }
+      send_string(std::format(
+        "xa_diff: {}, ya_diff: {}, za_diff: {}",
+        mpu_6050::mpu_6050_factory_trim_data.ft_xa_change,
+        mpu_6050::mpu_6050_factory_trim_data.ft_ya_change,
+        mpu_6050::mpu_6050_factory_trim_data.ft_za_change
+      ));
+      break;
+    }
   default: ;
   }
 

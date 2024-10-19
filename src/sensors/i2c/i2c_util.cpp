@@ -18,22 +18,22 @@ void i2c_util::i2c_init(i2c_inst_t* i2c, const uint sda_pin, const uint scl_pin)
 
 void i2c_util::recover_i2c(i2c_inst_t* i2c, const uint8_t sda_pin, const uint8_t scl_pin)
 {
-  i2c_deinit(i2c);
-  gpio_deinit(sda_pin);
-  gpio_deinit(scl_pin);
-
-  gpio_init(scl_pin);
-  gpio_set_dir(scl_pin, true);
-
-  // Send 9 clock cycles for release as specified in I2C 3.1.16 ~400kHz
-  for (uint8_t i = 1; i <= 19; ++i)
-  {
-    gpio_put(scl_pin, i % 2);
-    sleep_us(2);
-  }
-
-  gpio_deinit(scl_pin);
-  i2c_init(i2c, sda_pin, scl_pin);
+  // i2c_deinit(i2c);
+  // gpio_deinit(sda_pin);
+  // gpio_deinit(scl_pin);
+  //
+  // gpio_init(scl_pin);
+  // gpio_set_dir(scl_pin, true);
+  //
+  // // Send 9 clock cycles for release as specified in I2C 3.1.16 ~400kHz
+  // for (uint8_t i = 1; i <= 19; ++i)
+  // {
+  //   gpio_put(scl_pin, i % 2);
+  //   sleep_us(2);
+  // }
+  //
+  // gpio_deinit(scl_pin);
+  // i2c_init(i2c, sda_pin, scl_pin);
 }
 
 
@@ -128,22 +128,27 @@ bool i2c_util::read_bytes(i2c_inst_t *i2c, const uint8_t dev_addr, const uint8_t
 // See https://github.com/raspberrypi/pico-examples/blob/master/i2c/bus_scan/bus_scan.c
 void i2c_util::scan_for_devices(i2c_inst_t* i2c)
 {
-  bool found_one = false;
+  const uint8_t bus_num = i2c == I2C_BUS0 ? 0 : 1;
+  uint8_t found_count = 0;
   for (int addr = 0; addr < 1 << 7; ++addr) {
     uint8_t data;
     if ((addr & 0x78) == 0 || (addr & 0x78) == 0x78)
       continue;
 
-    const int read_bytes = i2c_read_blocking_until(i2c, addr, &data, 1, false, delayed_by_ms(get_absolute_time(), 100));
+    const int read_bytes = i2c_read_blocking_until(i2c, addr, &data, 1, false, delayed_by_ms(get_absolute_time(), 5));
     if (read_bytes == 1)
     {
-      found_one = true;
-      usb_communication::send_string(std::format("Found I2C device at 0x{:02x} on bus {}", addr, i2c == I2C_BUS0 ? 0 : 1));
+      found_count++;
+      usb_communication::send_string(std::format("Found I2C device at 0x{:02x} on bus {}", addr, bus_num));
     }
   }
 
-  if (!found_one)
+  if (found_count == 0)
   {
-    usb_communication::send_string("No I2C devices found :(");
+    usb_communication::send_string(std::format("Scan complete, no I2C devices found on bus {}", bus_num));
+  }
+  else
+  {
+    usb_communication::send_string(std::format("Scan complete! Found {} I2C devices on bus {}", found_count, bus_num));
   }
 }

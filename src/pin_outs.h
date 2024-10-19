@@ -16,4 +16,4 @@
 #define STATUS_LED_PIN 25 // Onboard
 
 // #define HMC_5883L_RDY_PIN 1 // Pin 2
-#define MPU_6050_INT_PIN 26
+#define MPU_6050_INT_PIN 1 // Pin 2

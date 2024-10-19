@@ -39,7 +39,7 @@ int main()
     const uint32_t start_time = time_us_32();
     ds_1307::clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
-    // mpu_6050::accel_loop(collection_data);
+    mpu_6050::accel_loop(collection_data);
     watchdog_update();
 
     const uint32_t elapsed_time = time_us_32() - start_time;

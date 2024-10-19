@@ -69,6 +69,7 @@ target_link_libraries(elijah-payload
         hardware_i2c
         hardware_pio
         pico_multicore
+        pico_rand
 )
 
 pico_add_extra_outputs(elijah-payload)

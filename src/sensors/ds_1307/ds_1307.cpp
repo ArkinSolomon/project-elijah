@@ -241,10 +241,11 @@ void ds_1307::clock_loop(CollectionData& collection_data)
 
     // Assume the stored pressure to be true, since it was written at some point, since time is set memory is saved
     // but also make sure the memory isn't corrupted by checking it's within reasonable limits
-    if (read_pressure < 94818.9 || read_pressure > 103284.9)
+    if (read_pressure < 93125.69 || read_pressure > 104978)
     {
         bmp_280::update_sea_level_pressure();
-    } else
+    }
+    else
     {
       bmp_280::update_sea_level_pressure(read_pressure, false);
     }

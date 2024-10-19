@@ -26,7 +26,9 @@ namespace usb_communication
     DS_1307_REG_DUMP = 0x0E,
     DS_1307_ERASE = 0x0F,
     SEA_LEVEL_PRESS_ACK_SUCCESS = 0x10,
-    SEA_LEVEL_PRESS_ACK_FAIL = 0x11
+    SEA_LEVEL_PRESS_ACK_FAIL = 0x11,
+    GET_BUILD_INFO = 0x12,
+    MPU_6050_ST = 0x13
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -82,6 +84,12 @@ namespace usb_communication
     },
     {
       SEA_LEVEL_PRESS_ACK_FAIL, 0
+    },
+    {
+      GET_BUILD_INFO, 0
+    },
+    {
+      MPU_6050_ST, 0
     }
   };
 
