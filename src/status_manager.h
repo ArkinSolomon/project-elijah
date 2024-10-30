@@ -12,7 +12,7 @@ namespace status_manager
   inline uint sm;
   inline uint offset;
 
-  inline uint8_t faults[8] = {false, false, false, false, false, false, false, END_OF_FAULT_LIST};
+  inline uint8_t faults[9] = {false, false, false, false, false, false, false, false, END_OF_FAULT_LIST};
 
   enum fault_id
   {
@@ -23,6 +23,7 @@ namespace status_manager
     DEVICE_HMC_5883L = 4,
     DEVICE_MPU_6050 = 5,
     _i2c_bus1 = 6,
+    DEVICE_W25Q64FV = 7,
     _end_of_device_list = END_OF_FAULT_LIST
   };
 

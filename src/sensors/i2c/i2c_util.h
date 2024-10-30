@@ -4,7 +4,9 @@
 
 namespace i2c_util
 {
-  void i2c_init(i2c_inst_t* i2c, uint sda_pin, uint scl_pin);
+  inline uint16_t baud_rate_bus0, baud_rate_bus1;
+
+  void i2c_bus_init(i2c_inst_t* i2c, uint sda_pin, uint scl_pin, uint baud_rate);
   void recover_i2c(i2c_inst_t* i2c, uint8_t sda_pin, uint8_t scl_pin);
   bool read_byte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, int8_t &output);
   bool read_ubyte(i2c_inst_t *i2c, uint8_t dev_addr, uint8_t reg_addr, uint8_t &output);

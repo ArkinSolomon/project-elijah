@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <bits/basic_string.h>
+#include <pico/mutex.h>
 
 struct CollectionData;
 
@@ -68,7 +69,7 @@ namespace usb_communication
       I2C_SCAN_0, 0
     },
     {
-      I2C_SCAN_1, 1
+      I2C_SCAN_1, 0
     },
     {
       SET_SEA_LEVEL_PRESS, 8
@@ -93,7 +94,10 @@ namespace usb_communication
     }
   };
 
+  inline mutex_t usb_comm_mtx;
+
   void init_usb_com();
+
   void scan_for_packets();
   void send_packet(packet_type_id type_id);
   void send_packet(packet_type_id type_id, const uint8_t* packet_data);

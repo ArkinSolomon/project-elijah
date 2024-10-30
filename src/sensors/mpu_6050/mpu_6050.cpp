@@ -186,7 +186,6 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
   static uint8_t no_detect_cycles = 0;
-  static bool wait_for_low = false;
 
   if (!device_detected)
   {
@@ -212,11 +211,6 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
 
   if (!gpio_get(MPU_6050_INT_PIN))
   {
-    if (wait_for_low)
-    {
-      wait_for_low = false;
-    }
-
     if (no_detect_cycles == MAX_MPU_6050_NOT_READY_CYCLES)
     {
       usb_communication::send_string(std::format("MPU 6050 not interrupted for {} cycles",
@@ -236,27 +230,17 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
     return;
   }
 
-  if (wait_for_low)
-  {
-    return;
-  }
-
   no_detect_cycles = 0;
-  wait_for_low = true;
-  usb_communication::send_string("MPU 6050 data ready");
-
   int16_t accel_x, accel_y, accel_z, temp, gyro_x, gyro_y, gyro_z;
   const bool success = get_data(accel_x, accel_y, accel_z, temp, gyro_x, gyro_y, gyro_z);
   if (!success)
   {
-    usb_communication::send_string("Fault: MPU 6050, failed to read acceleration");
-    wait_for_low = false;
+    usb_communication::send_string("Fault: MPU 6050, failed to read outputs");
     set_fault(status_manager::DEVICE_MPU_6050, true);
   }
 
-  usb_communication::send_string(std::format("MPU 6050 accel {} {} {}, temp {}, gyro {} {} {}", accel_x, accel_y,
-                                             accel_z, temp, gyro_x, gyro_y, gyro_z));
-
+  // usb_communication::send_string(std::format("MPU 6050 accel {} {} {}, temp {}, gyro {} {} {}", accel_x, accel_y,
+  //                                            accel_z, temp, gyro_x, gyro_y, gyro_z));
 
   set_fault(status_manager::DEVICE_MPU_6050, false);
 }

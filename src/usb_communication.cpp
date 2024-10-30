@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <cstring>
 #include <format>
-#include <sstream>
 #include <string>
 #include <pico/mutex.h>
 #include <pico/stdio.h>
@@ -21,12 +20,13 @@
 void usb_communication::init_usb_com()
 {
   stdio_init_all();
+  mutex_init(&usb_comm_mtx);
 }
 
 void usb_communication::scan_for_packets()
 {
   char packet_type = 0xFF;
-  int num_read = stdio_get_until(&packet_type, 1, delayed_by_ms(get_absolute_time(), 100));
+  int num_read = stdio_get_until(&packet_type, 1, delayed_by_ms(get_absolute_time(), 30));
   if (num_read != 1)
   {
     return;
@@ -59,27 +59,20 @@ void usb_communication::send_packet(const packet_type_id type_id)
 
 void usb_communication::send_packet(const packet_type_id type_id, const uint8_t packet_data[])
 {
-  static mutex mtx;
-  if (!mutex_is_initialized(&mtx))
-  {
-    mutex_init(&mtx);
-  }
-
   if (!stdio_usb_connected())
   {
     return;
   }
-
-  mutex_enter_blocking(&mtx);
+  mutex_enter_blocking(&usb_comm_mtx);
 
   stdio_putchar_raw(type_id);
   const uint8_t write_len = packet_type_lens.at(type_id);
+
   if (write_len > 0)
   {
     stdio_put_string(reinterpret_cast<const char*>(packet_data), write_len, false, false);
   }
-
-  mutex_exit(&mtx);
+  mutex_exit(&usb_comm_mtx);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -88,6 +81,7 @@ void usb_communication::send_string(const std::string& str)
   {
     return;
   }
+  mutex_enter_blocking(&usb_comm_mtx);
 
   const uint16_t str_len = str.size();
   const uint8_t meta_data[3] = {
@@ -96,6 +90,7 @@ void usb_communication::send_string(const std::string& str)
 
   stdio_put_string(reinterpret_cast<const char*>(meta_data), 3, false, false);
   stdio_put_string(str.c_str(), str_len, false, false);
+  mutex_exit(&usb_comm_mtx);
 }
 
 void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, const uint8_t* packet_data)

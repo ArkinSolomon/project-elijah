@@ -44,7 +44,9 @@ add_executable(elijah-payload ${elijah_SRC}
         src/byte_util.cpp
         src/byte_util.h
         src/sensors/mpu_6050/mpu_6050.cpp
-        src/sensors/mpu_6050/mpu_6050.h)
+        src/sensors/mpu_6050/mpu_6050.h
+        src/storage/w25q64fv.cpp
+        src/storage/w25q64fv.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
@@ -67,6 +69,7 @@ target_include_directories(elijah-payload PRIVATE
 # Add any user requested libraries
 target_link_libraries(elijah-payload
         hardware_i2c
+        hardware_spi
         hardware_pio
         pico_multicore
         pico_rand
