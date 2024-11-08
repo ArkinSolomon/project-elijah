@@ -29,14 +29,15 @@ namespace usb_communication
     SEA_LEVEL_PRESS_ACK_SUCCESS = 0x10,
     SEA_LEVEL_PRESS_ACK_FAIL = 0x11,
     GET_BUILD_INFO = 0x12,
-    MPU_6050_ST = 0x13
+    MPU_6050_ST = 0x13,
+    W25Q64FV_DEV_INFO = 0x14,
+    FAULT_DATA = 0x15
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
     {
       // (MSB->LSB) 8-bit seconds, 8-bit minutes, 8-bit hours, 8-bit day-of-week, 8-bit date, 8-bit month, 16-bit year
       TIME_SET, 8
-
     },
     {
       TIME_SET_SUCCESS, 0
@@ -63,7 +64,7 @@ namespace usb_communication
       CALIBRATION_DATA_BMP_280, 34
     },
     {
-      LOOP_TIME, 4
+      LOOP_TIME, 24
     },
     {
       I2C_SCAN_0, 0
@@ -91,6 +92,12 @@ namespace usb_communication
     },
     {
       MPU_6050_ST, 0
+    },
+    {
+      W25Q64FV_DEV_INFO, 0
+    },
+    {
+      FAULT_DATA, 5
     }
   };
 

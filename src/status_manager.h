@@ -62,4 +62,5 @@ namespace status_manager
   void detect_i2c_bus_fault(fault_id fault_id);
   bool is_i2c_fault_id(const fault_id i2c_fault_ids[], fault_id id);
   bool check_i2c_bus_fault(const fault_id i2c_fault_ids[]);
+  void send_status();
 }

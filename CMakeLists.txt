@@ -46,7 +46,8 @@ add_executable(elijah-payload ${elijah_SRC}
         src/sensors/mpu_6050/mpu_6050.cpp
         src/sensors/mpu_6050/mpu_6050.h
         src/storage/w25q64fv.cpp
-        src/storage/w25q64fv.h)
+        src/storage/w25q64fv.h
+        src/multicore/multicore_command.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})

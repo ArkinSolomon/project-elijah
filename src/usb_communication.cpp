@@ -16,6 +16,7 @@
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
+#include "storage/w25q64fv.h"
 
 void usb_communication::init_usb_com()
 {
@@ -150,6 +151,8 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
       ));
       break;
     }
+  case W25Q64FV_DEV_INFO:
+    w25q64fv::print_device_info();
   default: ;
   }
 
@@ -158,6 +161,11 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
 
 void usb_communication::send_collection_data(const CollectionData& collection_data)
 {
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
   uint8_t serialized_data[28];
 
   serialized_data[0] = collection_data.time_inst.seconds;

@@ -6,6 +6,7 @@
 #include <hardware/pio.h>
 #include <pico/mutex.h>
 
+#include "byte_util.h"
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
 #include "usb_communication.h"
@@ -56,6 +57,7 @@ void status_manager::set_status(const device_status status)
   usb_communication::send_string(std::format("Device status changed: 0x{:08x}", static_cast<uint32_t>(status)));
   current_status = status;
   pio_sm_put_blocking(pio, sm, status);
+  send_status();
 }
 
 status_manager::device_status status_manager::get_current_status()
@@ -80,6 +82,7 @@ void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
   }
 
   mutex_exit(&mtx);
+  send_status();
 }
 
 void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
@@ -187,4 +190,25 @@ bool status_manager::check_i2c_bus_fault(const fault_id i2c_fault_ids[])
   }
   while (i2c_fault_ids[++i] != _end_of_device_list);
   return true;
+}
+
+void status_manager::send_status()
+{
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
+  uint8_t send_data[5];
+  size_t i = 0;
+
+  do
+  {
+    send_data[4] <<= 1;
+    send_data[4] |= faults[i] ? 0x1 : 0x0;
+  }
+  while (faults[++i] != END_OF_FAULT_LIST);
+
+  *send_data = current_status;
+  send_packet(usb_communication::FAULT_DATA, send_data);
 }
