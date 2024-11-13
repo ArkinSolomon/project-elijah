@@ -18,7 +18,7 @@ set(toolchainVersion 13_2_Rel1)
 set(picotoolVersion 2.0.0)
 include(${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
+set(PICO_BOARD gen4_rp2350_24 CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -29,25 +29,8 @@ project(elijah-payload C CXX ASM)
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-
 file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
-add_executable(elijah-payload ${elijah_SRC}
-        src/main.h
-        src/status_manager.h
-        src/status_manager.cpp
-        src/usb_communication.h
-        src/usb_communication.cpp
-        src/sensors/bmp_280/bmp_280.cpp
-        src/sensors/bmp_280/bmp_280.h
-        src/sensors/hmc_5883l/hmc_5883l.cpp
-        src/sensors/hmc_5883l/hmc_5883l.h
-        src/byte_util.cpp
-        src/byte_util.h
-        src/sensors/mpu_6050/mpu_6050.cpp
-        src/sensors/mpu_6050/mpu_6050.h
-        src/storage/w25q64fv.cpp
-        src/storage/w25q64fv.h
-        src/multicore/multicore_command.h)
+add_executable(elijah-payload ${elijah_SRC})
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})

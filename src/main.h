@@ -8,6 +8,7 @@ struct CollectionData
   int32_t pressure;
   double temperature;
   double altitude;
+  double accel_x, accel_y, accel_z;
 };
 
 void pin_init();

@@ -9,7 +9,6 @@
 #include "src/pin_outs.h"
 #include "src/status_manager.h"
 #include "src/usb_communication.h"
-#include "src/sensors/bmp_180/bmp_180.h"
 #include "src/sensors/i2c/i2c_util.h"
 
 /**
@@ -138,18 +137,6 @@ bool bmp_280::read_calibration_data()
     i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P8, bmp_280_calib_data.dig_P8) &&
     i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, _reg_defs::REG_DIG_P9, bmp_280_calib_data.dig_P9);
 
-  // bmp_280_calib_data.dig_T1 = 27504;
-  // bmp_280_calib_data.dig_T2 = 26435;
-  // bmp_280_calib_data.dig_T3 = -1000;
-  // bmp_280_calib_data.dig_P1 = 36477;
-  // bmp_280_calib_data.dig_P2 = -10685;
-  // bmp_280_calib_data.dig_P3 = 3024;
-  // bmp_280_calib_data.dig_P4 = 2855;
-  // bmp_280_calib_data.dig_P5 = 140;
-  // bmp_280_calib_data.dig_P6 = -7;
-  // bmp_280_calib_data.dig_P7 = 15500;
-  // bmp_280_calib_data.dig_P8 = -14600;
-  // bmp_280_calib_data.dig_P9 = 6000;
   return success;
 }
 

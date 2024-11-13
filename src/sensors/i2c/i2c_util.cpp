@@ -119,7 +119,7 @@ bool i2c_util::read_bytes(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t
     return false;
   }
 
-  const int bytes_read = i2c_read_blocking_until(I2C_BUS0, dev_addr, output, len, false,
+  const int bytes_read = i2c_read_blocking_until(i2c, dev_addr, output, len, false,
                                                  delayed_by_ms(get_absolute_time(), 100));
   if (bytes_read != len)
   {

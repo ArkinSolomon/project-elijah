@@ -166,7 +166,7 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
     return;
   }
 
-  uint8_t serialized_data[28];
+  uint8_t serialized_data[52];
 
   serialized_data[0] = collection_data.time_inst.seconds;
   serialized_data[1] = collection_data.time_inst.minutes;
@@ -180,6 +180,10 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
 
   byte_util::encode_double(collection_data.temperature, &serialized_data[12]);
   byte_util::encode_double(collection_data.altitude, &serialized_data[20]);
+
+  byte_util::encode_double(collection_data.accel_x, &serialized_data[28]);
+  byte_util::encode_double(collection_data.accel_y, &serialized_data[36]);
+  byte_util::encode_double(collection_data.accel_z, &serialized_data[44]);
 
   send_packet(COLLECTION_DATA, serialized_data);
 }

@@ -11,6 +11,7 @@
     </sourceRoots>
     <libraryRoots>
       <file path="$PICO_SDK_PATH$/sdk/2.0.0/lib" />
+      <file path="$PROJECT_DIR$/lib" />
     </libraryRoots>
   </component>
   <component name="WestSettings">{}</component>

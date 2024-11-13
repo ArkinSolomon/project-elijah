@@ -46,7 +46,7 @@ namespace usb_communication
       TIME_SET_FAIL, 0
     },
     {
-      COLLECTION_DATA, 28
+      COLLECTION_DATA, 52
     },
     {
       STRING, 0,
