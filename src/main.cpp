@@ -19,6 +19,11 @@
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
 
+void int_tst(uint gpio, uint32_t event_mask)
+{
+  // usb_communication::send_string("interupt");
+}
+
 int main()
 {
 #ifdef PICO_RP2040
@@ -41,7 +46,7 @@ int main()
   {
     usb_communication::send_string("Reboot caused by watchdog");
   }
-  watchdog_enable(5000, true);
+  // watchdog_enable(5000, true);
 
   gpio_put(CORE_0_LED_PIN, false);
   launch_core_1();
@@ -61,6 +66,7 @@ int main()
 
   static bool led_on = false;
   CollectionData collection_data{{}};
+  absolute_time_t last_loop_time = 0;
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
@@ -80,21 +86,27 @@ int main()
         bmp_280::send_calibration_data();
       }
 
+      status_manager::check_faults();
+
       set_status(status_manager::USB);
       usb_communication::scan_for_packets();
       usb_communication::send_collection_data(collection_data);
 
-      uint8_t loop_time_data[24];
+      uint8_t loop_time_data[32];
       byte_util::encode_uint64(main_loop_time, loop_time_data);
 
       mutex_enter_blocking(&core_1_stats::loop_time_mtx);
-      byte_util::encode_uint64(core_1_stats::loop_time, loop_time_data + 8);
+      byte_util::encode_uint64(core_1_stats::loop_time, &loop_time_data[8]);
       mutex_exit(&core_1_stats::loop_time_mtx);
 
+      const absolute_time_t time_between_loops = last_loop_time > 0 ? absolute_time_diff_us(last_loop_time, start_time) : 0;
+      byte_util::encode_uint64(time_between_loops, &loop_time_data[16]);
+
       const absolute_time_t usb_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
-      byte_util::encode_uint64(usb_loop_time, loop_time_data + 16);
+      byte_util::encode_uint64(usb_loop_time, &loop_time_data[24]);
 
       send_packet(usb_communication::LOOP_TIME, loop_time_data);
+      last_loop_time = get_absolute_time();
     }
     else if (status_manager::get_current_status() == status_manager::BOOTING || (status_manager::get_current_status() ==
       status_manager::USB && !stdio_usb_connected()))
@@ -118,7 +130,9 @@ void pin_init()
 
   gpio_init(MPU_6050_INT_PIN);
   gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
+  // gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, false, int_tst);
 
+  // SPI at 104MHz
   gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);
   gpio_set_function(SPI1_TX_PIN, GPIO_FUNC_SPI);
   gpio_set_function(SPI1_RX_PIN, GPIO_FUNC_SPI);
@@ -129,6 +143,5 @@ void pin_init()
 
   spi_set_slave(spi1, false);
 
-  // SPI at 104MHz
   spi_init(spi1, 104 * 1000 * 1000);
 }

@@ -31,7 +31,7 @@ bool bmp_280::check_chip_id()
 bool bmp_280::soft_reset()
 {
   constexpr uint8_t data[2] = {_reg_defs::REG_SOFT_RESET, BMP_280_RESET_VALUE};
-  return i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
+  return i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 32)) == 2;
 }
 
 /**

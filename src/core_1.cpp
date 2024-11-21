@@ -24,7 +24,7 @@ void core_1_main()
   if (!did_w25q64fv_init)
   {
     usb_communication::send_string("Fault W25Q64FV, device failed to initialize");
-    set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
+    // set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
     multicore_fifo_push_blocking(CORE_1_READY_FLAG);
     return;
   }
@@ -38,8 +38,9 @@ void core_1_main()
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    sleep_ms(50);
     gpio_put(CORE_1_LED_PIN, led_on = !led_on);
+
+    sleep_ms(100);
     mutex_enter_blocking(&core_1_stats::loop_time_mtx);
     const uint64_t elapsed_time = absolute_time_diff_us(start_time, get_absolute_time());
     core_1_stats::loop_time = elapsed_time;

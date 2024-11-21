@@ -26,6 +26,5 @@ namespace w25q64fv
   void print_device_info();
   bool write_data(uint32_t page_addr, uint8_t* data, uint16_t len);
   bool chip_erase();
-  bool is_busy(bool& is_flash_busy);
   void wait_for_not_busy();
 }

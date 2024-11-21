@@ -33,7 +33,7 @@ bool hmc_5883l::configure(samples_averaged samples_averaged, data_output_rate da
 
   const uint8_t write_data[4] = {_reg_defs::REG_CONFIG_A, config_a, config_b, mode_data};
   const int success = i2c_write_blocking_until(I2C_BUS0, HMC_5883L_ADDR, write_data, 4, false,
-                                               delayed_by_ms(get_absolute_time(), 100));
+                                               delayed_by_ms(get_absolute_time(), 32));
 
   return success == 4;
 }

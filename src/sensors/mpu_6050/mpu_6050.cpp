@@ -4,6 +4,7 @@
 #include <format>
 
 #include "pico/rand.h"
+#include "src/cs_lock_num.h"
 #include "src/main.h"
 #include "src/pin_outs.h"
 #include "src/status_manager.h"
@@ -23,8 +24,7 @@ bool mpu_6050::check_chip_id()
 }
 
 bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyro_range,
-                         const accel_full_scale_range accel_range, const bool
-                         int_enable)
+                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl)
 {
   const uint8_t config_reg_data = dlpf_cfg & 0x07;
   const uint8_t gyro_config_reg_data = static_cast<uint8_t>(gyro_range) << 3 & 0x18;
@@ -34,7 +34,7 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
   };
 
   int bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, write_cfg_data, 4, false,
-                                               delayed_by_ms(get_absolute_time(), 100));
+                                               delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 4)
   {
     return false;
@@ -42,24 +42,26 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
 
   accel_scale = get_accel_scale(accel_range);
 
-  const uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, static_cast<uint8_t>(int_enable ? 0x01 : 0x00)};
+  constexpr uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, 0x01};
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, int_en_data, 2, false,
-                                           delayed_by_ms(get_absolute_time(), 100));
+                                           delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 2)
   {
     return false;
   }
 
-  constexpr uint8_t sleep_disable_data[3] = {_reg_defs::REG_PWR_MGMT_1, 0x18, 0xC7};
+  const uint8_t wake_ctrl_reg_val = static_cast<uint8_t>(wake_ctrl) << 6 | 0x07;
+  usb_communication::send_string(std::format("wake_ctrl {:08b}", wake_ctrl_reg_val));
+  const uint8_t sleep_disable_data[3] = {_reg_defs::REG_PWR_MGMT_1, 0x18, wake_ctrl_reg_val};
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, sleep_disable_data, 3, false,
-                                           delayed_by_ms(get_absolute_time(), 100));
+                                           delayed_by_ms(get_absolute_time(), 32));
   return bytes_written == 3;
 }
 
 bool mpu_6050::configure_default()
 {
   return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                   accel_full_scale_range::RANGE_2g, true);
+                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_5Hz);
 }
 
 double mpu_6050::get_accel_scale(const accel_full_scale_range accel_range)
@@ -89,7 +91,7 @@ bool mpu_6050::self_test()
   write_data[4] &= 0x3F;
 
   bool success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                           accel_full_scale_range::RANGE_8g, true);
+                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz);
   if (!success)
   {
     return false;
@@ -107,7 +109,7 @@ bool mpu_6050::self_test()
   }
 
   int bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, write_data, 5, false,
-                                               delayed_by_ms(get_absolute_time(), 100));
+                                               delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 5)
   {
     return false;
@@ -126,7 +128,7 @@ bool mpu_6050::self_test()
 
   *rand_loc = 0;
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, write_data, 5, false,
-                                           delayed_by_ms(get_absolute_time(), 100));
+                                           delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 5)
   {
     return false;
@@ -180,11 +182,18 @@ bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
 void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
-  static uint8_t no_detect_cycles = 0;
+  static absolute_time_t last_detect_time;
+
+  if (!critical_section_is_initialized(&irq_sens_data_cs))
+  {
+    critical_section_init_with_lock_num(&irq_sens_data_cs, CS_LOCK_NUM_MPU_SENS_DATA);
+  }
+  critical_section_enter_blocking(&irq_sens_data_cs);
+  // ReadSensorData last_sensor_data = irq_sens_data;
+  critical_section_exit(&irq_sens_data_cs);
 
   if (!device_detected)
   {
-    no_detect_cycles = 0;
     device_detected = check_chip_id();
     if (!device_detected)
     {
@@ -204,28 +213,6 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
     usb_communication::send_string("MPU 6050 configured");
   }
 
-  if (!gpio_get(MPU_6050_INT_PIN))
-  {
-    if (no_detect_cycles == MAX_MPU_6050_NOT_READY_CYCLES)
-    {
-      usb_communication::send_string(std::format("MPU 6050 not interrupted for {} cycles",
-                                                 MAX_MPU_6050_NOT_READY_CYCLES));
-      no_detect_cycles = 0;
-      device_detected = check_chip_id();
-      if (!device_detected)
-      {
-        set_fault(status_manager::DEVICE_MPU_6050, true);
-        usb_communication::send_string("Fault: MPU 6050, device not detected, ready pin not set");
-      }
-    }
-    else
-    {
-      no_detect_cycles++;
-    }
-    return;
-  }
-
-  no_detect_cycles = 0;
   const bool success = get_data(collection_data.accel_x, collection_data.accel_y, collection_data.accel_z);
   if (!success)
   {

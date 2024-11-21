@@ -7,6 +7,7 @@
 #include <pico/mutex.h>
 
 #include "byte_util.h"
+#include "cs_lock_num.h"
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
 #include "usb_communication.h"
@@ -27,7 +28,7 @@ void status_manager::status_manager_pio_init()
     gpio_set_dir(STATUS_LED_PIN, true);
     while (err_pattern_count <= 10)
     {
-      usb_communication::send_string("Fault: PIO not started [NO_FREE]");
+      usb_communication::send_string("Fault: PIO not started, no free state machines");
       gpio_put(STATUS_LED_PIN, true);
       sleep_ms(500);
       gpio_put(STATUS_LED_PIN, false);
@@ -68,10 +69,18 @@ status_manager::device_status status_manager::get_current_status()
 void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
 {
   static mutex mtx;
+  static critical_section_t cs;
   if (!mutex_is_initialized(&mtx))
   {
     mutex_init(&mtx);
   }
+
+  if (!critical_section_is_initialized(&cs))
+  {
+    critical_section_init_with_lock_num(&cs, CS_LOCK_NUM_STATUS);
+  }
+
+  critical_section_enter_blocking(&cs);
   mutex_enter_blocking(&mtx);
 
   faults[fault_id] = fault_state;
@@ -82,6 +91,7 @@ void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
   }
 
   mutex_exit(&mtx);
+  critical_section_exit(&cs);
   send_status();
 }
 
@@ -154,6 +164,7 @@ status_manager::device_status status_manager::check_faults()
   {
     if (faults[i])
     {
+      usb_communication::send_string(std::format("fault at index {} {}", i, faults[i]));
       new_state = FAULT;
       break;
     }

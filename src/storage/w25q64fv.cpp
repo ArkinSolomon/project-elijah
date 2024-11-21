@@ -103,47 +103,35 @@ bool w25q64fv::chip_erase()
   return bytes_written == 1;
 }
 
-bool w25q64fv::is_busy(bool& is_flash_busy)
+void w25q64fv::wait_for_not_busy()
 {
   gpio_put(SPI1_CSN_PIN, false);
   const int bytes_written = spi_write_blocking(spi1, &_command_defs::COMMAND_READ_STATUS_REG1, 1);
   if (bytes_written != 1)
   {
+    usb_communication::send_string("W25Q64FV can not write write status register 1 read command");
+    set_fault(status_manager::DEVICE_W25Q64FV, true);
     gpio_put(SPI1_CSN_PIN, true);
-    return false;
+    return;
   }
 
-  uint8_t status_reg;
-  const int bytes_read = spi_read_blocking(spi1, 0x00, &status_reg, 1);
-  is_flash_busy = status_reg & 0x01;
-  usb_communication::send_string(std::format("{:02x}", status_reg));
-  return bytes_read == 1;
-}
-
-void w25q64fv::wait_for_not_busy()
-{
-  bool is_chip_busy;
-  bool chip_busy_read_success = !is_busy(is_chip_busy);
-
-  absolute_time_t last_print = get_absolute_time();
-
-  while (is_chip_busy || !chip_busy_read_success)
+  while (true)
   {
-    if (!chip_busy_read_success)
+    uint8_t status_reg;
+    const int bytes_read = spi_read_blocking(spi1, 0x00, &status_reg, 1);
+    if (bytes_read != 1)
     {
-      usb_communication::send_string("Fault W25Q64FV, can not read status");
-      set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
-      return;
+      usb_communication::send_string("W25Q64FV can not read status register 1");
+      set_fault(status_manager::DEVICE_W25Q64FV, true);
+      break;
     }
 
-    const absolute_time_t print_time = get_absolute_time();
-    if (absolute_time_diff_us(last_print, print_time) > 2500 * 1000)
+    set_fault(status_manager::DEVICE_W25Q64FV, false);
+    usb_communication::send_string(std::format("{:08b}", status_reg));
+    if (!(status_reg & 0x01))
     {
-      usb_communication::send_string("Waiting for W25Q64FV to finish erasing...");
-      last_print = print_time;
+      break;
     }
-
-    chip_busy_read_success = !is_busy(is_chip_busy);
-    sleep_ms(1);
   }
+  gpio_put(SPI1_CSN_PIN, true);
 }

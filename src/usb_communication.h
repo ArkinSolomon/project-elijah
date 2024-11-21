@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <bits/basic_string.h>
+#include <pico/critical_section.h>
 #include <pico/mutex.h>
 
 struct CollectionData;
@@ -31,7 +32,8 @@ namespace usb_communication
     GET_BUILD_INFO = 0x12,
     MPU_6050_ST = 0x13,
     W25Q64FV_DEV_INFO = 0x14,
-    FAULT_DATA = 0x15
+    FAULT_DATA = 0x15,
+    RESTART = 0x16
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -64,7 +66,7 @@ namespace usb_communication
       CALIBRATION_DATA_BMP_280, 34
     },
     {
-      LOOP_TIME, 24
+      LOOP_TIME, 32
     },
     {
       I2C_SCAN_0, 0
@@ -98,10 +100,14 @@ namespace usb_communication
     },
     {
       FAULT_DATA, 5
+    },
+    {
+      RESTART, 0
     }
   };
 
   inline mutex_t usb_comm_mtx;
+  inline critical_section_t usb_comm_cs;
 
   void init_usb_com();
 

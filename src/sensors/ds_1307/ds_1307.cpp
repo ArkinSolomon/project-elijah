@@ -55,7 +55,7 @@ bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_w
     year_data
   };
   const int bytes_written = i2c_write_blocking_until(I2C_BUS0, DS_1307_ADDR, write_data, 8, false,
-                                                     delayed_by_ms(get_absolute_time(), 100));
+                                                     delayed_by_ms(get_absolute_time(), 32));
 
   return bytes_written == 8;
 }
@@ -144,7 +144,7 @@ bool ds_1307::write_custom_register(const custom_register addr, const uint8_t* d
   }
   write_data[0] = write_addr;
   const int bytes_written = i2c_write_blocking_until(I2C_BUS0, DS_1307_ADDR, write_data, size + 1, false,
-                                                     delayed_by_ms(get_absolute_time(), 100));
+                                                     delayed_by_ms(get_absolute_time(), 32));
   return bytes_written == size + 1;
 }
 
@@ -186,7 +186,7 @@ void ds_1307::erase_data()
 {
   constexpr uint8_t zeros[0x3F] = {};
   const int bytes_written = i2c_write_blocking_until(I2C_BUS0, DS_1307_ADDR, zeros, 0x3F, false,
-                                                     delayed_by_ms(get_absolute_time(), 100));
+                                                     delayed_by_ms(get_absolute_time(), 32));
   const bool success = bytes_written == 0x3F;
   if (!success)
   {

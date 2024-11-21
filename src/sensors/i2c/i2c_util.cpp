@@ -113,14 +113,14 @@ bool i2c_util::read_bytes(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t
                           const uint8_t len)
 {
   const int bytes_written = i2c_write_blocking_until(i2c, dev_addr, &reg_addr, 1, true,
-                                                     delayed_by_ms(get_absolute_time(), 100));
+                                                     delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 1)
   {
     return false;
   }
 
   const int bytes_read = i2c_read_blocking_until(i2c, dev_addr, output, len, false,
-                                                 delayed_by_ms(get_absolute_time(), 100));
+                                                 delayed_by_ms(get_absolute_time(), 32));
   if (bytes_read != len)
   {
     return false;

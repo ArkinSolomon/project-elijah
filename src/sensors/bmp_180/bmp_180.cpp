@@ -53,7 +53,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
 {
   constexpr uint8_t write_data[2] = {_reg_defs::REG_CTRL_MEAS, 0x2E};
   bool success = i2c_write_blocking_until(I2C_BUS0, BMP_180_ADDR, write_data, 2, false,
-                                          delayed_by_ms(get_absolute_time(), 100)) == 2;
+                                          delayed_by_ms(get_absolute_time(), 32)) == 2;
   if (!success)
   {
     return false;
@@ -152,7 +152,7 @@ bool bmp_180::read_press_temp_alt(const oss_setting oss_setting, double& tempera
 bool bmp_180::soft_reset()
 {
   constexpr uint8_t data[2] = {_reg_defs::REG_SOFT_RESET, BMP_180_RESET_VALUE};
-  return i2c_write_blocking_until(I2C_BUS0, BMP_180_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 100)) == 2;
+  return i2c_write_blocking_until(I2C_BUS0, BMP_180_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 32)) == 2;
 }
 
 /**

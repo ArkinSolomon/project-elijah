@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <pico/critical_section.h>
+#include <pico/mutex.h>
 
 #define MPU_6050_ADDR 0x68
 #define MPU_6050_DEVICE_ID 0x68
 
 #define CONFIG_MPU_6050_DLPF_CFG 0b010 // See datasheet
-
-#define MAX_MPU_6050_NOT_READY_CYCLES 230
 
 #define GRAVITY_CONSTANT 9.80665
 
@@ -60,17 +60,39 @@ namespace mpu_6050
     RANGE_16g = 0b11
   };
 
+  enum class lp_wake_ctrl
+  {
+    FREQ_1250mHz = 0b00,
+    FREQ_5Hz = 0b01,
+    FREQ_20Hz = 0b10,
+    FREQ_40Hz = 0b11
+  };
+
   struct FactoryTrimData
   {
     double ft_xa, ft_ya, ft_za;
     double ft_xa_change, ft_ya_change, ft_za_change;
   };
 
+  struct ReadSensorData
+  {
+    double accel_x, accel_y, accel_z;
+    absolute_time_t last_update_time;
+  };
+
   inline FactoryTrimData mpu_6050_factory_trim_data{};
-  inline double accel_scale, gyro_scale;
+  inline double accel_scale;
+
+  inline volatile ReadSensorData irq_sens_data{
+    -1, -1, -1, 0
+  };
+  inline critical_section_t irq_sens_data_cs;
+
+  inline mutex_t mpu_6050_lock;
 
   bool check_chip_id();
-  bool configure(uint8_t dlpf_cfg, gyro_full_scale_range gyro_range, accel_full_scale_range accel_range, bool int_enable);
+  bool configure(uint8_t dlpf_cfg, gyro_full_scale_range gyro_range, accel_full_scale_range accel_range,
+                 lp_wake_ctrl wake_ctrl);
   bool configure_default();
   double get_accel_scale(accel_full_scale_range accel_range);
 

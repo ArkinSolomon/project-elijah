@@ -4,6 +4,8 @@
 #include <cstring>
 #include <format>
 #include <string>
+#include <hardware/watchdog.h>
+#include <pico/critical_section.h>
 #include <pico/mutex.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
@@ -22,6 +24,7 @@ void usb_communication::init_usb_com()
 {
   stdio_init_all();
   mutex_init(&usb_comm_mtx);
+  critical_section_init_with_lock_num(&usb_comm_cs, 1);
 }
 
 void usb_communication::scan_for_packets()
@@ -64,6 +67,8 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
   {
     return;
   }
+
+  critical_section_enter_blocking(&usb_comm_cs);
   mutex_enter_blocking(&usb_comm_mtx);
 
   stdio_putchar_raw(type_id);
@@ -74,6 +79,7 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
     stdio_put_string(reinterpret_cast<const char*>(packet_data), write_len, false, false);
   }
   mutex_exit(&usb_comm_mtx);
+  critical_section_exit(&usb_comm_cs);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -82,6 +88,7 @@ void usb_communication::send_string(const std::string& str)
   {
     return;
   }
+  critical_section_enter_blocking(&usb_comm_cs);
   mutex_enter_blocking(&usb_comm_mtx);
 
   const uint16_t str_len = str.size();
@@ -92,6 +99,7 @@ void usb_communication::send_string(const std::string& str)
   stdio_put_string(reinterpret_cast<const char*>(meta_data), 3, false, false);
   stdio_put_string(str.c_str(), str_len, false, false);
   mutex_exit(&usb_comm_mtx);
+  critical_section_exit(&usb_comm_cs);
 }
 
 void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, const uint8_t* packet_data)
@@ -144,7 +152,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
         break;
       }
       send_string(std::format(
-        "xa_diff: {}, ya_diff: {}, za_diff: {}",
+        "Factory trim: xa_diff: {}, ya_diff: {}, za_diff: {}",
         mpu_6050::mpu_6050_factory_trim_data.ft_xa_change,
         mpu_6050::mpu_6050_factory_trim_data.ft_ya_change,
         mpu_6050::mpu_6050_factory_trim_data.ft_za_change
@@ -153,6 +161,12 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     }
   case W25Q64FV_DEV_INFO:
     w25q64fv::print_device_info();
+  case RESTART:
+    send_string("Restarting...");
+    watchdog_enable(100, false);
+
+  // ReSharper disable once CppPossiblyErroneousEmptyStatements CppDFAEndlessLoop
+    while (true);
   default: ;
   }
 

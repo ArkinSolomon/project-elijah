@@ -18,7 +18,7 @@ set(toolchainVersion 13_2_Rel1)
 set(picotoolVersion 2.0.0)
 include(${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 # ====================================================================================
-set(PICO_BOARD gen4_rp2350_24 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -30,7 +30,8 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
-add_executable(elijah-payload ${elijah_SRC})
+add_executable(elijah-payload ${elijah_SRC}
+        src/cs_lock_num.h)
 
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
