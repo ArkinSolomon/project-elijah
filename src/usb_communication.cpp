@@ -33,13 +33,6 @@ usb_communication::USBWritePacket::USBWritePacket(USBWritePacket& other) : data(
 {
 }
 
-usb_communication::USBWritePacket& usb_communication::USBWritePacket::operator=(USBWritePacket& other)
-{
-  data = std::move(other.data);
-  size = other.size;
-  return *this;
-}
-
 
 void usb_communication::init_usb_com()
 {
@@ -76,35 +69,6 @@ void usb_communication::scan_for_packets()
   handle_usb_packet(static_cast<packet_type_id>(packet_type), reinterpret_cast<unsigned char*>(packet_data));
 }
 
-void usb_communication::check_for_send_data()
-{
-  if (!stdio_usb_connected() || curr_write_buff_idx == 0)
-  {
-    return;
-  }
-
-  critical_section_enter_blocking(&usb_cs);
-  write_packets();
-  critical_section_exit(&usb_cs);
-}
-
-void usb_communication::write_packets()
-{
-  gpio_put(CORE_0_LED_PIN, true);
-  for (size_t i = 0; i < curr_write_buff_idx; ++i)
-  {
-    USBWritePacket* write_packet = &usb_write_packet_buff[i];
-    stdio_put_string(reinterpret_cast<const char*>(write_packet->data.get()),
-                     write_packet->size,
-                     false, false);
-    gpio_put(CORE_1_LED_PIN, true);
-    write_packet->data.reset();
-    gpio_put(CORE_1_LED_PIN, false);
-  }
-  gpio_put(CORE_0_LED_PIN, false);
-  curr_write_buff_idx = 0;
-}
-
 void usb_communication::send_packet(const packet_type_id type_id)
 {
   send_packet(type_id, nullptr);
@@ -128,8 +92,8 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
     memcpy(write_data + 1, packet_data, write_len);
   }
 
-  auto p = USBWritePacket(std::move(write_data_ptr), total_len);
-  queue_write_packet(p);
+  const auto packet = USBWritePacket(std::move(write_data_ptr), total_len);
+  write_packet(packet);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -152,13 +116,42 @@ void usb_communication::send_string(const std::string& str)
     memcpy(write_data + 3, str.c_str(), str_len);
   }
 
-  auto p = USBWritePacket(std::move(write_data_ptr), total_len);
-  queue_write_packet(p);
+  const auto packet = USBWritePacket(std::move(write_data_ptr), total_len);
+  write_packet(packet);
 }
 
 void usb_communication::say_hello()
 {
   send_string("Hello, computer \u263a");
+}
+
+void usb_communication::send_collection_data(const CollectionData& collection_data)
+{
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
+  uint8_t serialized_data[52];
+
+  serialized_data[0] = collection_data.time_inst.seconds;
+  serialized_data[1] = collection_data.time_inst.minutes;
+  serialized_data[2] = collection_data.time_inst.hours;
+  serialized_data[3] = collection_data.time_inst.day;
+  serialized_data[4] = collection_data.time_inst.date;
+  serialized_data[5] = collection_data.time_inst.month;
+
+  byte_util::encode_uint16(collection_data.time_inst.year, &serialized_data[6]);
+  byte_util::encode_uint32(collection_data.pressure, &serialized_data[8]);
+
+  byte_util::encode_double(collection_data.temperature, &serialized_data[12]);
+  byte_util::encode_double(collection_data.altitude, &serialized_data[20]);
+
+  byte_util::encode_double(collection_data.accel_x, &serialized_data[28]);
+  byte_util::encode_double(collection_data.accel_y, &serialized_data[36]);
+  byte_util::encode_double(collection_data.accel_z, &serialized_data[44]);
+
+  send_packet(COLLECTION_DATA, serialized_data);
 }
 
 void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, const uint8_t* packet_data)
@@ -232,36 +225,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   delete [] packet_data;
 }
 
-void usb_communication::send_collection_data(const CollectionData& collection_data)
-{
-  if (!stdio_usb_connected())
-  {
-    return;
-  }
-
-  uint8_t serialized_data[52];
-
-  serialized_data[0] = collection_data.time_inst.seconds;
-  serialized_data[1] = collection_data.time_inst.minutes;
-  serialized_data[2] = collection_data.time_inst.hours;
-  serialized_data[3] = collection_data.time_inst.day;
-  serialized_data[4] = collection_data.time_inst.date;
-  serialized_data[5] = collection_data.time_inst.month;
-
-  byte_util::encode_uint16(collection_data.time_inst.year, &serialized_data[6]);
-  byte_util::encode_uint32(collection_data.pressure, &serialized_data[8]);
-
-  byte_util::encode_double(collection_data.temperature, &serialized_data[12]);
-  byte_util::encode_double(collection_data.altitude, &serialized_data[20]);
-
-  byte_util::encode_double(collection_data.accel_x, &serialized_data[28]);
-  byte_util::encode_double(collection_data.accel_y, &serialized_data[36]);
-  byte_util::encode_double(collection_data.accel_z, &serialized_data[44]);
-
-  send_packet(COLLECTION_DATA, serialized_data);
-}
-
-void usb_communication::queue_write_packet(USBWritePacket& packet)
+void usb_communication::write_packet(const USBWritePacket& packet)
 {
   if (!stdio_usb_connected())
   {
@@ -269,13 +233,8 @@ void usb_communication::queue_write_packet(USBWritePacket& packet)
   }
 
   critical_section_enter_blocking(&usb_cs);
-  usb_write_packet_buff[curr_write_buff_idx] = packet;
-  curr_write_buff_idx++;
-
-  if (curr_write_buff_idx == MAX_WRITE_PACKET_BUFF_SIZE)
-  {
-    // write_packets();
-  }
-
+  stdio_put_string(reinterpret_cast<const char*>(packet.data.get()),
+                   packet.size,
+                   false, false);
   critical_section_exit(&usb_cs);
 }
