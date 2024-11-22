@@ -2,9 +2,12 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <bits/basic_string.h>
 #include <pico/critical_section.h>
 #include <pico/mutex.h>
+
+#define MAX_WRITE_PACKET_BUFF_SIZE 32
 
 struct CollectionData;
 
@@ -106,18 +109,34 @@ namespace usb_communication
     }
   };
 
-  inline mutex_t usb_comm_mtx;
-  inline critical_section_t usb_str_cs;
-  inline critical_section_t usb_pak_cs;
+  struct USBWritePacket
+  {
+    std::unique_ptr<uint8_t> data;
+    int size;
+
+    USBWritePacket();
+    USBWritePacket(std::unique_ptr<uint8_t> data, int size);
+    USBWritePacket(USBWritePacket& other);
+    USBWritePacket& operator=(USBWritePacket& other);
+  };
+
+  inline USBWritePacket usb_write_packet_buff[MAX_WRITE_PACKET_BUFF_SIZE];
+  inline size_t curr_write_buff_idx = 0;
+
+  inline critical_section_t usb_cs;
 
   void init_usb_com();
 
   void scan_for_packets();
+  void check_for_send_data();
+  void write_packets();
+
   void send_packet(packet_type_id type_id);
   void send_packet(packet_type_id type_id, const uint8_t* packet_data);
   void send_string(const std::string& str);
+  void say_hello();
 
   void handle_usb_packet(packet_type_id packet_type_id, const uint8_t* packet_data);
   void send_collection_data(const CollectionData& collection_data);
-  void say_hello();
+  void queue_write_packet(USBWritePacket& packet);
 }

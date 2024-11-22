@@ -22,7 +22,7 @@
 int main()
 {
 #ifdef PICO_RP2040
-  set_sys_clock_khz(133000, true);
+  // set_sys_clock_khz(133000, true);
 #elifdef PICO_RP2350
   set_sys_clock_khz(150000, true);
 #endif
@@ -41,9 +41,10 @@ int main()
   {
     usb_communication::send_string("Reboot caused by watchdog");
   }
-  // watchdog_enable(5000, true);
+  watchdog_enable(5000, true);
 
   gpio_put(CORE_0_LED_PIN, false);
+
   launch_core_1();
 
   while (multicore_fifo_get_status() & 0x1 == 0)
@@ -58,7 +59,14 @@ int main()
   {
     set_status(status_manager::NORMAL);
   }
+  while (true)
+  {
+    usb_communication::send_string("hello!");
+    usb_communication::check_for_send_data();
+  }
 
+
+  return 0;
   static bool led_on = false;
   CollectionData collection_data{{}};
   absolute_time_t last_loop_time = 0;
@@ -71,7 +79,7 @@ int main()
     mpu_6050::accel_loop(collection_data);
 
     watchdog_update();
-    gpio_put(CORE_0_LED_PIN, led_on = !led_on);
+    // gpio_put(CORE_0_LED_PIN, led_on = !led_on);
 
     const absolute_time_t main_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
     if (stdio_usb_connected())
@@ -87,6 +95,7 @@ int main()
       set_status(status_manager::USB);
       usb_communication::scan_for_packets();
       usb_communication::send_collection_data(collection_data);
+      usb_communication::check_for_send_data();
 
       uint8_t loop_time_data[32];
       byte_util::encode_uint64(main_loop_time, loop_time_data);

@@ -6,7 +6,6 @@
 #include <string>
 #include <hardware/watchdog.h>
 #include <pico/critical_section.h>
-#include <pico/mutex.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 
@@ -21,12 +20,31 @@
 #include "sensors/mpu_6050/mpu_6050.h"
 #include "storage/w25q64fv.h"
 
+usb_communication::USBWritePacket::USBWritePacket() : data(nullptr), size(-1)
+{
+}
+
+usb_communication::USBWritePacket::USBWritePacket(std::unique_ptr<uint8_t> data,
+                                                  const int size) : data(std::move(data)), size(size)
+{
+}
+
+usb_communication::USBWritePacket::USBWritePacket(USBWritePacket& other) : data(std::move(other.data)), size(other.size)
+{
+}
+
+usb_communication::USBWritePacket& usb_communication::USBWritePacket::operator=(USBWritePacket& other)
+{
+  data = std::move(other.data);
+  size = other.size;
+  return *this;
+}
+
+
 void usb_communication::init_usb_com()
 {
   stdio_init_all();
-  mutex_init(&usb_comm_mtx);
-  critical_section_init_with_lock_num(&usb_str_cs, CS_LOCK_NUM_USB_STR);
-  critical_section_init_with_lock_num(&usb_pak_cs, CS_LOCK_NUM_USB_PAK);
+  critical_section_init_with_lock_num(&usb_cs, CS_LOCK_NUM_USB);
 }
 
 void usb_communication::scan_for_packets()
@@ -58,6 +76,35 @@ void usb_communication::scan_for_packets()
   handle_usb_packet(static_cast<packet_type_id>(packet_type), reinterpret_cast<unsigned char*>(packet_data));
 }
 
+void usb_communication::check_for_send_data()
+{
+  if (!stdio_usb_connected() || curr_write_buff_idx == 0)
+  {
+    return;
+  }
+
+  critical_section_enter_blocking(&usb_cs);
+  write_packets();
+  critical_section_exit(&usb_cs);
+}
+
+void usb_communication::write_packets()
+{
+  gpio_put(CORE_0_LED_PIN, true);
+  for (size_t i = 0; i < curr_write_buff_idx; ++i)
+  {
+    USBWritePacket* write_packet = &usb_write_packet_buff[i];
+    stdio_put_string(reinterpret_cast<const char*>(write_packet->data.get()),
+                     write_packet->size,
+                     false, false);
+    gpio_put(CORE_1_LED_PIN, true);
+    write_packet->data.reset();
+    gpio_put(CORE_1_LED_PIN, false);
+  }
+  gpio_put(CORE_0_LED_PIN, false);
+  curr_write_buff_idx = 0;
+}
+
 void usb_communication::send_packet(const packet_type_id type_id)
 {
   send_packet(type_id, nullptr);
@@ -71,19 +118,18 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
   }
 
   const uint8_t write_len = packet_type_lens.at(type_id);
+  const int total_len = write_len + 1;
 
-  critical_section_enter_blocking(&usb_pak_cs);
-  mutex_enter_blocking(&usb_comm_mtx);
-
-  stdio_putchar_raw(type_id);
+  std::unique_ptr<uint8_t> write_data_ptr(new uint8_t[total_len]);
+  const auto write_data = write_data_ptr.get();
 
   if (write_len > 0)
   {
-    stdio_put_string(reinterpret_cast<const char*>(packet_data), write_len, false, false);
+    memcpy(write_data + 1, packet_data, write_len);
   }
 
-  mutex_exit(&usb_comm_mtx);
-  critical_section_exit(&usb_pak_cs);
+  auto p = USBWritePacket(std::move(write_data_ptr), total_len);
+  queue_write_packet(p);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -93,18 +139,26 @@ void usb_communication::send_string(const std::string& str)
     return;
   }
 
-  critical_section_enter_blocking(&usb_str_cs);
-  mutex_enter_blocking(&usb_comm_mtx);
-
   const uint16_t str_len = str.size();
-  const uint8_t meta_data[3] = {
-    STRING, static_cast<uint8_t>(str_len >> 8), static_cast<uint8_t>(str_len & 0xFF)
-  };
+  const int total_len = str_len + 3;
 
-  stdio_put_string(reinterpret_cast<const char*>(meta_data), 3, false, false);
-  stdio_put_string(str.c_str(), str_len, false, false);
-  mutex_exit(&usb_comm_mtx);
-  critical_section_exit(&usb_str_cs);
+  std::unique_ptr<uint8_t> write_data_ptr(new uint8_t[total_len]{
+    STRING, static_cast<uint8_t>(str_len >> 8), static_cast<uint8_t>(str_len & 0xFF)
+  });
+  const auto write_data = write_data_ptr.get();
+
+  if (str_len > 0)
+  {
+    memcpy(write_data + 3, str.c_str(), str_len);
+  }
+
+  auto p = USBWritePacket(std::move(write_data_ptr), total_len);
+  queue_write_packet(p);
+}
+
+void usb_communication::say_hello()
+{
+  send_string("Hello, computer \u263a");
 }
 
 void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, const uint8_t* packet_data)
@@ -207,7 +261,21 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
   send_packet(COLLECTION_DATA, serialized_data);
 }
 
-void usb_communication::say_hello()
+void usb_communication::queue_write_packet(USBWritePacket& packet)
 {
-  send_string("Hello, computer \u263a");
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
+  critical_section_enter_blocking(&usb_cs);
+  usb_write_packet_buff[curr_write_buff_idx] = packet;
+  curr_write_buff_idx++;
+
+  if (curr_write_buff_idx == MAX_WRITE_PACKET_BUFF_SIZE)
+  {
+    // write_packets();
+  }
+
+  critical_section_exit(&usb_cs);
 }

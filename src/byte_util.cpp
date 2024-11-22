@@ -1,6 +1,7 @@
 #include "byte_util.h"
 #include <cmath>
 #include <cstring>
+#include <pico/mem_ops.h>
 
 void byte_util::encode_int16(const int16_t data, uint8_t* output, uint8_t& sign, const uint8_t sign_bit)
 {

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Initialise pico_sdk from installed location
@@ -58,6 +58,10 @@ target_link_libraries(elijah-payload
         hardware_pio
         pico_multicore
         pico_rand
+        pico_mem_ops_default
+        pico_float_default
+        pico_double_default
+        pico_int64_ops_default
 )
 
 pico_add_extra_outputs(elijah-payload)
