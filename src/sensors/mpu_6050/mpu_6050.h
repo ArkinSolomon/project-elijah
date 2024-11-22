@@ -7,9 +7,10 @@
 #define MPU_6050_ADDR 0x68
 #define MPU_6050_DEVICE_ID 0x68
 
-#define CONFIG_MPU_6050_DLPF_CFG 0b010 // See datasheet
+#define CONFIG_MPU_6050_DLPF_CFG 0b110 // See datasheet
 
 #define GRAVITY_CONSTANT 9.80665
+#define MAX_CYCLE_DELAY_DIFF_MS 575
 
 struct CollectionData;
 
@@ -77,15 +78,16 @@ namespace mpu_6050
   struct ReadSensorData
   {
     double accel_x, accel_y, accel_z;
-    absolute_time_t last_update_time;
+    absolute_time_t update_time;
+
+    ReadSensorData();
+    ReadSensorData(volatile const ReadSensorData &read_sensor_data);
   };
 
   inline FactoryTrimData mpu_6050_factory_trim_data{};
   inline double accel_scale;
 
-  inline volatile ReadSensorData irq_sens_data{
-    -1, -1, -1, 0
-  };
+  inline ReadSensorData irq_sens_data;
   inline critical_section_t irq_sens_data_cs;
 
   inline mutex_t mpu_6050_lock;
@@ -97,10 +99,10 @@ namespace mpu_6050
   double get_accel_scale(accel_full_scale_range accel_range);
 
   bool self_test();
-  double factory_trim_gyro(double test_value);
   double factory_trim_accel(double test_value);
   double calculate_self_test_change(double str, double ft);
 
   bool get_data(double& accel_x, double& accel_y, double& accel_z);
+  void data_int(uint gpio, uint32_t event_mask);
   void accel_loop(CollectionData& collection_data);
 }

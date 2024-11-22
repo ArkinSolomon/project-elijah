@@ -107,7 +107,8 @@ namespace usb_communication
   };
 
   inline mutex_t usb_comm_mtx;
-  inline critical_section_t usb_comm_cs;
+  inline critical_section_t usb_str_cs;
+  inline critical_section_t usb_pak_cs;
 
   void init_usb_com();
 

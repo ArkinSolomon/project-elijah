@@ -127,7 +127,6 @@ void w25q64fv::wait_for_not_busy()
     }
 
     set_fault(status_manager::DEVICE_W25Q64FV, false);
-    usb_communication::send_string(std::format("{:08b}", status_reg));
     if (!(status_reg & 0x01))
     {
       break;

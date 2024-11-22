@@ -11,6 +11,20 @@
 #include "src/usb_communication.h"
 #include "src/sensors/i2c/i2c_util.h"
 
+mpu_6050::ReadSensorData::ReadSensorData()
+{
+  accel_x = accel_y = accel_z = -1;
+  update_time = 0;
+}
+
+mpu_6050::ReadSensorData::ReadSensorData(volatile const ReadSensorData& read_sensor_data)
+{
+  accel_x = read_sensor_data.accel_x;
+  accel_y = read_sensor_data.accel_y;
+  accel_z = read_sensor_data.accel_z;
+  update_time = read_sensor_data.update_time;
+}
+
 /**
  * Check if the chip is detected.
  *
@@ -179,50 +193,50 @@ bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
   return true;
 }
 
+void mpu_6050::data_int(uint gpio, uint32_t event_mask)
+{
+  critical_section_enter_blocking(&irq_sens_data_cs);
+  usb_communication::send_string(std::format("mpu_6050::data_int {} ", gpio));
+  ReadSensorData data;
+  const bool success = get_data(data.accel_x, data.accel_y, data.accel_z);
+  if (!success)
+  {
+    usb_communication::send_string("MPU 6050 failed to get data on interrupt");
+    set_fault(status_manager::DEVICE_MPU_6050, true);
+    return;
+  }
+
+  set_fault(status_manager::DEVICE_MPU_6050, false);
+
+  data.update_time = get_absolute_time();
+
+  irq_sens_data.accel_x = data.accel_x;
+  irq_sens_data.accel_y = data.accel_y;
+  irq_sens_data.accel_z = data.accel_z;
+  irq_sens_data.update_time = data.update_time;
+  critical_section_exit(&irq_sens_data_cs);
+}
+
 void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
-  static absolute_time_t last_detect_time;
 
   if (!critical_section_is_initialized(&irq_sens_data_cs))
   {
     critical_section_init_with_lock_num(&irq_sens_data_cs, CS_LOCK_NUM_MPU_SENS_DATA);
   }
   critical_section_enter_blocking(&irq_sens_data_cs);
-  // ReadSensorData last_sensor_data = irq_sens_data;
+  const ReadSensorData last_sensor_data = irq_sens_data;
   critical_section_exit(&irq_sens_data_cs);
 
-  if (!device_detected)
+  if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
   {
-    device_detected = check_chip_id();
-    if (!device_detected)
-    {
-      set_fault(status_manager::DEVICE_MPU_6050, true);
-      usb_communication::send_string("Fault: MPU 6050, device not detected");
-      return;
-    }
-
-    const bool success = self_test();
-    if (!success)
-    {
-      device_detected = false;
-      set_fault(status_manager::DEVICE_MPU_6050, true);
-      usb_communication::send_string("Fault: MPU 6050, failed to configure/self-test");
-      return;
-    }
-    usb_communication::send_string("MPU 6050 configured");
+    usb_communication::send_string(std::format("It's been more than {}ms since a sensor update", MAX_CYCLE_DELAY_DIFF_MS));
   }
 
-  const bool success = get_data(collection_data.accel_x, collection_data.accel_y, collection_data.accel_z);
-  if (!success)
-  {
-    usb_communication::send_string("Fault: MPU 6050, failed to read outputs");
-    set_fault(status_manager::DEVICE_MPU_6050, true);
-  }
-
-  double accel_magnitude = sqrt(
-    pow(collection_data.accel_x, 2) + pow(collection_data.accel_y, 2) + pow(collection_data.accel_z, 2));
-  usb_communication::send_string(std::format("magnitude {}", accel_magnitude));
+  collection_data.accel_x = last_sensor_data.accel_x;
+  collection_data.accel_y = last_sensor_data.accel_y;
+  collection_data.accel_z = last_sensor_data.accel_z;
 
   set_fault(status_manager::DEVICE_MPU_6050, false);
 }

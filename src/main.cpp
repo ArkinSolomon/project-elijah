@@ -19,11 +19,6 @@
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
 
-void int_tst(uint gpio, uint32_t event_mask)
-{
-  // usb_communication::send_string("interupt");
-}
-
 int main()
 {
 #ifdef PICO_RP2040
@@ -72,6 +67,7 @@ int main()
     const absolute_time_t start_time = get_absolute_time();
     ds_1307::clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
+    mpu_6050::data_int(0, 0);
     mpu_6050::accel_loop(collection_data);
 
     watchdog_update();
@@ -130,7 +126,7 @@ void pin_init()
 
   gpio_init(MPU_6050_INT_PIN);
   gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
-  // gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, false, int_tst);
+  // gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true, mpu_6050::data_int);
 
   // SPI at 104MHz
   gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);
