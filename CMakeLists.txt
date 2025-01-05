@@ -4,6 +4,9 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_BUILD_TYPE DEBUG)
+
+
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 
@@ -40,7 +43,7 @@ pico_set_program_name(elijah-payload "elijah-payload")
 pico_set_program_version(elijah-payload "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(elijah-payload 0)
+pico_enable_stdio_uart(elijah-payload 1)
 pico_enable_stdio_usb(elijah-payload 1)
 
 # Add the standard library to the build

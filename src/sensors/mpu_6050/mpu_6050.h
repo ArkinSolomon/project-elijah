@@ -10,7 +10,7 @@
 #define CONFIG_MPU_6050_DLPF_CFG 0b110 // See datasheet
 
 #define GRAVITY_CONSTANT 9.80665
-#define MAX_CYCLE_DELAY_DIFF_MS 575
+#define MAX_CYCLE_DELAY_DIFF_MS 300
 
 struct CollectionData;
 
@@ -86,17 +86,18 @@ namespace mpu_6050
 
   inline FactoryTrimData mpu_6050_factory_trim_data{};
   inline double accel_scale;
+  inline uint16_t max_time_since_irq;
 
   inline ReadSensorData irq_sens_data;
-  inline critical_section_t irq_sens_data_cs;
-
-  inline mutex_t mpu_6050_lock;
+  inline critical_section_t mpu_6050_cs;
 
   bool check_chip_id();
   bool configure(uint8_t dlpf_cfg, gyro_full_scale_range gyro_range, accel_full_scale_range accel_range,
-                 lp_wake_ctrl wake_ctrl);
+                 lp_wake_ctrl wake_ctrl, bool int_enable, bool self_test);
   bool configure_default();
+  bool configure_default_with_lock();
   double get_accel_scale(accel_full_scale_range accel_range);
+  void init_crit_section();
 
   bool self_test();
   double factory_trim_accel(double test_value);

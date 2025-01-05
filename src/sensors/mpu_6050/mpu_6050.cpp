@@ -38,11 +38,35 @@ bool mpu_6050::check_chip_id()
 }
 
 bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyro_range,
-                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl)
+                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl, const bool int_enable,
+                         const bool self_test)
 {
+  switch (wake_ctrl)
+  {
+  case lp_wake_ctrl::FREQ_1250mHz:
+    max_time_since_irq = 1500;
+    break;
+  case lp_wake_ctrl::FREQ_5Hz:
+    max_time_since_irq = 500;
+    break;
+  case lp_wake_ctrl::FREQ_20Hz:
+    max_time_since_irq = 110;
+    break;
+  case lp_wake_ctrl::FREQ_40Hz:
+    max_time_since_irq = 75;
+    break;
+  }
+
   const uint8_t config_reg_data = dlpf_cfg & 0x07;
-  const uint8_t gyro_config_reg_data = static_cast<uint8_t>(gyro_range) << 3 & 0x18;
-  const uint8_t accel_config_reg_dat = static_cast<uint8_t>(accel_range) << 2 & 0x18;
+  uint8_t gyro_config_reg_data = static_cast<uint8_t>(gyro_range) << 3 & 0x18;
+  uint8_t accel_config_reg_dat = static_cast<uint8_t>(accel_range) << 2 & 0x18;
+
+  if (self_test)
+  {
+    gyro_config_reg_data |= 0xE0;
+    accel_config_reg_dat |= 0xE0;
+  }
+
   const uint8_t write_cfg_data[4] = {
     _reg_defs::REG_CONFIG, config_reg_data, gyro_config_reg_data, accel_config_reg_dat
   };
@@ -56,7 +80,8 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
 
   accel_scale = get_accel_scale(accel_range);
 
-  constexpr uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, 0x01};
+  uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE};
+  int_en_data[1] = int_enable ? 0x01 : 0x00;
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, int_en_data, 2, false,
                                            delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 2)
@@ -65,8 +90,7 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
   }
 
   const uint8_t wake_ctrl_reg_val = static_cast<uint8_t>(wake_ctrl) << 6 | 0x07;
-  usb_communication::send_string(std::format("wake_ctrl {:08b}", wake_ctrl_reg_val));
-  const uint8_t sleep_disable_data[3] = {_reg_defs::REG_PWR_MGMT_1, 0x18, wake_ctrl_reg_val};
+  const uint8_t sleep_disable_data[3] = {_reg_defs::REG_PWR_MGMT_1, 0x28, wake_ctrl_reg_val};
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, sleep_disable_data, 3, false,
                                            delayed_by_ms(get_absolute_time(), 32));
   return bytes_written == 3;
@@ -75,7 +99,15 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
 bool mpu_6050::configure_default()
 {
   return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_5Hz);
+                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_20Hz, true, false);
+}
+
+bool mpu_6050::configure_default_with_lock()
+{
+  critical_section_enter_blocking(&mpu_6050_cs);
+  const bool ret_val = configure_default();
+  critical_section_exit(&mpu_6050_cs);
+  return ret_val;
 }
 
 double mpu_6050::get_accel_scale(const accel_full_scale_range accel_range)
@@ -94,69 +126,73 @@ double mpu_6050::get_accel_scale(const accel_full_scale_range accel_range)
   return 0;
 }
 
+void mpu_6050::init_crit_section()
+{
+  if (!critical_section_is_initialized(&mpu_6050_cs))
+  {
+    critical_section_init_with_lock_num(&mpu_6050_cs, CS_LOCK_NUM_MPU_SENS_DATA);
+  }
+}
+
 bool mpu_6050::self_test()
 {
-  uint8_t write_data[5];
-  write_data[0] = _reg_defs::REG_SELF_TEST_X;
-
-  // Write a bunch of random values to self test registers x, y, z, and a at once
-  const auto rand_loc = reinterpret_cast<uint32_t*>(&write_data[1]);
-  *rand_loc = get_rand_32();
-  write_data[4] &= 0x3F;
-
+  critical_section_enter_blocking(&mpu_6050_cs);
   bool success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz);
+                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false, true);
   if (!success)
   {
     return false;
   }
 
-  const uint8_t xa_test = write_data[1] >> 4 | write_data[4] & 0x30
-                , ya_test = write_data[2] >> 4 | write_data[4] & 0x0C
-                , za_test = write_data[3] >> 4 | write_data[4] & 0x03;
+  sleep_ms(250);
 
-  double st_d_accel_x, st_d_accel_y, st_d_accel_z;
-  success = get_data(st_d_accel_x, st_d_accel_y, st_d_accel_z);
+  uint8_t self_test_registers[5];
+  success = i2c_util::read_bytes(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_SELF_TEST_X, self_test_registers, 5);
   if (!success)
   {
     return false;
   }
 
-  int bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, write_data, 5, false,
-                                               delayed_by_ms(get_absolute_time(), 32));
-  if (bytes_written != 5)
-  {
-    return false;
-  }
-
-  double st_e_accel_x, st_e_accel_y, st_e_accel_z;
-  success = get_data(st_e_accel_x, st_e_accel_y, st_e_accel_z);
-  if (!success)
-  {
-    return false;
-  }
-
-  const double str_accel_x = st_e_accel_x - st_d_accel_x
-               , str_accel_y = st_e_accel_y - st_d_accel_y
-               , str_accel_z = st_e_accel_z - st_d_accel_z;
-
-  *rand_loc = 0;
-  bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, write_data, 5, false,
-                                           delayed_by_ms(get_absolute_time(), 32));
-  if (bytes_written != 5)
-  {
-    return false;
-  }
+  const uint8_t xa_test = self_test_registers[1] >> 5 << 2 | self_test_registers[4] & 0x30
+                , ya_test = self_test_registers[2] >> 5 << 2 | self_test_registers[4] & 0x0C
+                , za_test = self_test_registers[3] >> 5 << 2 | self_test_registers[4] & 0x03;
 
   mpu_6050_factory_trim_data.ft_xa = factory_trim_accel(xa_test);
   mpu_6050_factory_trim_data.ft_ya = factory_trim_accel(ya_test);
   mpu_6050_factory_trim_data.ft_za = factory_trim_accel(za_test);
 
-  mpu_6050_factory_trim_data.ft_xa_change = calculate_self_test_change(str_accel_x, mpu_6050_factory_trim_data.ft_xa);
-  mpu_6050_factory_trim_data.ft_ya_change = calculate_self_test_change(str_accel_y, mpu_6050_factory_trim_data.ft_ya);
-  mpu_6050_factory_trim_data.ft_za_change = calculate_self_test_change(str_accel_z, mpu_6050_factory_trim_data.ft_za);
+  double xa_st_en, ya_st_en, za_st_en;
+  success = get_data(xa_st_en, ya_st_en, za_st_en);
+  if (!success)
+  {
+    return false;
+  }
 
-  return configure_default();
+  success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
+                      accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false, false);
+  if (!success)
+  {
+    return false;
+  }
+
+  double xa_st_dis, ya_st_dis, za_st_dis;
+  success = get_data(xa_st_dis, ya_st_dis, za_st_dis);
+  if (!success)
+  {
+    return false;
+  }
+
+  const double str_xa = xa_st_en - xa_st_dis
+               , str_ya = ya_st_dis - ya_st_en
+               , str_za = za_st_dis - za_st_en;
+
+  mpu_6050_factory_trim_data.ft_xa_change = calculate_self_test_change(str_xa, mpu_6050_factory_trim_data.ft_xa);
+  mpu_6050_factory_trim_data.ft_ya_change = calculate_self_test_change(str_ya, mpu_6050_factory_trim_data.ft_ya);
+  mpu_6050_factory_trim_data.ft_za_change = calculate_self_test_change(str_za, mpu_6050_factory_trim_data.ft_za);
+
+  const bool ret_val = configure_default();
+  critical_section_exit(&mpu_6050_cs);
+  return ret_val;
 }
 
 double mpu_6050::factory_trim_accel(const double test_value)
@@ -183,20 +219,26 @@ bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
     return false;
   }
 
-  accel_x = static_cast<int16_t>(read_data[0] << 8 | read_data[1]) * accel_scale + mpu_6050_factory_trim_data.
-    ft_xa_change;
-  accel_y = static_cast<int16_t>(read_data[2] << 8 | read_data[3]) * accel_scale + mpu_6050_factory_trim_data.
-    ft_ya_change;
-  accel_z = static_cast<int16_t>(read_data[4] << 8 | read_data[5]) * accel_scale + mpu_6050_factory_trim_data.
-    ft_za_change;
+  accel_x = static_cast<int16_t>(read_data[0] << 8 | read_data[1]) * accel_scale; // * mpu_6050_factory_trim_data.
+  // ft_xa_change;
+  accel_y = static_cast<int16_t>(read_data[2] << 8 | read_data[3]) * accel_scale; // * mpu_6050_factory_trim_data.
+  // ft_ya_change;
+  accel_z = static_cast<int16_t>(read_data[4] << 8 | read_data[5]) * accel_scale; // * mpu_6050_factory_trim_data.
+  // ft_za_change;
 
   return true;
 }
 
 void mpu_6050::data_int(uint gpio, uint32_t event_mask)
 {
-  critical_section_enter_blocking(&irq_sens_data_cs);
-  usb_communication::send_string(std::format("mpu_6050::data_int {} ", gpio));
+  if (!critical_section_is_initialized(&mpu_6050_cs))
+  {
+    return;
+  }
+
+  critical_section_enter_blocking(&mpu_6050_cs);
+
+  // usb_communication::send_string(std::format("mpu_6050::data_int on pin {} ", gpio));
   ReadSensorData data;
   const bool success = get_data(data.accel_x, data.accel_y, data.accel_z);
   if (!success)
@@ -214,29 +256,31 @@ void mpu_6050::data_int(uint gpio, uint32_t event_mask)
   irq_sens_data.accel_y = data.accel_y;
   irq_sens_data.accel_z = data.accel_z;
   irq_sens_data.update_time = data.update_time;
-  critical_section_exit(&irq_sens_data_cs);
+  critical_section_exit(&mpu_6050_cs);
 }
 
 void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
 
-  if (!critical_section_is_initialized(&irq_sens_data_cs))
-  {
-    critical_section_init_with_lock_num(&irq_sens_data_cs, CS_LOCK_NUM_MPU_SENS_DATA);
-  }
-  critical_section_enter_blocking(&irq_sens_data_cs);
+  gpio_put(CORE_1_LED_PIN, true);
+  critical_section_enter_blocking(&mpu_6050_cs);
+  gpio_put(CORE_1_LED_PIN, false);
+
   const ReadSensorData last_sensor_data = irq_sens_data;
-  critical_section_exit(&irq_sens_data_cs);
+  gpio_put(CORE_0_LED_PIN, true);
 
   if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
   {
-    usb_communication::send_string(std::format("It's been more than {}ms since a sensor update", MAX_CYCLE_DELAY_DIFF_MS));
+    usb_communication::send_string(std::format("It's been more than {}ms since a sensor update (updated at {})",
+                                               MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time));
   }
 
   collection_data.accel_x = last_sensor_data.accel_x;
   collection_data.accel_y = last_sensor_data.accel_y;
   collection_data.accel_z = last_sensor_data.accel_z;
+  gpio_put(CORE_0_LED_PIN, true);
 
   set_fault(status_manager::DEVICE_MPU_6050, false);
+  critical_section_exit(&mpu_6050_cs);
 }

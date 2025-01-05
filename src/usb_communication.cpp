@@ -87,6 +87,7 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
   std::unique_ptr<uint8_t> write_data_ptr(new uint8_t[total_len]);
   const auto write_data = write_data_ptr.get();
 
+  write_data[0] = type_id;
   if (write_len > 0)
   {
     memcpy(write_data + 1, packet_data, write_len);
@@ -204,7 +205,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
         break;
       }
       send_string(std::format(
-        "Factory trim: xa_diff: {}, ya_diff: {}, za_diff: {}",
+        "Factory trim: Acceleration change (x, y, z): {:.5}, {:.5}, {:.5}",
         mpu_6050::mpu_6050_factory_trim_data.ft_xa_change,
         mpu_6050::mpu_6050_factory_trim_data.ft_ya_change,
         mpu_6050::mpu_6050_factory_trim_data.ft_za_change

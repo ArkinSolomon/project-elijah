@@ -55,7 +55,11 @@ void status_manager::set_status(const device_status status)
     return;
   }
 
-  usb_communication::send_string(std::format("Device status changed: 0x{:08x}", static_cast<uint32_t>(status)));
+  usb_communication::send_string(std::format("Device status changed: 0x{:08X} ({})", static_cast<uint32_t>(status),
+                                             status_name_map.contains(status)
+                                               ? status_name_map.at(status)
+                                               : "Unknown status")
+  );
   current_status = status;
   pio_sm_put_blocking(pio, sm, status);
   send_status();

@@ -18,46 +18,33 @@ void launch_core_1()
 
 void core_1_main()
 {
-  while (true)
+  gpio_put(CORE_1_LED_PIN, false);
+
+  const bool did_w25q64fv_init = w25q64fv::init() && w25q64fv::chip_erase();
+  if (!did_w25q64fv_init)
   {
-    gpio_put(CORE_1_LED_PIN, true);
-    for (int i = 0; i < 10; i++)
-    {
-      usb_communication::send_string(std::format("Hello World core 1! {}", i));
-      sleep_ms(i * 40);
-    }
-    sleep_ms(3540);
-    gpio_put(CORE_1_LED_PIN, false);
-    sleep_ms(1000);
+    usb_communication::send_string("Fault W25Q64FV, device failed to initialize");
+    set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
+    multicore_fifo_push_blocking(CORE_1_READY_FLAG);
+    return;
   }
 
-  // gpio_put(CORE_1_LED_PIN, false);
-  //
-  // const bool did_w25q64fv_init = w25q64fv::init() && w25q64fv::chip_erase();
-  // if (!did_w25q64fv_init)
-  // {
-  //   usb_communication::send_string("Fault W25Q64FV, device failed to initialize");
-  //   set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
-  //   multicore_fifo_push_blocking(CORE_1_READY_FLAG);
-  //   return;
-  // }
-  //
-  // w25q64fv::wait_for_not_busy();
-  //
-  // set_status(status_manager::NORMAL);
-  // multicore_fifo_push_blocking(CORE_1_READY_FLAG);
-  //
-  // static bool led_on = false;
-  // while (true)
-  // {
-  //   const absolute_time_t start_time = get_absolute_time();
-  //   gpio_put(CORE_1_LED_PIN, led_on = !led_on);
-  //
-  //   sleep_ms(100);
-  //
-  //   mutex_enter_blocking(&core_1_stats::loop_time_mtx);
-  //   const uint64_t elapsed_time = absolute_time_diff_us(start_time, get_absolute_time());
-  //   core_1_stats::loop_time = elapsed_time;
-  //   mutex_exit(&core_1_stats::loop_time_mtx);
-  // }
+  w25q64fv::wait_for_not_busy();
+
+  set_status(status_manager::NORMAL);
+  multicore_fifo_push_blocking(CORE_1_READY_FLAG);
+
+  static bool led_on = false;
+  while (true)
+  {
+    const absolute_time_t start_time = get_absolute_time();
+    // gpio_put(CORE_1_LED_PIN, led_on = !led_on);
+
+    sleep_ms(100);
+
+    mutex_enter_blocking(&core_1_stats::loop_time_mtx);
+    const uint64_t elapsed_time = absolute_time_diff_us(start_time, get_absolute_time());
+    core_1_stats::loop_time = elapsed_time;
+    mutex_exit(&core_1_stats::loop_time_mtx);
+  }
 }

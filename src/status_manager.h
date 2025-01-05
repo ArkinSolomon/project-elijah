@@ -1,4 +1,6 @@
 #pragma once
+#include <map>
+#include <string>
 #include <hardware/i2c.h>
 #include <hardware/pio.h>
 #include <pico/stdlib.h>
@@ -53,6 +55,14 @@ namespace status_manager
   };
 
   inline device_status current_status = STATUS_NOT_SET;
+  inline const std::map<device_status, std::string> status_name_map = {
+    {STATUS_NOT_SET, "Not set"},
+    {BOOTING, "Booting"},
+    {NORMAL, "Normal"},
+    {FAULT, "Fault"},
+    {DONE, "Done"},
+    {USB, "USB"}
+  };
 
   void status_manager_pio_init();
   void set_status(device_status status);
