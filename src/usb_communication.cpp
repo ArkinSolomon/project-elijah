@@ -20,20 +20,6 @@
 #include "sensors/mpu_6050/mpu_6050.h"
 #include "storage/w25q64fv.h"
 
-usb_communication::USBWritePacket::USBWritePacket() : data(nullptr), size(-1)
-{
-}
-
-usb_communication::USBWritePacket::USBWritePacket(std::unique_ptr<uint8_t> data,
-                                                  const int size) : data(std::move(data)), size(size)
-{
-}
-
-usb_communication::USBWritePacket::USBWritePacket(USBWritePacket& other) : data(std::move(other.data)), size(other.size)
-{
-}
-
-
 void usb_communication::init_usb_com()
 {
   stdio_init_all();
@@ -84,17 +70,15 @@ void usb_communication::send_packet(const packet_type_id type_id, const uint8_t 
   const uint8_t write_len = packet_type_lens.at(type_id);
   const int total_len = write_len + 1;
 
-  std::unique_ptr<uint8_t> write_data_ptr(new uint8_t[total_len]);
-  const auto write_data = write_data_ptr.get();
-
+  uint8_t write_data[total_len];
   write_data[0] = type_id;
+
   if (write_len > 0)
   {
     memcpy(write_data + 1, packet_data, write_len);
   }
 
-  const auto packet = USBWritePacket(std::move(write_data_ptr), total_len);
-  write_packet(packet);
+  write_packet(write_data, total_len);
 }
 
 void usb_communication::send_string(const std::string& str)
@@ -105,20 +89,33 @@ void usb_communication::send_string(const std::string& str)
   }
 
   const uint16_t str_len = str.size();
-  const int total_len = str_len + 3;
+  const uint16_t total_len = str_len + 3;
 
-  std::unique_ptr<uint8_t> write_data_ptr(new uint8_t[total_len]{
-    STRING, static_cast<uint8_t>(str_len >> 8), static_cast<uint8_t>(str_len & 0xFF)
-  });
-  const auto write_data = write_data_ptr.get();
+  if (str_len > 100)
+  {
+    // send_string(std::format("allocating  {}", total_len));
+  }
+
+  gpio_put(CORE_0_LED_PIN, true);
+  uint8_t write_data[total_len];
+  for (int i = 0; i < total_len; i++)
+  {
+    write_data[i] = 'A';
+  }
+  gpio_put(CORE_0_LED_PIN, false);
+
+  write_data[0] = STRING;
+  write_data[1] = str_len >> 8;
+  write_data[2] = str_len & 0xFF;
 
   if (str_len > 0)
   {
-    memcpy(write_data + 3, str.c_str(), str_len);
+    strcpy(reinterpret_cast<char*>(write_data + 3), str.c_str());
   }
 
-  const auto packet = USBWritePacket(std::move(write_data_ptr), total_len);
-  write_packet(packet);
+  gpio_put(CORE_1_LED_PIN, true);
+  write_packet(write_data, total_len);
+  gpio_put(CORE_1_LED_PIN, false);
 }
 
 void usb_communication::say_hello()
@@ -201,19 +198,21 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
       const bool success = mpu_6050::self_test();
       if (!success)
       {
-        send_string("MPU 6050 self-test failed");
+        send_string("MPU 6050 self-test failed to execute");
         break;
       }
+
       send_string(std::format(
-        "Factory trim: Acceleration change (x, y, z): {:.5}, {:.5}, {:.5}",
-        mpu_6050::mpu_6050_factory_trim_data.ft_xa_change,
-        mpu_6050::mpu_6050_factory_trim_data.ft_ya_change,
-        mpu_6050::mpu_6050_factory_trim_data.ft_za_change
+        "Change from factory trim (x, y, z): {:.7}%, {:.7}%, {:.7}%",
+        mpu_6050::mpu_6050_factory_trim_data.ft_xa_change_percent,
+        mpu_6050::mpu_6050_factory_trim_data.ft_ya_change_percent,
+        mpu_6050::mpu_6050_factory_trim_data.ft_za_change_percent
       ));
       break;
     }
   case W25Q64FV_DEV_INFO:
     w25q64fv::print_device_info();
+    break;
   case RESTART:
     send_string("Restarting...");
     watchdog_enable(100, false);
@@ -226,7 +225,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   delete [] packet_data;
 }
 
-void usb_communication::write_packet(const USBWritePacket& packet)
+void usb_communication::write_packet(const uint8_t* packet_data, const size_t packet_len)
 {
   if (!stdio_usb_connected())
   {
@@ -234,8 +233,6 @@ void usb_communication::write_packet(const USBWritePacket& packet)
   }
 
   critical_section_enter_blocking(&usb_cs);
-  stdio_put_string(reinterpret_cast<const char*>(packet.data.get()),
-                   packet.size,
-                   false, false);
+  stdio_put_string(reinterpret_cast<const char*>(packet_data), static_cast<int>(packet_len), false, false);
   critical_section_exit(&usb_cs);
 }

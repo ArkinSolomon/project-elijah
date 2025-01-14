@@ -72,7 +72,7 @@ namespace mpu_6050
   struct FactoryTrimData
   {
     double ft_xa, ft_ya, ft_za;
-    double ft_xa_change, ft_ya_change, ft_za_change;
+    double ft_xa_change_percent, ft_ya_change_percent, ft_za_change_percent;
   };
 
   struct ReadSensorData
@@ -93,7 +93,7 @@ namespace mpu_6050
 
   bool check_chip_id();
   bool configure(uint8_t dlpf_cfg, gyro_full_scale_range gyro_range, accel_full_scale_range accel_range,
-                 lp_wake_ctrl wake_ctrl, bool int_enable, bool self_test);
+                 lp_wake_ctrl wake_ctrl, bool self_test);
   bool configure_default();
   bool configure_default_with_lock();
   double get_accel_scale(accel_full_scale_range accel_range);
@@ -101,7 +101,7 @@ namespace mpu_6050
 
   bool self_test();
   double factory_trim_accel(double test_value);
-  double calculate_self_test_change(double str, double ft);
+  double calculate_self_test_change_percent(double str, double ft);
 
   bool get_data(double& accel_x, double& accel_y, double& accel_z);
   void data_int(uint gpio, uint32_t event_mask);

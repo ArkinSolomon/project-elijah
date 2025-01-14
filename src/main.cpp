@@ -47,7 +47,7 @@ int main()
   }
   // watchdog_enable(5000, true);
 
-  sleep_ms(5000);
+  sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
 
   launch_core_1();

@@ -38,7 +38,7 @@ bool mpu_6050::check_chip_id()
 }
 
 bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyro_range,
-                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl, const bool int_enable,
+                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl,
                          const bool self_test)
 {
   switch (wake_ctrl)
@@ -80,8 +80,7 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
 
   accel_scale = get_accel_scale(accel_range);
 
-  uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE};
-  int_en_data[1] = int_enable ? 0x01 : 0x00;
+  constexpr uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, 0x01};
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, int_en_data, 2, false,
                                            delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 2)
@@ -99,7 +98,7 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
 bool mpu_6050::configure_default()
 {
   return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_20Hz, true, false);
+                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_20Hz, false);
 }
 
 bool mpu_6050::configure_default_with_lock()
@@ -137,14 +136,13 @@ void mpu_6050::init_crit_section()
 bool mpu_6050::self_test()
 {
   critical_section_enter_blocking(&mpu_6050_cs);
+  gpio_set_irq_enabled(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, false);
   bool success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false, true);
+                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, true);
   if (!success)
   {
     return false;
   }
-
-  sleep_ms(250);
 
   uint8_t self_test_registers[5];
   success = i2c_util::read_bytes(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_SELF_TEST_X, self_test_registers, 5);
@@ -161,6 +159,9 @@ bool mpu_6050::self_test()
   mpu_6050_factory_trim_data.ft_ya = factory_trim_accel(ya_test);
   mpu_6050_factory_trim_data.ft_za = factory_trim_accel(za_test);
 
+  while (gpio_get(MPU_6050_INT_PIN)) {}
+  while (!gpio_get(MPU_6050_INT_PIN)) {}
+
   double xa_st_en, ya_st_en, za_st_en;
   success = get_data(xa_st_en, ya_st_en, za_st_en);
   if (!success)
@@ -169,11 +170,14 @@ bool mpu_6050::self_test()
   }
 
   success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                      accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false, false);
+                      accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false);
   if (!success)
   {
     return false;
   }
+
+  while (gpio_get(MPU_6050_INT_PIN)) {}
+  while (!gpio_get(MPU_6050_INT_PIN)) {}
 
   double xa_st_dis, ya_st_dis, za_st_dis;
   success = get_data(xa_st_dis, ya_st_dis, za_st_dis);
@@ -186,11 +190,16 @@ bool mpu_6050::self_test()
                , str_ya = ya_st_dis - ya_st_en
                , str_za = za_st_dis - za_st_en;
 
-  mpu_6050_factory_trim_data.ft_xa_change = calculate_self_test_change(str_xa, mpu_6050_factory_trim_data.ft_xa);
-  mpu_6050_factory_trim_data.ft_ya_change = calculate_self_test_change(str_ya, mpu_6050_factory_trim_data.ft_ya);
-  mpu_6050_factory_trim_data.ft_za_change = calculate_self_test_change(str_za, mpu_6050_factory_trim_data.ft_za);
+  usb_communication::send_string(std::format("{} - {}, {} - {}, {} - {}", xa_st_en, xa_st_dis, ya_st_en, ya_st_dis, za_st_en, za_st_dis));
+
+  mpu_6050_factory_trim_data.ft_xa_change_percent = calculate_self_test_change_percent(str_xa, mpu_6050_factory_trim_data.ft_xa);
+  mpu_6050_factory_trim_data.ft_ya_change_percent = calculate_self_test_change_percent(str_ya, mpu_6050_factory_trim_data.ft_ya);
+  mpu_6050_factory_trim_data.ft_za_change_percent = calculate_self_test_change_percent(str_za, mpu_6050_factory_trim_data.ft_za);
 
   const bool ret_val = configure_default();
+  gpio_set_irq_enabled(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true);
+  while (gpio_get(MPU_6050_INT_PIN)) {}
+
   critical_section_exit(&mpu_6050_cs);
   return ret_val;
 }
@@ -205,8 +214,13 @@ double mpu_6050::factory_trim_accel(const double test_value)
   return 4096 * 0.34 * std::pow(0.92 / 0.34, (test_value - 1) / 30);
 }
 
-double mpu_6050::calculate_self_test_change(const double str, const double ft)
+double mpu_6050::calculate_self_test_change_percent(const double str, const double ft)
 {
+  if (ft == 0)
+  {
+    return -9999999;
+  }
+
   return (str - ft) / ft;
 }
 
@@ -231,12 +245,9 @@ bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
 
 void mpu_6050::data_int(uint gpio, uint32_t event_mask)
 {
-  if (!critical_section_is_initialized(&mpu_6050_cs))
-  {
-    return;
-  }
-
+  // gpio_put(CORE_0_LED_PIN, true);
   critical_section_enter_blocking(&mpu_6050_cs);
+  // gpio_put(CORE_0_LED_PIN, false);
 
   // usb_communication::send_string(std::format("mpu_6050::data_int on pin {} ", gpio));
   ReadSensorData data;
@@ -263,12 +274,12 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
 
-  gpio_put(CORE_1_LED_PIN, true);
+  // gpio_put(CORE_1_LED_PIN, true);
   critical_section_enter_blocking(&mpu_6050_cs);
-  gpio_put(CORE_1_LED_PIN, false);
+  // gpio_put(CORE_1_LED_PIN, false);
 
   const ReadSensorData last_sensor_data = irq_sens_data;
-  gpio_put(CORE_0_LED_PIN, true);
+
 
   if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
   {
@@ -279,7 +290,6 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
   collection_data.accel_x = last_sensor_data.accel_x;
   collection_data.accel_y = last_sensor_data.accel_y;
   collection_data.accel_z = last_sensor_data.accel_z;
-  gpio_put(CORE_0_LED_PIN, true);
 
   set_fault(status_manager::DEVICE_MPU_6050, false);
   critical_section_exit(&mpu_6050_cs);

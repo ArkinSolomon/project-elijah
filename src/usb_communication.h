@@ -106,16 +106,6 @@ namespace usb_communication
     }
   };
 
-  struct USBWritePacket
-  {
-    std::unique_ptr<uint8_t> data;
-    int size;
-
-    USBWritePacket();
-    USBWritePacket(std::unique_ptr<uint8_t> data, int size);
-    USBWritePacket(USBWritePacket& other);
-  };
-
   inline critical_section_t usb_cs;
 
   void init_usb_com();
@@ -128,5 +118,5 @@ namespace usb_communication
   void send_collection_data(const CollectionData& collection_data);
 
   void handle_usb_packet(packet_type_id packet_type_id, const uint8_t* packet_data);
-  void write_packet(const USBWritePacket& packet);
+  void write_packet(const uint8_t* packet_data, size_t packet_len);
 }
