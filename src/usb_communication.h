@@ -4,7 +4,7 @@
 #include <memory>
 #include <pico/critical_section.h>
 
-#define MAX_WRITE_PACKET_BUFF_SIZE 32
+#define MAX_RAW_STR_WRITE_BYTES 128
 
 struct CollectionData;
 

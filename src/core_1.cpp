@@ -5,6 +5,7 @@
 #include "core_1.h"
 
 #include <format>
+#include <pico/flash.h>
 
 #include "status_manager.h"
 #include "usb_communication.h"
@@ -19,6 +20,7 @@ void launch_core_1()
 void core_1_main()
 {
   gpio_put(CORE_1_LED_PIN, false);
+  flash_safe_execute_core_init();
 
   const bool did_w25q64fv_init = w25q64fv::init() && w25q64fv::chip_erase();
   if (!did_w25q64fv_init)
@@ -38,9 +40,9 @@ void core_1_main()
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    // gpio_put(CORE_1_LED_PIN, led_on = !led_on);
+    gpio_put(CORE_1_LED_PIN, led_on = !led_on);
 
-    sleep_ms(100);
+    // sleep_ms(100);
 
     mutex_enter_blocking(&core_1_stats::loop_time_mtx);
     const uint64_t elapsed_time = absolute_time_diff_us(start_time, get_absolute_time());

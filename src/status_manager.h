@@ -3,6 +3,8 @@
 #include <string>
 #include <hardware/i2c.h>
 #include <hardware/pio.h>
+#include <pico/critical_section.h>
+#include <pico/mutex.h>
 #include <pico/stdlib.h>
 
 #define END_OF_FAULT_LIST 0xAB
@@ -51,8 +53,10 @@ namespace status_manager
     NORMAL = 0xFFFFFFFF,
     FAULT = 0xAAAAAAAA,
     DONE = 0xF0000A00,
-    USB = 0xFFFFFFB
   };
+
+  inline mutex status_mtx;
+  inline critical_section_t status_cs;
 
   inline device_status current_status = STATUS_NOT_SET;
   inline const std::map<device_status, std::string> status_name_map = {
@@ -61,15 +65,14 @@ namespace status_manager
     {NORMAL, "Normal"},
     {FAULT, "Fault"},
     {DONE, "Done"},
-    {USB, "USB"}
   };
 
-  void status_manager_pio_init();
+  void status_manager_init();
   void set_status(device_status status);
   device_status get_current_status();
   void set_fault(fault_id fault_id, bool fault_state);
   device_status check_faults();
-  void detect_i2c_bus_fault(fault_id fault_id);
+  bool detect_i2c_bus_fault(fault_id fault_id);
   bool is_i2c_fault_id(const fault_id i2c_fault_ids[], fault_id id);
   bool check_i2c_bus_fault(const fault_id i2c_fault_ids[]);
   void send_status();

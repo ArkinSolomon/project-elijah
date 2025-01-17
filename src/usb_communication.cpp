@@ -91,18 +91,11 @@ void usb_communication::send_string(const std::string& str)
   const uint16_t str_len = str.size();
   const uint16_t total_len = str_len + 3;
 
-  if (str_len > 100)
-  {
-    // send_string(std::format("allocating  {}", total_len));
-  }
-
-  gpio_put(CORE_0_LED_PIN, true);
   uint8_t write_data[total_len];
   for (int i = 0; i < total_len; i++)
   {
     write_data[i] = 'A';
   }
-  gpio_put(CORE_0_LED_PIN, false);
 
   write_data[0] = STRING;
   write_data[1] = str_len >> 8;
@@ -110,12 +103,10 @@ void usb_communication::send_string(const std::string& str)
 
   if (str_len > 0)
   {
-    strcpy(reinterpret_cast<char*>(write_data + 3), str.c_str());
+    memcpy(write_data + 3, str.c_str(), str_len);
   }
 
-  gpio_put(CORE_1_LED_PIN, true);
   write_packet(write_data, total_len);
-  gpio_put(CORE_1_LED_PIN, false);
 }
 
 void usb_communication::say_hello()
@@ -233,6 +224,26 @@ void usb_communication::write_packet(const uint8_t* packet_data, const size_t pa
   }
 
   critical_section_enter_blocking(&usb_cs);
-  stdio_put_string(reinterpret_cast<const char*>(packet_data), static_cast<int>(packet_len), false, false);
+  size_t remaining_len = packet_len;
+  size_t offset = 0;
+  while (remaining_len > 0)
+  {
+    size_t write_size = 0;
+    if (remaining_len >= MAX_RAW_STR_WRITE_BYTES)
+    {
+      remaining_len -= MAX_RAW_STR_WRITE_BYTES;
+      write_size = MAX_RAW_STR_WRITE_BYTES;
+    }
+    else
+    {
+      write_size = remaining_len;
+      remaining_len = 0;
+    }
+
+    stdio_put_string(reinterpret_cast<const char*>(packet_data + offset), static_cast<int>(write_size), false, false);
+    stdio_flush();
+    offset += write_size;
+  }
+
   critical_section_exit(&usb_cs);
 }

@@ -216,38 +216,8 @@ void ds_1307::clock_loop(CollectionData& collection_data)
     {
       set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
 
-      // Write current sea level pressure to device, since the device has been reset
-      if (!bmp_280::update_sea_level_pressure())
-      {
-        clock_detected = false;
-        usb_communication::send_string("Fault: DS 1307, device not detected (can not write pressure)");
-      }
-      else
-      {
-        usb_communication::send_string("Fault: DS 1307, clock not set");
-      }
+      usb_communication::send_string("Fault: DS 1307, clock not set");
       return;
-    }
-
-    double read_pressure;
-    const bool success = bmp_280::read_stored_sea_level_pressure(read_pressure);
-    if (!success)
-    {
-      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-      clock_detected = false;
-      usb_communication::send_string("Fault: DS 1307, device not detected (can not read pressure)");
-      return;
-    }
-
-    // Assume the stored pressure to be true, since it was written at some point, since time is set memory is saved
-    // but also make sure the memory isn't corrupted by checking it's within reasonable limits
-    if (read_pressure < 93125.69 || read_pressure > 104978)
-    {
-        bmp_280::update_sea_level_pressure();
-    }
-    else
-    {
-      bmp_280::update_sea_level_pressure(read_pressure, false);
     }
   }
 

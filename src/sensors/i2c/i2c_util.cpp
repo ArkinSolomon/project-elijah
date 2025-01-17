@@ -31,7 +31,7 @@ void i2c_util::recover_i2c(i2c_inst_t* i2c, const uint8_t sda_pin, const uint8_t
   for (uint8_t i = 1; i <= 19; ++i)
   {
     gpio_put(scl_pin, i % 2);
-    sleep_us(2);
+    busy_wait_us(2);
   }
 
   gpio_deinit(scl_pin);

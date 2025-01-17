@@ -245,11 +245,8 @@ bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
 
 void mpu_6050::data_int(uint gpio, uint32_t event_mask)
 {
-  // gpio_put(CORE_0_LED_PIN, true);
   critical_section_enter_blocking(&mpu_6050_cs);
-  // gpio_put(CORE_0_LED_PIN, false);
 
-  // usb_communication::send_string(std::format("mpu_6050::data_int on pin {} ", gpio));
   ReadSensorData data;
   const bool success = get_data(data.accel_x, data.accel_y, data.accel_z);
   if (!success)
@@ -274,10 +271,7 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
 {
   static bool device_detected = false;
 
-  // gpio_put(CORE_1_LED_PIN, true);
   critical_section_enter_blocking(&mpu_6050_cs);
-  // gpio_put(CORE_1_LED_PIN, false);
-
   const ReadSensorData last_sensor_data = irq_sens_data;
 
 

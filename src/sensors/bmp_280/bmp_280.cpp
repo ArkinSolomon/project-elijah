@@ -3,6 +3,8 @@
 #include <format>
 #include <ranges>
 #include <cmath>
+#include <hardware/flash.h>
+#include <pico/flash.h>
 
 #include "src/byte_util.h"
 #include "src/main.h"
@@ -35,51 +37,75 @@ bool bmp_280::soft_reset()
 }
 
 /**
- * Update the sea level pressure stored in the DS1307 with the one stored in the calibration data.
+ * Update the sea level pressure stored in the flash with the one stored in the calibration data.
  *
  * @return True if the pressure is updated successfully.
  */
-bool bmp_280::update_sea_level_pressure()
+void bmp_280::update_saved_slp(void*)
 {
-  uint8_t encoded_press[8];
-  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, encoded_press);
-  return write_custom_register(ds_1307::custom_register::SEA_LEVEL_PRESS, encoded_press, 8);
+  uint8_t encoded_press[256];
+  constexpr uint64_t flash_check = BMP_280_SLP_FLASH_DATA_CHECK;
+  byte_util::encode_uint64(flash_check, encoded_press);
+
+  constexpr uint32_t flash_offset = BMP_280_SLP_FLASH_SECTOR_NUM * 4096;
+  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, encoded_press + sizeof(flash_check));
+
+  flash_range_erase(flash_offset, 256);
+  flash_range_program(flash_offset, encoded_press, 256);
 }
 
 /**
- * Update the sea level pressure used for calculations in RAM and optionally in the DS 1307.
+ * Update the sea level pressure used for calculations in RAM and optionally in flash.
  *
  * @param pressure The pressure to set.
- * @param write True if the DS 1307 should be written to.
- * @return True if the pressure was stored successfully.
+ * @param write True if the flash should be written to.
+ * @return True if the pressure was stored successfully (or chosen not to be stored).
  */
 bool bmp_280::update_sea_level_pressure(const double pressure, const bool write)
 {
   bmp_280_calib_data.sea_level_pressure = pressure;
+  int status = 0xBEEF;
   if (write)
   {
-    return update_sea_level_pressure();
+    status = flash_safe_execute(update_saved_slp, nullptr, 10);
   }
-  return true;
+  send_calibration_data();
+  return !write || status == PICO_OK;
 }
 
 /**
- * Read the stored pressure from the DS 1307.
- *
- * @param pressure The output to put the stored pressure.
- * @return True if the pressure was read successfully.
+ * Read the stored pressure from flash, or just.
  */
-bool bmp_280::read_stored_sea_level_pressure(double& pressure)
+void bmp_280::read_stored_slp()
 {
-  uint8_t read_pressure[8];
-  const bool success = read_custom_register(ds_1307::custom_register::SEA_LEVEL_PRESS, read_pressure, 8);
-  if (!success)
+  double stored_pressure;
+  flash_safe_execute([](void* stored_pressure_vp)
   {
-    return false;
-  }
+    const auto stored_pressure_ptr = static_cast<double*>(stored_pressure_vp);
 
-  pressure = byte_util::decode_double(read_pressure);
-  return true;
+    constexpr uint32_t flash_offset = BMP_280_SLP_FLASH_SECTOR_NUM * 4096;
+    const uint8_t* flash_contents = reinterpret_cast<uint8_t*>(XIP_BASE + flash_offset);
+
+    constexpr uint64_t flash_check = BMP_280_SLP_FLASH_DATA_CHECK;
+    if (*reinterpret_cast<const uint64_t*>(flash_contents) != flash_check)
+    {
+      *stored_pressure_ptr = -1;
+    }
+    else
+    {
+      *stored_pressure_ptr = byte_util::decode_double(flash_contents + sizeof(uint64_t));
+    }
+  }, &stored_pressure, 10);
+
+
+  if (stored_pressure <= 0)
+  {
+    update_sea_level_pressure(101325, true);
+  }
+  else
+  {
+    update_sea_level_pressure(stored_pressure, false);
+  }
 }
 
 /**

@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 
 # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
 if(WIN32)
@@ -50,6 +51,16 @@ target_link_libraries(elijah-payload
 
 target_include_directories(elijah-payload PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+)
+
+if(ENTER_USB_BOOT_ON_EXIT)
+    target_compile_definitions(elijah-payload PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
+endif(ENTER_USB_BOOT_ON_EXIT)
+
+target_compile_definitions(elijah-payload
+        PUBLIC
+        $<$<CONFIG:Debug>:DEBUG>
+        $<$<CONFIG:Release>:RELEASE>
 )
 
 # Add any user requested libraries

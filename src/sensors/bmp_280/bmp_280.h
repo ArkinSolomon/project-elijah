@@ -1,5 +1,8 @@
 #pragma once
 
+#define BMP_280_SLP_FLASH_DATA_CHECK 0xB860DD0601754BF5
+#define BMP_280_SLP_FLASH_SECTOR_NUM 128
+
 #define BMP_280_ADDR 0b1110110
 
 #define BMP_280_RESET_VALUE 0xB6
@@ -103,9 +106,9 @@ namespace bmp_280
   bool check_chip_id();
   bool soft_reset();
 
-  bool update_sea_level_pressure();
+  void update_saved_slp(void*);
   bool update_sea_level_pressure(double pressure, bool write = true);
-  bool read_stored_sea_level_pressure(double& pressure);
+  void read_stored_slp();
 
   bool check_status(bool& measuring, bool& updating);
   bool change_settings(device_mode mode, standby_time_setting standby_time, filter_coefficient_setting filter_setting,

@@ -1,13 +1,14 @@
 #include "main.h"
 
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <format>
 #include <hardware/clocks.h>
 #include <hardware/watchdog.h>
+#include <pico/flash.h>
 #include <pico/multicore.h>
 #include <pico/rand.h>
+#include <pico/stdio.h>
 
 #include "byte_util.h"
 #include "core_1.h"
@@ -23,76 +24,86 @@
 
 int main()
 {
+#ifdef DEBUG
+  busy_wait_ms(150);
+#endif
+
 #ifdef PICO_RP2040
   set_sys_clock_khz(133000, true);
 #elifdef PICO_RP2350
-  set_sys_clock_khz(150000, true);
+    set_sys_clock_khz(150000, true);
 #endif
 
   pin_init();
 
   usb_communication::init_usb_com();
-  status_manager::status_manager_pio_init();
+  status_manager::status_manager_init();
+  flash_safe_execute_core_init();
   mpu_6050::init_crit_section();
   mpu_6050::configure_default_with_lock();
 
   gpio_put(CORE_0_LED_PIN, true);
+  multicore_reset_core1();
   sleep_ms(200);
-  // gpio_put(CORE_1_LED_PIN, true);
+  gpio_put(CORE_1_LED_PIN, true);
   sleep_ms(200);
 
   if (watchdog_caused_reboot())
   {
     usb_communication::send_string("Reboot caused by watchdog");
   }
-  // watchdog_enable(5000, true);
+  watchdog_enable(5000, true);
 
   sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
 
-  launch_core_1();
+  // launch_core_1();
+  //
+  // while (multicore_fifo_get_status() & 0x1 == 0)
+  // {
+  //   if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
+  //   {
+  //     usb_communication::send_string("Core 1 ready");
+  //     break;
+  //   }
+  // }
 
-  while (multicore_fifo_get_status() & 0x1 == 0)
-  {
-    if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
-    {
-      usb_communication::send_string("Core 1 ready");
-      break;
-    }
-  }
+  bmp_280::read_stored_slp();
 
   if (status_manager::get_current_status() == status_manager::BOOTING)
   {
     set_status(status_manager::NORMAL);
   }
 
-  static bool led_on = false;
+  constexpr uint64_t us_between_loops = 1000000 / MAX_UPDATES_PER_SECOND;
+
+   bool led_on = false;
+  bool usb_connected = false;
   CollectionData collection_data{{}};
   absolute_time_t last_loop_time = 0;
-
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
     ds_1307::clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
-    // mpu_6050::data_int(0, 0);
     mpu_6050::accel_loop(collection_data);
 
     watchdog_update();
-    // gpio_put(CORE_0_LED_PIN, led_on = !led_on);
+    gpio_put(CORE_0_LED_PIN, led_on = !led_on);
 
     const absolute_time_t main_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
     if (stdio_usb_connected())
     {
-      if (status_manager::get_current_status() != status_manager::USB)
+      if (!usb_connected)
       {
         usb_communication::say_hello();
         bmp_280::send_calibration_data();
+        status_manager::send_status();
+        usb_connected = true;
       }
 
       status_manager::check_faults();
 
-      set_status(status_manager::USB);
       usb_communication::scan_for_packets();
       usb_communication::send_collection_data(collection_data);
 
@@ -103,20 +114,23 @@ int main()
       byte_util::encode_uint64(core_1_stats::loop_time, &loop_time_data[8]);
       mutex_exit(&core_1_stats::loop_time_mtx);
 
-      const absolute_time_t time_between_loops = last_loop_time > 0 ? absolute_time_diff_us(last_loop_time, start_time) : 0;
+      const absolute_time_t time_between_loops = last_loop_time > 0
+                                                   ? absolute_time_diff_us(last_loop_time, start_time)
+                                                   : 0;
       byte_util::encode_uint64(time_between_loops, &loop_time_data[16]);
 
       const absolute_time_t usb_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
       byte_util::encode_uint64(usb_loop_time, &loop_time_data[24]);
 
       send_packet(usb_communication::LOOP_TIME, loop_time_data);
-      last_loop_time = get_absolute_time();
     }
-    else if (status_manager::get_current_status() == status_manager::BOOTING || (status_manager::get_current_status() ==
-      status_manager::USB && !stdio_usb_connected()))
+    else if (usb_connected)
     {
-      set_status(status_manager::NORMAL);
+      usb_connected = false;
     }
+
+    sleep_until(delayed_by_us(last_loop_time, us_between_loops));
+    last_loop_time = get_absolute_time();
   }
 
   watchdog_disable();

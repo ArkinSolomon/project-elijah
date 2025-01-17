@@ -13,8 +13,19 @@
 #include "usb_communication.h"
 #include "sensors/i2c/i2c_util.h"
 
-void status_manager::status_manager_pio_init()
+void status_manager::status_manager_init()
 {
+  if (!mutex_is_initialized(&status_mtx))
+  {
+    mutex_init(&status_mtx);
+  }
+
+  if (!critical_section_is_initialized(&status_cs))
+  {
+    critical_section_init_with_lock_num(&status_cs, CS_LOCK_NUM_STATUS);
+  }
+
+
   static constexpr float pio_freq = 10;
   const float div = static_cast<float>(clock_get_hz(clk_sys)) / pio_freq;
 
@@ -50,7 +61,7 @@ void status_manager::status_manager_pio_init()
 
 void status_manager::set_status(const device_status status)
 {
-  if (current_status == status || current_status == DONE)
+  if (current_status == status)
   {
     return;
   }
@@ -62,7 +73,6 @@ void status_manager::set_status(const device_status status)
   );
   current_status = status;
   pio_sm_put_blocking(pio, sm, status);
-  send_status();
 }
 
 status_manager::device_status status_manager::get_current_status()
@@ -72,34 +82,24 @@ status_manager::device_status status_manager::get_current_status()
 
 void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
 {
-  static mutex mtx;
-  static critical_section_t cs;
-  if (!mutex_is_initialized(&mtx))
-  {
-    mutex_init(&mtx);
-  }
+  critical_section_enter_blocking(&status_cs);
+  mutex_enter_blocking(&status_mtx);
 
-  if (!critical_section_is_initialized(&cs))
-  {
-    critical_section_init_with_lock_num(&cs, CS_LOCK_NUM_STATUS);
-  }
-
-  critical_section_enter_blocking(&cs);
-  mutex_enter_blocking(&mtx);
-
+  const bool original_fault_state =  faults[fault_id] ;
   faults[fault_id] = fault_state;
-  detect_i2c_bus_fault(fault_id);
-  if (current_status == FAULT || current_status == NORMAL)
+  const bool did_bus_fault = detect_i2c_bus_fault(fault_id);
+
+  if (original_fault_state != fault_state || did_bus_fault)
   {
     set_status(check_faults());
+    send_status();
   }
 
-  mutex_exit(&mtx);
-  critical_section_exit(&cs);
-  send_status();
+  mutex_exit(&status_mtx);
+  critical_section_exit(&status_cs);
 }
 
-void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
+bool status_manager::detect_i2c_bus_fault(const fault_id fault_id)
 {
   static uint8_t fault_detect_cycles_bus0 = 0;
   static uint8_t fault_detect_cycles_bus1 = 0;
@@ -121,14 +121,14 @@ void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
 
   if (fault_on_bus == i2c_bus::NONE)
   {
-    return;
+    return false;
   }
 
   if (!is_faulted)
   {
     *fault_detect_cycles = 0;
     faults[static_cast<uint8_t>(fault_on_bus)] = false;
-    return;
+    return false;
   }
 
   (*fault_detect_cycles)++;
@@ -136,17 +136,15 @@ void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
 
   if (*fault_detect_cycles < I2C_MAX_FAULT_CYCLES)
   {
-    return;
+    return false;
   }
   *fault_detect_cycles = I2C_MAX_FAULT_CYCLES;
 
   if (check_i2c_bus_fault(fault_on_bus == i2c_bus::BUS0 ? i2c_fault_ids_bus0 : i2c_fault_ids_bus1))
   {
     faults[static_cast<uint8_t>(fault_on_bus)] = true;
-    if (current_status == NORMAL)
-    {
-      set_status(FAULT);
-    }
+    set_status(FAULT);
+
     usb_communication::send_string(std::format("Fault: I2C Bus fail, bus {}", fault_on_bus == i2c_bus::BUS0 ? 0 : 1));
     if (fault_on_bus == i2c_bus::BUS0)
     {
@@ -156,8 +154,10 @@ void status_manager::detect_i2c_bus_fault(const fault_id fault_id)
     {
       i2c_util::recover_i2c(I2C_BUS1, I2C1_SDA_PIN, I2C1_SCL_PIN);
     }
-    sleep_ms(100);
+    busy_wait_ms(75);
+    return true;
   }
+  return false;
 }
 
 status_manager::device_status status_manager::check_faults()
@@ -168,7 +168,6 @@ status_manager::device_status status_manager::check_faults()
   {
     if (faults[i])
     {
-      usb_communication::send_string(std::format("fault at index {} {}", i, faults[i]));
       new_state = FAULT;
       break;
     }
@@ -224,6 +223,6 @@ void status_manager::send_status()
   }
   while (faults[++i] != END_OF_FAULT_LIST);
 
-  *send_data = current_status;
+  send_data[0] = current_status;
   send_packet(usb_communication::FAULT_DATA, send_data);
 }
