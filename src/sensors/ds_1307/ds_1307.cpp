@@ -46,7 +46,7 @@ bool ds_1307::set_clock(const tm& time_inst)
   const uint8_t minutes_data = time_inst.tm_min / 10 << 4 | time_inst.tm_min % 10;
   const uint8_t hours_data = time_inst.tm_hour / 10 << 4 | time_inst.tm_hour % 10;
   const uint8_t date_data = time_inst.tm_mday / 10 << 4 | time_inst.tm_mday % 10;
-  const uint8_t month_data = time_inst.tm_mon / 10 << 4 | time_inst.tm_mon % 10;
+  const uint8_t month_data = (time_inst.tm_mon + 1) / 10 << 4 | (time_inst.tm_mon + 1) % 10;
 
   const int years_since_2000 = time_inst.tm_year - 100;
   const uint8_t year_data = static_cast<uint8_t>(years_since_2000) / 10 << 4 | years_since_2000 % 10;
@@ -113,7 +113,7 @@ bool ds_1307::read_clock(tm& time_inst)
   time_inst.tm_hour = (hours >> 4 & 0x3) * 10 + (hours & 0xF);
   time_inst.tm_mday = (date >> 4 & 0x3) * 10 + (date & 0xF);
   time_inst.tm_wday = day;
-  time_inst.tm_mon = ((month & 0x10) >> 4) * 10 + (month & 0xF);
+  time_inst.tm_mon = ((month & 0x10) >> 4) * 10 + (month & 0xF) - 1;
   time_inst.tm_year = 100 + (year >> 4) * 10 + (year & 0xF);
 
   return true;
@@ -129,14 +129,15 @@ void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
                 , month = packet_data[5];
   const int year = packet_data[6] << 8 | packet_data[7];
 
-  const tm time_inst {
+  const tm time_inst{
     seconds, minutes, hours, date, month, year - 1900, day
   };
 
   if (aon_timer_is_running())
   {
     aon_timer_set_time_calendar(&time_inst);
-  } else
+  }
+  else
   {
     aon_timer_start_calendar(&time_inst);
   }

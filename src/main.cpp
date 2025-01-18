@@ -4,6 +4,7 @@
 #include <cstring>
 #include <format>
 #include <hardware/clocks.h>
+#include <hardware/rtc.h>
 #include <hardware/watchdog.h>
 #include <pico/flash.h>
 #include <pico/multicore.h>
@@ -52,7 +53,7 @@ int main()
   {
     usb_communication::send_string("Reboot caused by watchdog");
   }
-  watchdog_enable(5000, true);
+  // watchdog_enable(5000, true);
 
   sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
@@ -87,12 +88,13 @@ int main()
     bmp_280::data_collection_loop(collection_data);
     mpu_6050::accel_loop(collection_data);
 
-    watchdog_update();
+    // watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);
 
     const absolute_time_t main_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
     if (stdio_usb_connected())
     {
+      const absolute_time_t usb_start_time = get_absolute_time();
       if (!usb_connected)
       {
         usb_communication::say_hello();
@@ -118,7 +120,7 @@ int main()
                                                    : 0;
       byte_util::encode_uint64(time_between_loops, &loop_time_data[16]);
 
-      const absolute_time_t usb_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
+      const absolute_time_t usb_loop_time = absolute_time_diff_us(usb_start_time, get_absolute_time());
       byte_util::encode_uint64(usb_loop_time, &loop_time_data[24]);
 
       send_packet(usb_communication::LOOP_TIME, loop_time_data);
@@ -160,19 +162,23 @@ void pin_init()
 
   spi_set_slave(spi1, false);
 
-  spi_init(spi1, 104 * 1000 * 1000);
+  spi_init(spi1, 33 * 1000 * 1000);
 }
 
 void clock_loop(CollectionData& collection_data)
 {
   static uint8_t loops_since_ds_1307_check = 0;
 
+  // For some reason it decides not to use the RTC idk why but it'll work when I figure it out... not important rn
   if (!aon_timer_is_running())
   {
     if (ds_1307::check_and_read_clock(collection_data.time_inst))
     {
-      const bool success = aon_timer_start_calendar(&collection_data.time_inst);
-      if (!success)
+      if (aon_timer_start_calendar(&collection_data.time_inst))
+      {
+        set_fault(status_manager::ONBOARD_CLOCK, false);
+      }
+      else
       {
         usb_communication::send_string("Fault: onboard clock not running");
         set_fault(status_manager::ONBOARD_CLOCK, true);
@@ -186,7 +192,13 @@ void clock_loop(CollectionData& collection_data)
     return;
   }
 
+  // It will be a good day when this shows up...
   const bool got_time = aon_timer_get_time_calendar(&collection_data.time_inst);
+  usb_communication::send_string(std::format("Onboard RTC: {} {} {} {} {} {} {}", collection_data.time_inst.tm_year,
+                                             collection_data.time_inst.tm_mon, collection_data.time_inst.tm_mday,
+                                             collection_data.time_inst.tm_wday, collection_data.time_inst.tm_hour,
+                                             collection_data.time_inst.tm_min, collection_data.time_inst.tm_sec));
+
   if (!got_time)
   {
     usb_communication::send_string("Fault: Failed to get time from onboard clock");
