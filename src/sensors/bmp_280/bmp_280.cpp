@@ -74,12 +74,15 @@ bool bmp_280::update_baro_pressure(const double pressure, const bool write)
 }
 
 /**
- * Read the stored pressure from flash, or just.
+ * Try to  the stored pressure from flash.
+ *
+ * @returns False if the pressure read failed, and we should try again, true if we were able to read the flash (not
+ *          necessarily if the data was there).
  */
-void bmp_280::read_stored_baro_press()
+bool bmp_280::read_stored_baro_press()
 {
   double stored_pressure;
-  int result = flash_safe_execute([](void* stored_pressure_vp)
+  int read_result = flash_safe_execute([](void* stored_pressure_vp)
   {
     const auto stored_pressure_ptr = static_cast<double*>(stored_pressure_vp);
 
@@ -89,7 +92,6 @@ void bmp_280::read_stored_baro_press()
     constexpr uint64_t flash_check = BMP_280_BARO_FLASH_DATA_CHECK;
     if (*reinterpret_cast<const uint64_t*>(flash_contents) != flash_check)
     {
-      usb_communication::send_string(std::format("Baro check read 0x{:16X}", *reinterpret_cast<const uint64_t*>(flash_contents)));
       *stored_pressure_ptr = -50;
     }
     else
@@ -98,15 +100,22 @@ void bmp_280::read_stored_baro_press()
     }
   }, &stored_pressure, 10);
 
-  usb_communication::send_string(std::format("Baro pressure read {} result: {}", stored_pressure, result));
+  if (read_result != PICO_OK)
+  {
+    update_baro_pressure(SEA_LEVEL_PRESS, false);
+    return false;
+  }
+
   if (stored_pressure <= 0)
   {
-    update_baro_pressure(101325, true);
+    update_baro_pressure(SEA_LEVEL_PRESS, true);
   }
   else
   {
     update_baro_pressure(stored_pressure, false);
   }
+
+  return true;
 }
 
 /**
@@ -264,7 +273,12 @@ bool bmp_280::read_press_temp_alt(int32_t& pressure, double& temperature, double
  */
 void bmp_280::data_collection_loop(CollectionData& collection_data)
 {
-  static bool calibration_data_received = false;
+  static bool calibration_data_received = false, did_read_stored_press = false;
+
+  if (!did_read_stored_press)
+  {
+    did_read_stored_press = read_stored_baro_press();
+  }
 
   if (!calibration_data_received)
   {
@@ -273,8 +287,6 @@ void bmp_280::data_collection_loop(CollectionData& collection_data)
     {
       usb_communication::send_string("Fault: BMP 280, did not detect and/or can not receive calibration data.");
       set_fault(status_manager::fault_id::DEVICE_BMP_280, true);
-      collection_data.pressure = -1;
-      collection_data.temperature = collection_data.altitude = -1;
       calibration_data_received = false;
       return;
     }
@@ -295,8 +307,6 @@ void bmp_280::data_collection_loop(CollectionData& collection_data)
     usb_communication::send_string("Fault: BMP 280, failed to read information");
     set_fault(status_manager::fault_id::DEVICE_BMP_280, true);
     calibration_data_received = false;
-    collection_data.pressure = -1;
-    collection_data.temperature = collection_data.altitude = -1;
     return;
   }
 

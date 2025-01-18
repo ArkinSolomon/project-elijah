@@ -182,8 +182,18 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     ds_1307::erase_data();
     break;
   case GET_BUILD_INFO:
-    send_string(std::format("Elijah Payload compiled {} at {}", __DATE__, __TIME__));
-    break;
+    {
+#ifdef DEBUG
+      std::string build_mode ="Debug";
+#elifdef RELEASE
+      std::string build_mode = "Release";
+#else
+      std::string build_mode =  "Unknown";
+#endif
+
+      send_string(std::format("Elijah Payload compiled {} at {} [Build mode: {}]", __DATE__, __TIME__, build_mode));
+      break;
+    }
   case MPU_6050_ST:
     {
       const bool success = mpu_6050::self_test();

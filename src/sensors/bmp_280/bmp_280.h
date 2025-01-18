@@ -1,7 +1,9 @@
 #pragma once
 
+#define SEA_LEVEL_PRESS 101325
+
 #define BMP_280_BARO_FLASH_DATA_CHECK 0xB860DD0601754BF5
-#define BMP_280_BARO_FLASH_SECTOR_NUM 128
+#define BMP_280_BARO_FLASH_SECTOR_NUM 498
 
 #define BMP_280_ADDR 0b1110110
 
@@ -108,7 +110,7 @@ namespace bmp_280
 
   void update_saved_baro_press(void*);
   bool update_baro_pressure(double pressure, bool write = true);
-  void read_stored_baro_press();
+  bool read_stored_baro_press();
 
   bool check_status(bool& measuring, bool& updating);
   bool change_settings(device_mode mode, standby_time_setting standby_time, filter_coefficient_setting filter_setting,

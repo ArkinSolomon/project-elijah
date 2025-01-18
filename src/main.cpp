@@ -68,8 +68,6 @@ int main()
     }
   }
 
-  bmp_280::read_stored_baro_press();
-
   if (status_manager::get_current_status() == status_manager::BOOTING)
   {
     set_status(status_manager::NORMAL);
