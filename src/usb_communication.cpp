@@ -123,14 +123,14 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
 
   uint8_t serialized_data[52];
 
-  serialized_data[0] = collection_data.time_inst.seconds;
-  serialized_data[1] = collection_data.time_inst.minutes;
-  serialized_data[2] = collection_data.time_inst.hours;
-  serialized_data[3] = collection_data.time_inst.day;
-  serialized_data[4] = collection_data.time_inst.date;
-  serialized_data[5] = collection_data.time_inst.month;
+  serialized_data[0] = collection_data.time_inst.tm_sec;
+  serialized_data[1] = collection_data.time_inst.tm_min;
+  serialized_data[2] = collection_data.time_inst.tm_hour;
+  serialized_data[3] = collection_data.time_inst.tm_wday;
+  serialized_data[4] = collection_data.time_inst.tm_mday;
+  serialized_data[5] = collection_data.time_inst.tm_mon;
 
-  byte_util::encode_uint16(collection_data.time_inst.year, &serialized_data[6]);
+  byte_util::encode_uint16(collection_data.time_inst.tm_year + 1900, &serialized_data[6]);
   byte_util::encode_uint32(collection_data.pressure, &serialized_data[8]);
 
   byte_util::encode_double(collection_data.temperature, &serialized_data[12]);

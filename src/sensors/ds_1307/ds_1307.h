@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ctime>
 
 #define DS_1307_ADDR 0b1101000
 
@@ -22,60 +23,18 @@ namespace ds_1307
   }
 
   enum class custom_register
-  {
-     SEA_LEVEL_PRESS = 0x08,
-  };
-
-  enum day_of_week
-  {
-    DAY_NOT_SET = 0,
-    SUNDAY = 1,
-    MONDAY = 2,
-    TUESDAY = 3,
-    WEDNESDAY = 4,
-    THURSDAY = 5,
-    FRIDAY = 6,
-    SATURDAY = 7
-  };
-
-  enum month_of_year
-  {
-    MONTH_NOT_SET = 0,
-    JANUARY = 1,
-    FEBRUARY = 2,
-    MARCH = 3,
-    APRIL = 4,
-    MAY = 5,
-    JUNE = 6,
-    JULY = 7,
-    AUGUST = 8,
-    SEPTEMBER = 9,
-    OCTOBER = 10,
-    NOVEMBER = 11,
-    DECEMBER = 12
-  };
-
-  struct TimeInstance
-  {
-    uint16_t year;
-    month_of_year month;
-    uint8_t date;
-    uint8_t hours;
-    uint8_t minutes;
-    uint8_t seconds;
-    day_of_week day;
-  };
+  {};
 
   bool check_clock(bool& clock_set);
-  bool set_clock(uint16_t year, month_of_year month, day_of_week day, uint8_t date, uint8_t hours, uint8_t minutes, uint8_t seconds);
-  bool get_time_instance(TimeInstance &time_inst);
-  void load_blank_inst(TimeInstance &time_inst);
+  bool set_clock(const tm& time_inst);
+  bool functional_check(const tm& reset_inst);
+
   void handle_time_set_packet(const uint8_t* packet_data);
+  bool read_clock(tm &time_inst);
+  bool check_and_read_clock(tm& time_inst);
 
   bool read_custom_register(custom_register addr, uint8_t* output, uint8_t size);
   bool write_custom_register(custom_register addr, const uint8_t* data, uint8_t size);
   void reg_dump();
   void erase_data();
-
-  void clock_loop(CollectionData& collection_data);
 }

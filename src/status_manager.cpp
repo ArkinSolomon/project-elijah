@@ -99,6 +99,11 @@ void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
   critical_section_exit(&status_cs);
 }
 
+bool status_manager::is_faulted(const fault_id fault_id)
+{
+  return faults[fault_id];
+}
+
 bool status_manager::detect_i2c_bus_fault(const fault_id fault_id)
 {
   static uint8_t fault_detect_cycles_bus0 = 0;
@@ -213,13 +218,17 @@ void status_manager::send_status()
     return;
   }
 
-  uint8_t send_data[5];
+  uint8_t send_data[6];
   size_t i = 0;
-
+  size_t byte_offset = 0;
   do
   {
-    send_data[4] <<= 1;
-    send_data[4] |= faults[i] ? 0x1 : 0x0;
+    if (i > 0 && i % 8 == 0)
+    {
+      byte_offset += 1;
+    }
+    send_data[4 + byte_offset] <<= 1;
+    send_data[4 + byte_offset] |= faults[i] ? 0x1 : 0x0;
   }
   while (faults[++i] != END_OF_FAULT_LIST);
 

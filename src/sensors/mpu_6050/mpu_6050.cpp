@@ -159,8 +159,12 @@ bool mpu_6050::self_test()
   mpu_6050_factory_trim_data.ft_ya = factory_trim_accel(ya_test);
   mpu_6050_factory_trim_data.ft_za = factory_trim_accel(za_test);
 
-  while (gpio_get(MPU_6050_INT_PIN)) {}
-  while (!gpio_get(MPU_6050_INT_PIN)) {}
+  while (gpio_get(MPU_6050_INT_PIN))
+  {
+  }
+  while (!gpio_get(MPU_6050_INT_PIN))
+  {
+  }
 
   double xa_st_en, ya_st_en, za_st_en;
   success = get_data(xa_st_en, ya_st_en, za_st_en);
@@ -176,8 +180,12 @@ bool mpu_6050::self_test()
     return false;
   }
 
-  while (gpio_get(MPU_6050_INT_PIN)) {}
-  while (!gpio_get(MPU_6050_INT_PIN)) {}
+  while (gpio_get(MPU_6050_INT_PIN))
+  {
+  }
+  while (!gpio_get(MPU_6050_INT_PIN))
+  {
+  }
 
   double xa_st_dis, ya_st_dis, za_st_dis;
   success = get_data(xa_st_dis, ya_st_dis, za_st_dis);
@@ -190,15 +198,21 @@ bool mpu_6050::self_test()
                , str_ya = ya_st_dis - ya_st_en
                , str_za = za_st_dis - za_st_en;
 
-  usb_communication::send_string(std::format("{} - {}, {} - {}, {} - {}", xa_st_en, xa_st_dis, ya_st_en, ya_st_dis, za_st_en, za_st_dis));
+  usb_communication::send_string(std::format("{} - {}, {} - {}, {} - {}", xa_st_en, xa_st_dis, ya_st_en, ya_st_dis,
+                                             za_st_en, za_st_dis));
 
-  mpu_6050_factory_trim_data.ft_xa_change_percent = calculate_self_test_change_percent(str_xa, mpu_6050_factory_trim_data.ft_xa);
-  mpu_6050_factory_trim_data.ft_ya_change_percent = calculate_self_test_change_percent(str_ya, mpu_6050_factory_trim_data.ft_ya);
-  mpu_6050_factory_trim_data.ft_za_change_percent = calculate_self_test_change_percent(str_za, mpu_6050_factory_trim_data.ft_za);
+  mpu_6050_factory_trim_data.ft_xa_change_percent = calculate_self_test_change_percent(
+    str_xa, mpu_6050_factory_trim_data.ft_xa);
+  mpu_6050_factory_trim_data.ft_ya_change_percent = calculate_self_test_change_percent(
+    str_ya, mpu_6050_factory_trim_data.ft_ya);
+  mpu_6050_factory_trim_data.ft_za_change_percent = calculate_self_test_change_percent(
+    str_za, mpu_6050_factory_trim_data.ft_za);
 
   const bool ret_val = configure_default();
   gpio_set_irq_enabled(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true);
-  while (gpio_get(MPU_6050_INT_PIN)) {}
+  while (gpio_get(MPU_6050_INT_PIN))
+  {
+  }
 
   critical_section_exit(&mpu_6050_cs);
   return ret_val;
@@ -269,16 +283,30 @@ void mpu_6050::data_int(uint gpio, uint32_t event_mask)
 
 void mpu_6050::accel_loop(CollectionData& collection_data)
 {
-  static bool device_detected = false;
-
   critical_section_enter_blocking(&mpu_6050_cs);
   const ReadSensorData last_sensor_data = irq_sens_data;
 
 
   if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
   {
-    usb_communication::send_string(std::format("It's been more than {}ms since a sensor update (updated at {})",
-                                               MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time));
+    if (!check_chip_id())
+    {
+      usb_communication::send_string(std::format(
+          "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), and the device is no longer detected",
+          MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
+      );
+    }
+    else
+    {
+      usb_communication::send_string(std::format(
+          "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), but the device is still detected",
+          MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
+      );
+    }
+
+    set_fault(status_manager::DEVICE_MPU_6050, true);
+    critical_section_exit(&mpu_6050_cs);
+    return;
   }
 
   collection_data.accel_x = last_sensor_data.accel_x;

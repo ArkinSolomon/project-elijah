@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <format>
+#include <pico/aon_timer.h>
 
 #include "../i2c/i2c_util.h"
 #include "../../pin_outs.h"
@@ -27,10 +28,10 @@ bool ds_1307::check_clock(bool& clock_set)
     return false;
   }
 
-  TimeInstance time_inst{};
-  get_time_instance(time_inst);
+  tm time_inst{};
+  const bool read_success = read_clock(time_inst);
 
-  clock_set = (seconds_reg & 0x80) == 0 && time_inst.year > 0;
+  clock_set = read_success && (seconds_reg & 0x80) == 0 && time_inst.tm_year > 100;
   return true;
 }
 
@@ -39,19 +40,19 @@ bool ds_1307::check_clock(bool& clock_set)
  *
  * Use 24-hour time.
  */
-bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_week day, const uint8_t date,
-                        const uint8_t hours, const uint8_t minutes, const uint8_t seconds)
+bool ds_1307::set_clock(const tm& time_inst)
 {
-  const uint8_t seconds_data = seconds / 10 << 4 | seconds % 10;
-  const uint8_t minutes_data = minutes / 10 << 4 | minutes % 10;
-  const uint8_t hours_data = hours / 10 << 4 | hours % 10;
-  const uint8_t date_data = date / 10 << 4 | date % 10;
-  const uint8_t month_data = static_cast<uint8_t>(month) / 10 << 4 | month % 10;
+  const uint8_t seconds_data = time_inst.tm_sec / 10 << 4 | time_inst.tm_sec % 10;
+  const uint8_t minutes_data = time_inst.tm_min / 10 << 4 | time_inst.tm_min % 10;
+  const uint8_t hours_data = time_inst.tm_hour / 10 << 4 | time_inst.tm_hour % 10;
+  const uint8_t date_data = time_inst.tm_mday / 10 << 4 | time_inst.tm_mday % 10;
+  const uint8_t month_data = time_inst.tm_mon / 10 << 4 | time_inst.tm_mon % 10;
 
-  year -= 2000;
-  const uint8_t year_data = static_cast<uint8_t>(year) / 10 << 4 | year % 10;
+  const int years_since_2000 = time_inst.tm_year - 100;
+  const uint8_t year_data = static_cast<uint8_t>(years_since_2000) / 10 << 4 | years_since_2000 % 10;
   const uint8_t write_data[8] = {
-    _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(day), date_data, month_data,
+    _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(time_inst.tm_wday & 0xFF),
+    date_data, month_data,
     year_data
   };
   const int bytes_written = i2c_write_blocking_until(I2C_BUS0, DS_1307_ADDR, write_data, 8, false,
@@ -60,10 +61,37 @@ bool ds_1307::set_clock(uint16_t year, const month_of_year month, const day_of_w
   return bytes_written == 8;
 }
 
+bool ds_1307::functional_check(const tm& reset_inst)
+{
+  bool clock_set = false;
+  if (!check_clock(clock_set))
+  {
+    set_fault(status_manager::DEVICE_DS_1307, true);
+    usb_communication::send_string("Fault: DS 1307 not detected during functional check");
+    return false;
+  }
+
+  // Clock detected but not set
+  if (!clock_set)
+  {
+    if (set_clock(reset_inst))
+    {
+      set_fault(status_manager::DEVICE_DS_1307, false);
+      return true;
+    }
+
+    set_fault(status_manager::DEVICE_DS_1307, true);
+    usb_communication::send_string("Fault: DS 1307 was detected, but unable to set during functional reset");
+  }
+
+  set_fault(status_manager::DEVICE_DS_1307, false);
+  return true;
+}
+
 /**
  * Get the current time as an instance.
  */
-bool ds_1307::get_time_instance(TimeInstance& time_inst)
+bool ds_1307::read_clock(tm& time_inst)
 {
   uint8_t reg_data[7];
   const bool success = i2c_util::read_bytes(I2C_BUS0, DS_1307_ADDR, _reg_defs::REG_SECONDS, reg_data, 7);
@@ -80,42 +108,40 @@ bool ds_1307::get_time_instance(TimeInstance& time_inst)
   const uint8_t month = reg_data[5];
   const uint8_t year = reg_data[6];
 
-  time_inst.seconds = (seconds >> 4 & 0x7) * 10 + (seconds & 0xF);
-  time_inst.minutes = (minutes >> 4) * 10 + (minutes & 0xF);
-  time_inst.hours = (hours >> 4 & 0x3) * 10 + (hours & 0xF);
-  time_inst.date = (date >> 4 & 0x3) * 10 + (date & 0xF);
-  time_inst.day = static_cast<day_of_week>(day);
-  time_inst.month = static_cast<month_of_year>(((month & 0x10) >> 4) * 10 + (month & 0xF));
-  time_inst.year = 2000 + (year >> 4) * 10 + (year & 0xF);
+  time_inst.tm_sec = (seconds >> 4 & 0x7) * 10 + (seconds & 0xF);
+  time_inst.tm_min = (minutes >> 4) * 10 + (minutes & 0xF);
+  time_inst.tm_hour = (hours >> 4 & 0x3) * 10 + (hours & 0xF);
+  time_inst.tm_mday = (date >> 4 & 0x3) * 10 + (date & 0xF);
+  time_inst.tm_wday = day;
+  time_inst.tm_mon = ((month & 0x10) >> 4) * 10 + (month & 0xF);
+  time_inst.tm_year = 100 + (year >> 4) * 10 + (year & 0xF);
 
   return true;
 }
 
-/**
- * Reset all values in the instance to 0.
- */
-void ds_1307::load_blank_inst(TimeInstance& time_inst)
-{
-  time_inst.year = 0;
-  time_inst.month = MONTH_NOT_SET;
-  time_inst.date = 0;
-  time_inst.hours = 0;
-  time_inst.minutes = 0;
-  time_inst.seconds = 0;
-  time_inst.day = DAY_NOT_SET;
-}
-
 void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
 {
-  const uint8_t seconds = packet_data[0];
-  const uint8_t minutes = packet_data[1];
-  const uint8_t hours = packet_data[2];
-  const auto day = static_cast<day_of_week>(packet_data[3]);
-  const uint8_t date = packet_data[4];
-  const auto month = static_cast<month_of_year>(packet_data[5]);
-  const uint16_t year = packet_data[6] << 8 | packet_data[7];
+  const uint8_t seconds = packet_data[0]
+                , minutes = packet_data[1]
+                , hours = packet_data[2]
+                , day = packet_data[3]
+                , date = packet_data[4]
+                , month = packet_data[5];
+  const int year = packet_data[6] << 8 | packet_data[7];
 
-  const bool clock_did_set = set_clock(year, month, day, date, hours, minutes, seconds);
+  const tm time_inst {
+    seconds, minutes, hours, date, month, year - 1900, day
+  };
+
+  if (aon_timer_is_running())
+  {
+    aon_timer_set_time_calendar(&time_inst);
+  } else
+  {
+    aon_timer_start_calendar(&time_inst);
+  }
+
+  const bool clock_did_set = set_clock(time_inst);
   if (!clock_did_set)
   {
     usb_communication::send_string("Fault: DS 1307, failed to set clock");
@@ -197,36 +223,32 @@ void ds_1307::erase_data()
   usb_communication::send_string("DS 1307 erased");
 }
 
-void ds_1307::clock_loop(CollectionData& collection_data)
+bool ds_1307::check_and_read_clock(tm& time_inst)
 {
-  static bool clock_detected = false, clock_set = false;
-
-  if (!clock_detected || !clock_set)
-  {
-    clock_detected = check_clock(clock_set);
-    if (!clock_detected)
-    {
-      usb_communication::send_string("Fault: DS 1307, device not detected (no acknowledgement)");
-      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-      return;
-    }
-
-    // Clock is detected but not set
-    if (!clock_set)
-    {
-      set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-
-      usb_communication::send_string("Fault: DS 1307, clock not set");
-      return;
-    }
-  }
-
-  clock_detected = get_time_instance(collection_data.time_inst);
+  bool clock_set = false;
+  bool clock_detected = check_clock(clock_set);;
   if (!clock_detected)
   {
-    load_blank_inst(collection_data.time_inst);
-    return;
+    usb_communication::send_string("Fault: DS 1307, device not detected (no acknowledgement)");
+    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+    return false;
+  }
+
+  if (!clock_set)
+  {
+    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+    usb_communication::send_string("Fault: DS 1307, clock not set");
+    return false;
+  }
+
+  clock_detected = read_clock(time_inst);
+  if (!clock_detected)
+  {
+    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+    usb_communication::send_string("Fault: DS 1307, clock not detected (acknowledged but failed to read time)");
+    return false;
   }
 
   set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
+  return true;
 }

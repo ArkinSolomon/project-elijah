@@ -74,6 +74,7 @@ target_link_libraries(elijah-payload
         pico_float_default
         pico_double_default
         pico_int64_ops_default
+        pico_aon_timer
 )
 
 pico_add_extra_outputs(elijah-payload)

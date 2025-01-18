@@ -7,8 +7,8 @@
 #include <hardware/watchdog.h>
 #include <pico/flash.h>
 #include <pico/multicore.h>
-#include <pico/rand.h>
-#include <pico/stdio.h>
+#include <pico/time.h>
+#include <pico/aon_timer.h>
 
 #include "byte_util.h"
 #include "core_1.h"
@@ -57,16 +57,16 @@ int main()
   sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
 
-  // launch_core_1();
-  //
-  // while (multicore_fifo_get_status() & 0x1 == 0)
-  // {
-  //   if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
-  //   {
-  //     usb_communication::send_string("Core 1 ready");
-  //     break;
-  //   }
-  // }
+  launch_core_1();
+
+  while (multicore_fifo_get_status() & 0x1 == 0)
+  {
+    if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
+    {
+      usb_communication::send_string("Core 1 ready");
+      break;
+    }
+  }
 
   bmp_280::read_stored_slp();
 
@@ -77,16 +77,18 @@ int main()
 
   constexpr uint64_t us_between_loops = 1000000 / MAX_UPDATES_PER_SECOND;
 
-   bool led_on = false;
+  bool led_on = false;
   bool usb_connected = false;
+
   CollectionData collection_data{{}};
   absolute_time_t last_loop_time = 0;
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    ds_1307::clock_loop(collection_data);
+    clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
     mpu_6050::accel_loop(collection_data);
+
 
     watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);
@@ -162,4 +164,50 @@ void pin_init()
   spi_set_slave(spi1, false);
 
   spi_init(spi1, 104 * 1000 * 1000);
+}
+
+void clock_loop(CollectionData& collection_data)
+{
+  static uint8_t loops_since_ds_1307_check = 0;
+
+  if (!aon_timer_is_running())
+  {
+    if (ds_1307::check_and_read_clock(collection_data.time_inst))
+    {
+      const bool success = aon_timer_start_calendar(&collection_data.time_inst);
+      if (!success)
+      {
+        usb_communication::send_string("Fault: onboard clock not running");
+        set_fault(status_manager::ONBOARD_CLOCK, true);
+      }
+    }
+    else
+    {
+      usb_communication::send_string("Fault: onboard clock requires DS 1307 to be set in order to initialize");
+      set_fault(status_manager::ONBOARD_CLOCK, true);
+    }
+    return;
+  }
+
+  const bool got_time = aon_timer_get_time_calendar(&collection_data.time_inst);
+  if (!got_time)
+  {
+    usb_communication::send_string("Fault: Failed to get time from onboard clock");
+    set_fault(status_manager::ONBOARD_CLOCK, true);
+    return;
+  }
+
+  if (loops_since_ds_1307_check > 32)
+  {
+    if (ds_1307::functional_check(collection_data.time_inst))
+    {
+      loops_since_ds_1307_check = 0;
+    }
+  }
+  else
+  {
+    loops_since_ds_1307_check++;
+  }
+
+  set_fault(status_manager::ONBOARD_CLOCK, false);
 }

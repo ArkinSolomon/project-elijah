@@ -99,7 +99,7 @@ namespace usb_communication
       W25Q64FV_DEV_INFO, 0
     },
     {
-      FAULT_DATA, 5
+      FAULT_DATA, 6
     },
     {
       RESTART, 0
