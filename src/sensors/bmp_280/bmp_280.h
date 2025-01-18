@@ -1,7 +1,7 @@
 #pragma once
 
-#define BMP_280_SLP_FLASH_DATA_CHECK 0xB860DD0601754BF5
-#define BMP_280_SLP_FLASH_SECTOR_NUM 128
+#define BMP_280_BARO_FLASH_DATA_CHECK 0xB860DD0601754BF5
+#define BMP_280_BARO_FLASH_SECTOR_NUM 128
 
 #define BMP_280_ADDR 0b1110110
 
@@ -98,7 +98,7 @@ namespace bmp_280
     int16_t dig_T2 = -1 , dig_T3 = -1;
     uint16_t dig_P1 = 0;
     int16_t dig_P2 = -1, dig_P3 = -1, dig_P4 = -1, dig_P5 = -1, dig_P6 = -1, dig_P7 = -1, dig_P8 = -1, dig_P9 = -1;
-    double sea_level_pressure = 101325; // Pascals
+    double baro_pressure = 101325; // Pascals
   };
 
   inline CalibrationData bmp_280_calib_data{};
@@ -106,9 +106,9 @@ namespace bmp_280
   bool check_chip_id();
   bool soft_reset();
 
-  void update_saved_slp(void*);
-  bool update_sea_level_pressure(double pressure, bool write = true);
-  void read_stored_slp();
+  void update_saved_baro_press(void*);
+  bool update_baro_pressure(double pressure, bool write = true);
+  void read_stored_baro_press();
 
   bool check_status(bool& measuring, bool& updating);
   bool change_settings(device_mode mode, standby_time_setting standby_time, filter_coefficient_setting filter_setting,

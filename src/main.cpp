@@ -68,7 +68,7 @@ int main()
     }
   }
 
-  bmp_280::read_stored_slp();
+  bmp_280::read_stored_baro_press();
 
   if (status_manager::get_current_status() == status_manager::BOOTING)
   {
@@ -88,7 +88,6 @@ int main()
     clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
     mpu_6050::accel_loop(collection_data);
-
 
     watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);

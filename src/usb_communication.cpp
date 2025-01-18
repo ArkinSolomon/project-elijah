@@ -162,16 +162,16 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   case I2C_SCAN_1:
     i2c_util::scan_for_devices(I2C_BUS1);
     break;
-  case SET_SEA_LEVEL_PRESS:
+  case SET_BARO_PRESS:
     {
       const double pressure = byte_util::decode_double(packet_data);
-      if (bmp_280::update_sea_level_pressure(pressure))
+      if (bmp_280::update_baro_pressure(pressure))
       {
-        send_packet(SEA_LEVEL_PRESS_ACK_SUCCESS);
+        send_packet(BARO_PRESS_ACK_SUCCESS);
       }
       else
       {
-        send_packet(SEA_LEVEL_PRESS_ACK_FAIL);
+        send_packet(BARO_PRESS_ACK_FAIL);
       }
       break;
     }

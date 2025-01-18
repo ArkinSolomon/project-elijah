@@ -286,7 +286,6 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
   critical_section_enter_blocking(&mpu_6050_cs);
   const ReadSensorData last_sensor_data = irq_sens_data;
 
-
   if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
   {
     if (!check_chip_id())
@@ -302,6 +301,7 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
           "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), but the device is still detected",
           MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
       );
+      configure_default();
     }
 
     set_fault(status_manager::DEVICE_MPU_6050, true);

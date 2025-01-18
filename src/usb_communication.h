@@ -24,11 +24,11 @@ namespace usb_communication
     LOOP_TIME = 0x0A,
     I2C_SCAN_0 = 0x0B,
     I2C_SCAN_1 = 0x0C,
-    SET_SEA_LEVEL_PRESS = 0x0D,
+    SET_BARO_PRESS = 0x0D,
     DS_1307_REG_DUMP = 0x0E,
     DS_1307_ERASE = 0x0F,
-    SEA_LEVEL_PRESS_ACK_SUCCESS = 0x10,
-    SEA_LEVEL_PRESS_ACK_FAIL = 0x11,
+    BARO_PRESS_ACK_SUCCESS = 0x10,
+    BARO_PRESS_ACK_FAIL = 0x11,
     GET_BUILD_INFO = 0x12,
     MPU_6050_ST = 0x13,
     W25Q64FV_DEV_INFO = 0x14,
@@ -75,7 +75,7 @@ namespace usb_communication
       I2C_SCAN_1, 0
     },
     {
-      SET_SEA_LEVEL_PRESS, 8
+      SET_BARO_PRESS, 8
     },
     {
       DS_1307_REG_DUMP, 0
@@ -84,10 +84,10 @@ namespace usb_communication
       DS_1307_ERASE, 0
     },
     {
-      SEA_LEVEL_PRESS_ACK_SUCCESS, 0
+      BARO_PRESS_ACK_SUCCESS, 0
     },
     {
-      SEA_LEVEL_PRESS_ACK_FAIL, 0
+      BARO_PRESS_ACK_FAIL, 0
     },
     {
       GET_BUILD_INFO, 0

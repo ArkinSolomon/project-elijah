@@ -37,37 +37,37 @@ bool bmp_280::soft_reset()
 }
 
 /**
- * Update the sea level pressure stored in the flash with the one stored in the calibration data.
+ * Update the barometric pressure stored in the flash with the one stored in the calibration data.
  *
  * @return True if the pressure is updated successfully.
  */
-void bmp_280::update_saved_slp(void*)
+void bmp_280::update_saved_baro_press(void*)
 {
   uint8_t encoded_press[256];
-  constexpr uint64_t flash_check = BMP_280_SLP_FLASH_DATA_CHECK;
-  byte_util::encode_uint64(flash_check, encoded_press);
+  constexpr uint64_t flash_check = BMP_280_BARO_FLASH_DATA_CHECK;
+  *reinterpret_cast<uint64_t*>(encoded_press) = flash_check;
 
-  constexpr uint32_t flash_offset = BMP_280_SLP_FLASH_SECTOR_NUM * 4096;
-  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, encoded_press + sizeof(flash_check));
+  constexpr uint32_t flash_offset = BMP_280_BARO_FLASH_SECTOR_NUM * 4096;
+  byte_util::encode_double(bmp_280_calib_data.baro_pressure, encoded_press + sizeof(flash_check));
 
   flash_range_erase(flash_offset, 256);
   flash_range_program(flash_offset, encoded_press, 256);
 }
 
 /**
- * Update the sea level pressure used for calculations in RAM and optionally in flash.
+ * Update the barometric pressure used for calculations in RAM and optionally in flash.
  *
  * @param pressure The pressure to set.
  * @param write True if the flash should be written to.
  * @return True if the pressure was stored successfully (or chosen not to be stored).
  */
-bool bmp_280::update_sea_level_pressure(const double pressure, const bool write)
+bool bmp_280::update_baro_pressure(const double pressure, const bool write)
 {
-  bmp_280_calib_data.sea_level_pressure = pressure;
+  bmp_280_calib_data.baro_pressure = pressure;
   int status = 0xBEEF;
   if (write)
   {
-    status = flash_safe_execute(update_saved_slp, nullptr, 10);
+    status = flash_safe_execute(update_saved_baro_press, nullptr, 10);
   }
   send_calibration_data();
   return !write || status == PICO_OK;
@@ -76,20 +76,21 @@ bool bmp_280::update_sea_level_pressure(const double pressure, const bool write)
 /**
  * Read the stored pressure from flash, or just.
  */
-void bmp_280::read_stored_slp()
+void bmp_280::read_stored_baro_press()
 {
   double stored_pressure;
-  flash_safe_execute([](void* stored_pressure_vp)
+  int result = flash_safe_execute([](void* stored_pressure_vp)
   {
     const auto stored_pressure_ptr = static_cast<double*>(stored_pressure_vp);
 
-    constexpr uint32_t flash_offset = BMP_280_SLP_FLASH_SECTOR_NUM * 4096;
+    constexpr uint32_t flash_offset = BMP_280_BARO_FLASH_SECTOR_NUM * 4096;
     const uint8_t* flash_contents = reinterpret_cast<uint8_t*>(XIP_BASE + flash_offset);
 
-    constexpr uint64_t flash_check = BMP_280_SLP_FLASH_DATA_CHECK;
+    constexpr uint64_t flash_check = BMP_280_BARO_FLASH_DATA_CHECK;
     if (*reinterpret_cast<const uint64_t*>(flash_contents) != flash_check)
     {
-      *stored_pressure_ptr = -1;
+      usb_communication::send_string(std::format("Baro check read 0x{:16X}", *reinterpret_cast<const uint64_t*>(flash_contents)));
+      *stored_pressure_ptr = -50;
     }
     else
     {
@@ -97,14 +98,14 @@ void bmp_280::read_stored_slp()
     }
   }, &stored_pressure, 10);
 
-
+  usb_communication::send_string(std::format("Baro pressure read {} result: {}", stored_pressure, result));
   if (stored_pressure <= 0)
   {
-    update_sea_level_pressure(101325, true);
+    update_baro_pressure(101325, true);
   }
   else
   {
-    update_sea_level_pressure(stored_pressure, false);
+    update_baro_pressure(stored_pressure, false);
   }
 }
 
@@ -185,7 +186,7 @@ void bmp_280::send_calibration_data()
   byte_util::encode_int16(bmp_280_calib_data.dig_P7, &packet_data[20], packet_data[0], 0);
   byte_util::encode_int16(bmp_280_calib_data.dig_P8, &packet_data[22], packet_data[1], 1);
   byte_util::encode_int16(bmp_280_calib_data.dig_P9, &packet_data[24], packet_data[1], 0);
-  byte_util::encode_double(bmp_280_calib_data.sea_level_pressure, &packet_data[26]);
+  byte_util::encode_double(bmp_280_calib_data.baro_pressure, &packet_data[26]);
 
   send_packet(usb_communication::CALIBRATION_DATA_BMP_280, packet_data);
 }
@@ -250,7 +251,7 @@ bool bmp_280::read_press_temp_alt(int32_t& pressure, double& temperature, double
   p = p + (var1 + var2 + ((double)bmp_280_calib_data.dig_P7)) / 16.0;
 
   pressure = static_cast<int32_t>(std::round(p));
-  altitude = 44330.0 * (1 - std::pow(p / bmp_280_calib_data.sea_level_pressure, 1 / 5.255));
+  altitude = 44330.0 * (1 - std::pow(p / bmp_280_calib_data.baro_pressure, 1 / 5.255));
   // ReSharper restore All
 
   return true;
