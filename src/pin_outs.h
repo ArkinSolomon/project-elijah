@@ -24,3 +24,13 @@
 #define SPI1_TX_PIN 11 // Pin 15
 #define SPI1_RX_PIN 12 // Pin 16
 #define SPI1_CSN_PIN 13 // Pin 17
+
+#define BAT_VOLTAGE_PIN 26 // Pin 31
+
+#if BAT_VOLTAGE_PIN == 26
+#define BAT_ADC_INPUT 0
+#elif BAT_VOLTAGE_PIN == 27
+#define BAT_ADC_INPUT 1
+#elif BAT_VOLTAGE_PIN == 28
+#define BAT_ADC_INPUT 2
+#endif

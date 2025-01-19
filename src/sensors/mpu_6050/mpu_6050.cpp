@@ -4,12 +4,12 @@
 #include <format>
 
 #include "pico/rand.h"
-#include "src/cs_lock_num.h"
-#include "src/main.h"
-#include "src/pin_outs.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
-#include "src/sensors/i2c/i2c_util.h"
+#include "cs_lock_num.h"
+#include "main.h"
+#include "pin_outs.h"
+#include "status_manager.h"
+#include "usb_communication.h"
+#include "sensors/i2c/i2c_util.h"
 
 mpu_6050::ReadSensorData::ReadSensorData()
 {

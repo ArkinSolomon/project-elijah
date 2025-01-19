@@ -6,12 +6,12 @@
 #include <hardware/flash.h>
 #include <pico/flash.h>
 
-#include "src/byte_util.h"
-#include "src/main.h"
-#include "src/pin_outs.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
-#include "src/sensors/i2c/i2c_util.h"
+#include "byte_util.h"
+#include "main.h"
+#include "pin_outs.h"
+#include "status_manager.h"
+#include "usb_communication.h"
+#include "sensors/i2c/i2c_util.h"
 
 /**
  * Check if the chip is detected.

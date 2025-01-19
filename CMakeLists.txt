@@ -46,12 +46,13 @@ pico_enable_stdio_uart(elijah-payload 1)
 pico_enable_stdio_usb(elijah-payload 1)
 
 # Add the standard library to the build
-target_link_libraries(elijah-payload
-        pico_stdlib)
+target_link_libraries(elijah-payload pico_stdlib)
 
 target_include_directories(elijah-payload PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/src
 )
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src build)
+target_link_libraries(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
 
 if(ENTER_USB_BOOT_ON_EXIT)
     target_compile_definitions(elijah-payload PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
@@ -68,6 +69,7 @@ target_link_libraries(elijah-payload
         hardware_i2c
         hardware_spi
         hardware_pio
+        hardware_adc
         pico_multicore
         pico_rand
         pico_mem_ops_default

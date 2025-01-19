@@ -2,10 +2,10 @@
 
 #include <format>
 
-#include "src/pin_outs.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
-#include "src/sensors/i2c/i2c_util.h"
+#include "pin_outs.h"
+#include "status_manager.h"
+#include "usb_communication.h"
+#include "sensors/i2c/i2c_util.h"
 
 bool hmc_5883l::check_device_id()
 {

@@ -121,7 +121,7 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
     return;
   }
 
-  uint8_t serialized_data[52];
+  uint8_t serialized_data[68];
 
   serialized_data[0] = collection_data.time_inst.tm_sec;
   serialized_data[1] = collection_data.time_inst.tm_min;
@@ -139,6 +139,9 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
   byte_util::encode_double(collection_data.accel_x, &serialized_data[28]);
   byte_util::encode_double(collection_data.accel_y, &serialized_data[36]);
   byte_util::encode_double(collection_data.accel_z, &serialized_data[44]);
+
+  byte_util::encode_double(collection_data.bat_voltage, &serialized_data[52]);
+  byte_util::encode_double(collection_data.bat_percent, &serialized_data[60]);
 
   send_packet(COLLECTION_DATA, serialized_data);
 }

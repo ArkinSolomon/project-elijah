@@ -7,10 +7,10 @@
 #include "../i2c/i2c_util.h"
 #include "../../pin_outs.h"
 #include "hardware/i2c.h"
-#include "src/main.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
-#include "src/sensors/bmp_280/bmp_280.h"
+#include "main.h"
+#include "status_manager.h"
+#include "usb_communication.h"
+#include "sensors/bmp_280/bmp_280.h"
 
 /**
  * Check if the clock is detected,

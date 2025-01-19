@@ -3,7 +3,7 @@
 #include <format>
 #include <sys/unistd.h>
 
-#include "src/usb_communication.h"
+#include "usb_communication.h"
 
 void i2c_util::i2c_bus_init(i2c_inst_t* i2c, const uint sda_pin, const uint scl_pin, const uint baud_rate)
 {

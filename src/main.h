@@ -11,6 +11,7 @@ struct CollectionData
   double temperature;
   double altitude;
   double accel_x, accel_y, accel_z;
+  double bat_voltage, bat_percent;
 };
 
 void pin_init();

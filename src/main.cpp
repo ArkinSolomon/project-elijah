@@ -4,7 +4,6 @@
 #include <cstring>
 #include <format>
 #include <hardware/clocks.h>
-#include <hardware/rtc.h>
 #include <hardware/watchdog.h>
 #include <pico/flash.h>
 #include <pico/multicore.h>
@@ -17,7 +16,9 @@
 #include "status_manager.h"
 #include "usb_communication.h"
 #include "hardware/i2c.h"
+#include "hardware/adc.h"
 #include "pico/stdlib.h"
+#include "sensors/battery/battery.h"
 #include "sensors/bmp_280/bmp_280.h"
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
@@ -87,6 +88,7 @@ int main()
     clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
     mpu_6050::accel_loop(collection_data);
+    battery::collect_bat_information(collection_data);
 
     // watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);
@@ -151,7 +153,7 @@ void pin_init()
   gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
   gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true, mpu_6050::data_int);
 
-  // SPI at 104MHz
+  // SPI at 33MHz for W25Q64FV
   gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);
   gpio_set_function(SPI1_TX_PIN, GPIO_FUNC_SPI);
   gpio_set_function(SPI1_RX_PIN, GPIO_FUNC_SPI);
@@ -161,8 +163,12 @@ void pin_init()
   gpio_put(SPI1_CSN_PIN, true);
 
   spi_set_slave(spi1, false);
-
   spi_init(spi1, 33 * 1000 * 1000);
+
+  // Battery ADC
+  adc_init();
+  adc_gpio_init(BAT_VOLTAGE_PIN);
+  adc_select_input(BAT_ADC_INPUT);
 }
 
 void clock_loop(CollectionData& collection_data)

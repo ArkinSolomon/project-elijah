@@ -6,9 +6,9 @@
 #include <hardware/spi.h>
 #include <sys/unistd.h>
 
-#include "src/pin_outs.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
+#include "pin_outs.h"
+#include "status_manager.h"
+#include "usb_communication.h"
 
 bool w25q64fv::init()
 {

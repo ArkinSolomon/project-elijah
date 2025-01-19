@@ -3,8 +3,8 @@
 #include <cstring>
 
 #include "w25q64fv.h"
-#include "src/status_manager.h"
-#include "src/usb_communication.h"
+#include "status_manager.h"
+#include "usb_communication.h"
 
 payload_data_manager::LaunchData::LaunchData(const std::string& new_launch_name) // NOLINT(*-pro-type-member-init)
 {
