@@ -105,9 +105,6 @@ bool w25q64fv::write_enable()
   }
 
   set_fault(status_manager::DEVICE_W25Q64FV, false);
-
-
-  usb_communication::send_string("Writing enabled");
   return true;
 }
 
@@ -194,14 +191,19 @@ bool w25q64fv::page_program(const uint32_t page_addr, const uint8_t* data, const
   write_buff[3] = static_cast<uint8_t>(page_addr & 0xFF);
   memcpy(write_buff + 4, data, data_len);
 
-
   wait_for_not_busy();
   if (!write_enable())
   {
     return false;
   }
 
-  usb_communication::send_string(std::format("writing page {:012X} {} byte", page_addr, data_len));
+  std::string write_data;
+  for (int i = 0; i < write_len; i++)
+  {
+    write_data += std::format("{:02X}", write_buff[i]);
+  }
+
+  // usb_communication::send_string(std::format("writing page {:012X} {} bytes ({} byte command), cmd: 0x{}", page_addr, data_len, write_len, write_data));
   gpio_put(SPI1_CSN_PIN, false);
   const int bytes_written = spi_write_blocking(spi1, write_buff, write_len);
   gpio_put(SPI1_CSN_PIN, true);

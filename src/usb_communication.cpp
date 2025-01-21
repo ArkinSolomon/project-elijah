@@ -18,7 +18,7 @@
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
-#include "storage/w25q64fv.h"
+#include "storage/w25q64fv/w25q64fv.h"
 
 void usb_communication::init_usb_com()
 {
@@ -219,7 +219,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     break;
   case RESTART:
     send_string("Restarting...");
-    watchdog_enable(100, false);
+    watchdog_enable(10, false);
 
   // ReSharper disable once CppPossiblyErroneousEmptyStatements CppDFAEndlessLoop
     while (true);

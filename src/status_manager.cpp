@@ -150,7 +150,7 @@ bool status_manager::detect_i2c_bus_fault(const fault_id fault_id)
     faults[static_cast<uint8_t>(fault_on_bus)] = true;
     set_status(FAULT);
 
-    usb_communication::send_string(std::format("Fault: I2C Bus fail, bus {}", fault_on_bus == i2c_bus::BUS0 ? 0 : 1));
+    // usb_communication::send_string(std::format("Fault: I2C Bus fail, bus {}... attempting to recover", fault_on_bus == i2c_bus::BUS0 ? 0 : 1));
     if (fault_on_bus == i2c_bus::BUS0)
     {
       i2c_util::recover_i2c(I2C_BUS0, I2C0_SDA_PIN, I2C0_SCL_PIN);

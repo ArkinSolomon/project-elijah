@@ -1,6 +1,6 @@
 #pragma once
 
-#define ADC_SAMPLE_COUNT 128
+#define ADC_SAMPLE_COUNT 64
 #define VOLTAGE_DECIMAL_PLACES 2
 
 #include <cstdint>

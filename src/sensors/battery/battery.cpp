@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <format>
+#include <bits/stl_algo.h>
 #include <hardware/adc.h>
 
 #include "main.h"
@@ -30,11 +31,23 @@ void battery::collect_bat_information(CollectionData& collection_data)
   constexpr double conversion_factor = 3.3f / (1 << 8);
   const double voltage_result = average_result / 16 * conversion_factor;
 
-  collection_data.bat_voltage = voltage_result * 3; // multiply by 3 due to voltage divider
+  collection_data.bat_voltage = voltage_result * 3.125; // we only read 32% of voltage
   collection_data.bat_percent = calc_charge_percent(collection_data.bat_voltage);
 }
 
 double battery::calc_charge_percent(const double voltage)
 {
-  return 2.4095 * pow(voltage, 4) - 75.641 * pow(voltage, 3) + 889.29 * pow(voltage, 2) - 4639.7 * voltage + 9062.4;
+  if (voltage < 7.22)
+  {
+    return 0;
+  }
+
+  if (voltage >= 8.4)
+  {
+    return 1;
+  }
+
+  const double fitted_percent = 2.4095 * pow(voltage, 4) - 75.641 * pow(voltage, 3) + 889.29 * pow(voltage, 2) - 4639.7
+    * voltage + 9062.4;
+  return std::clamp(fitted_percent, 0.0, 1.0);
 }

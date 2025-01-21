@@ -31,41 +31,42 @@ project(elijah-payload C CXX ASM)
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-file(GLOB_RECURSE elijah_SRC CONFIGURE_DEPENDS "src/*.cpp")
-add_executable(elijah-payload ${elijah_SRC}
-        src/cs_lock_num.h)
+file(GLOB_RECURSE elijah_SRC_CPP CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE elijah_SRC_C CONFIGURE_DEPENDS "src/*.c")
 
+add_executable(${PROJECT_NAME} ${elijah_SRC_CPP} ${elijah_SRC_C})
 file(GLOB elijah_PIO CONFIGURE_DEPENDS "src/pio/*.pio")
+
 pico_generate_pio_header(${PROJECT_NAME} ${elijah_PIO})
 
 pico_set_program_name(elijah-payload "elijah-payload")
 pico_set_program_version(elijah-payload "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(elijah-payload 1)
-pico_enable_stdio_usb(elijah-payload 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
 
 # Add the standard library to the build
-target_link_libraries(elijah-payload pico_stdlib)
+target_link_libraries(${PROJECT_NAME} pico_stdlib)
 
-target_include_directories(elijah-payload PRIVATE
+target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
 )
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src build)
-target_link_libraries(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src fast-fs-build)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/CRCpp crc-build)
 
 if(ENTER_USB_BOOT_ON_EXIT)
-    target_compile_definitions(elijah-payload PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
 endif(ENTER_USB_BOOT_ON_EXIT)
 
-target_compile_definitions(elijah-payload
+target_compile_definitions(${PROJECT_NAME}
         PUBLIC
         $<$<CONFIG:Debug>:DEBUG>
         $<$<CONFIG:Release>:RELEASE>
 )
 
 # Add any user requested libraries
-target_link_libraries(elijah-payload
+target_link_libraries(${PROJECT_NAME}
         hardware_i2c
         hardware_spi
         hardware_pio
@@ -77,7 +78,9 @@ target_link_libraries(elijah-payload
         pico_double_default
         pico_int64_ops_default
         pico_aon_timer
+        no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
+        CRCpp
 )
 
-pico_add_extra_outputs(elijah-payload)
+pico_add_extra_outputs(${PROJECT_NAME})
 

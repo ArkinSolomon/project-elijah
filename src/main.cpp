@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <format>
+#include <f_util.h>
 #include <hardware/clocks.h>
 #include <hardware/watchdog.h>
 #include <pico/flash.h>
@@ -18,11 +19,13 @@
 #include "hardware/i2c.h"
 #include "hardware/adc.h"
 #include "pico/stdlib.h"
+#include "sensors/onboard_clock/onboard_clock.h"
 #include "sensors/battery/battery.h"
 #include "sensors/bmp_280/bmp_280.h"
-#include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
+
+#include "sd_card.h"
 
 int main()
 {
@@ -54,7 +57,7 @@ int main()
   {
     usb_communication::send_string("Reboot caused by watchdog");
   }
-  // watchdog_enable(5000, true);
+  watchdog_enable(5000, true);
 
   sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
@@ -81,16 +84,23 @@ int main()
   bool usb_connected = false;
 
   CollectionData collection_data{{}};
-  absolute_time_t last_loop_time = 0;
+  absolute_time_t last_loop_start_time = nil_time, last_loop_end_time = nil_time;
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    clock_loop(collection_data);
+
+    onboard_clock::clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
     mpu_6050::accel_loop(collection_data);
     battery::collect_bat_information(collection_data);
 
-    // watchdog_update();
+
+    const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
+    buffer_data(payload_data_manager::DataInstance(collection_data, time_since_last_collection));
+    usb_communication::send_string(std::format("is sl: {}, is trivial {}",
+                                               std::is_standard_layout_v<payload_data_manager::DataInstance>,
+                                               std::is_trivial_v<payload_data_manager::DataInstance>));
+    watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);
 
     const absolute_time_t main_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
@@ -117,8 +127,8 @@ int main()
       byte_util::encode_uint64(core_1_stats::loop_time, &loop_time_data[8]);
       mutex_exit(&core_1_stats::loop_time_mtx);
 
-      const absolute_time_t time_between_loops = last_loop_time > 0
-                                                   ? absolute_time_diff_us(last_loop_time, start_time)
+      const absolute_time_t time_between_loops = last_loop_end_time > 0
+                                                   ? absolute_time_diff_us(last_loop_end_time, start_time)
                                                    : 0;
       byte_util::encode_uint64(time_between_loops, &loop_time_data[16]);
 
@@ -132,8 +142,9 @@ int main()
       usb_connected = false;
     }
 
-    sleep_until(delayed_by_us(last_loop_time, us_between_loops));
-    last_loop_time = get_absolute_time();
+    last_loop_start_time = start_time;
+    sleep_until(delayed_by_us(last_loop_end_time, us_between_loops));
+    last_loop_end_time = get_absolute_time();
   }
 
   watchdog_disable();
@@ -153,6 +164,18 @@ void pin_init()
   gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
   gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true, mpu_6050::data_int);
 
+  // // SPI at 25MHz for MicroSD
+  // gpio_set_function(SPI0_SCK_PIN, GPIO_FUNC_SPI);
+  // gpio_set_function(SPI0_TX_PIN, GPIO_FUNC_SPI);
+  // gpio_set_function(SPI0_RX_PIN, GPIO_FUNC_SPI);
+  //
+  // gpio_init(SPI0_CSN_PIN);
+  // gpio_set_dir(SPI0_CSN_PIN, GPIO_OUT);
+  // gpio_put(SPI0_CSN_PIN, true);
+  //
+  // spi_set_slave(spi0, false);
+  // spi_init(spi0, 25 * 1000 * 1000);
+
   // SPI at 33MHz for W25Q64FV
   gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);
   gpio_set_function(SPI1_TX_PIN, GPIO_FUNC_SPI);
@@ -169,60 +192,4 @@ void pin_init()
   adc_init();
   adc_gpio_init(BAT_VOLTAGE_PIN);
   adc_select_input(BAT_ADC_INPUT);
-}
-
-void clock_loop(CollectionData& collection_data)
-{
-  static uint8_t loops_since_ds_1307_check = 0;
-
-  // For some reason it decides not to use the RTC idk why but it'll work when I figure it out... not important rn
-  if (!aon_timer_is_running())
-  {
-    if (ds_1307::check_and_read_clock(collection_data.time_inst))
-    {
-      if (aon_timer_start_calendar(&collection_data.time_inst))
-      {
-        set_fault(status_manager::ONBOARD_CLOCK, false);
-      }
-      else
-      {
-        usb_communication::send_string("Fault: onboard clock not running");
-        set_fault(status_manager::ONBOARD_CLOCK, true);
-      }
-    }
-    else
-    {
-      usb_communication::send_string("Fault: onboard clock requires DS 1307 to be set in order to initialize");
-      set_fault(status_manager::ONBOARD_CLOCK, true);
-    }
-    return;
-  }
-
-  // It will be a good day when this shows up...
-  const bool got_time = aon_timer_get_time_calendar(&collection_data.time_inst);
-  usb_communication::send_string(std::format("Onboard RTC: {} {} {} {} {} {} {}", collection_data.time_inst.tm_year,
-                                             collection_data.time_inst.tm_mon, collection_data.time_inst.tm_mday,
-                                             collection_data.time_inst.tm_wday, collection_data.time_inst.tm_hour,
-                                             collection_data.time_inst.tm_min, collection_data.time_inst.tm_sec));
-
-  if (!got_time)
-  {
-    usb_communication::send_string("Fault: Failed to get time from onboard clock");
-    set_fault(status_manager::ONBOARD_CLOCK, true);
-    return;
-  }
-
-  if (loops_since_ds_1307_check > 32)
-  {
-    if (ds_1307::functional_check(collection_data.time_inst))
-    {
-      loops_since_ds_1307_check = 0;
-    }
-  }
-  else
-  {
-    loops_since_ds_1307_check++;
-  }
-
-  set_fault(status_manager::ONBOARD_CLOCK, false);
 }

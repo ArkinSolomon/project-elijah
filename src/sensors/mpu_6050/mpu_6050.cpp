@@ -290,10 +290,10 @@ void mpu_6050::accel_loop(CollectionData& collection_data)
   {
     if (!check_chip_id())
     {
-      usb_communication::send_string(std::format(
-          "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), and the device is no longer detected",
-          MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
-      );
+      // usb_communication::send_string(std::format(
+      //     "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), and the device is not detected",
+      //     MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
+      // );
     }
     else
     {
