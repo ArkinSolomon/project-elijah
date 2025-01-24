@@ -8,7 +8,7 @@ static spi_t spi = {
     .sck_gpio = SPI0_SCK_PIN,    // GPIO number (not Pico pin number)
     .mosi_gpio = SPI0_TX_PIN,
     .miso_gpio = SPI0_RX_PIN,
-    .baud_rate = 125 * 1000 * 1000 / 4  // 31250000 Hz
+    .baud_rate = 125 * 1000 * 1000 / 4  // 31,250,000 Hz
 }
 ;
 

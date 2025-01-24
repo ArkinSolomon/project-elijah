@@ -18,26 +18,18 @@ void launch_core_1()
   mutex_init(&core_1_stats::loop_time_mtx);
   payload_data_manager::init_data_manager();
 
-  if (!sd_init_driver())
-  {
-    usb_communication::send_string("Could not initialize SD card driver");
-  }
-
   multicore_launch_core1(core_1_main);
 }
 
 void core_1_main()
 {
-  gpio_put(CORE_1_LED_PIN, false);
   flash_safe_execute_core_init();
 
-  const bool did_w25q64fv_init = w25q64fv::init();
+  bool did_w25q64fv_init = w25q64fv::init();
   if (!did_w25q64fv_init)
   {
     usb_communication::send_string("Fault: W25Q64FV, device failed to initialize");
     set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
-    multicore_fifo_push_blocking(CORE_1_READY_FLAG);
-    return;
   }
 
   payload_data_manager::init_launch_data();
@@ -57,15 +49,24 @@ void core_1_main()
   //                                              test_data_out[i]));
   // }
 
+  // gpio_put(CORE_1_LED_PIN, false);
   multicore_fifo_push_blocking(CORE_1_READY_FLAG);
 
   bool led_on = false;
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    gpio_put(CORE_1_LED_PIN, led_on = !led_on);
+    // gpio_put(CORE_1_LED_PIN, led_on = !led_on);
 
-    payload_data_manager::try_write_active_data();
+    if (!did_w25q64fv_init)
+    {
+      did_w25q64fv_init = w25q64fv::init();
+    }
+
+    if (did_w25q64fv_init)
+    {
+      // payload_data_manager::try_write_active_data();
+    }
 
     mutex_enter_blocking(&core_1_stats::loop_time_mtx);
     const uint64_t elapsed_time = absolute_time_diff_us(start_time, get_absolute_time());

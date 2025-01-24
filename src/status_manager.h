@@ -16,7 +16,7 @@ namespace status_manager
   inline uint sm;
   inline uint offset;
 
-  inline uint8_t faults[10] = {false, false, false, false, false, false, false, false, false, END_OF_FAULT_LIST};
+  inline uint8_t faults[11] = {false, false, false, false, false, false, false, false, false, false, END_OF_FAULT_LIST};
 
   enum fault_id
   {
@@ -29,6 +29,7 @@ namespace status_manager
     _i2c_bus1 = 6,
     DEVICE_W25Q64FV = 7,
     ONBOARD_CLOCK = 8,
+    MICRO_SD = 9,
     _end_of_device_list = END_OF_FAULT_LIST
   };
 

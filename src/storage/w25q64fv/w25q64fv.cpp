@@ -1,14 +1,16 @@
 #include "w25q64fv.h"
+#include <format>
+#include "usb_communication.h"
+
+#ifndef W25Q64FV_FLASH_SIM
 
 #include <cstring>
-#include <format>
 #include <hardware/gpio.h>
 #include <hardware/spi.h>
 #include <sys/unistd.h>
 
 #include "pin_outs.h"
 #include "status_manager.h"
-#include "usb_communication.h"
 
 bool w25q64fv::init()
 {
@@ -77,14 +79,6 @@ bool w25q64fv::init()
   const int shorts_read = spi_read16_blocking(spi1, 0x0000, reinterpret_cast<uint16_t*>(&unique_id), 4);
   gpio_put(SPI1_CSN_PIN, true);
   return shorts_read == 4;
-}
-
-void w25q64fv::print_device_info()
-{
-  usb_communication::send_string(std::format(
-    "W25Q64FV initialized!\nManufacturer ID: 0x{:02X}\nDevice ID: 0x{:02X}\nMemory Type: 0x{:02X}\nCapacity ID: 0x{:02X}\nUnique ID: 0x{:016X}",
-    manufacturer_id,
-    manufacturer_device_id, memory_type, capacity, unique_id));
 }
 
 bool w25q64fv::write_enable()
@@ -352,4 +346,14 @@ bool w25q64fv::wait_for_not_busy()
       return true;
     }
   }
+}
+
+#endif
+
+void w25q64fv::print_device_info()
+{
+  usb_communication::send_string(std::format(
+    "W25Q64FV initialized!\nManufacturer ID: 0x{:02X}\nDevice ID: 0x{:02X}\nMemory Type: 0x{:02X}\nCapacity ID: 0x{:02X}\nUnique ID: 0x{:016X}",
+    manufacturer_id,
+    manufacturer_device_id, memory_type, capacity, unique_id));
 }

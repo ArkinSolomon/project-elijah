@@ -1,6 +1,8 @@
 #pragma once
 
-#define WINBOND_MANUFACTURER_DEVICE_ID 0xEF
+#define WINBOND_MANUFACTURER_ID 0xEF
+
+#define SECTOR_SIZE 4096
 
 #include <cstdint>
 #include <cstddef>

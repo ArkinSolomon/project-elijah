@@ -6,13 +6,18 @@
 #include <pico/mutex.h>
 #include <pico/rand.h>
 
-#define METADATA_SECTOR 0
-#define START_SECTOR 1
+#include "storage/w25q64fv/w25q64fv.h"
+
+#define METADATA_SECTOR 1
+#define START_SECTOR 2
 
 #define DATA_BUFF_SIZE 128
 
 #define LAUNCH_DATA_PRESENT_CHECK 0xA64B39FC
-#define SECTOR_DATA_PRESENT_CHECK 0xDEADBEEF
+#define SECTOR_DATA_PRESENT_CHECK 0xC8A7E312
+
+#define LAUNCH_DATA_SIZE 76
+#define ENCODED_DATA_INSTANCE_SIZE 81
 
 struct CollectionData;
 
@@ -24,8 +29,6 @@ namespace payload_data_manager
     uint32_t start_sector;
     uint32_t next_sector;
 
-    uint32_t present_check;
-
     explicit LaunchData(const std::string& new_launch_name);
   };
 
@@ -33,7 +36,8 @@ namespace payload_data_manager
   {
     NONE = 0x00,
     LAUNCH = 0x01,
-    LANDING = 0x02
+    LANDING = 0x02,
+    _neg_press = 0x80
   };
 
   constexpr DataInstanceEvent operator|(DataInstanceEvent a, DataInstanceEvent b)
@@ -65,10 +69,10 @@ namespace payload_data_manager
   };
 
   constexpr uint8_t instances_per_sector = std::floor(
-    (4096 - 4 /* (bytes) present check (not shown) */ - 1 /* num_instances */ - 2 /* for dropped packets */
-      - 8  /* For CRC */) / sizeof(DataInstance));
+    (SECTOR_SIZE - 4 /* (bytes) present check (not shown) */ - 1 /* num_instances */ - 2 /* for dropped packets */
+      - 8  /* For CRC */) / ENCODED_DATA_INSTANCE_SIZE);
 
-  struct LaunchSectorData
+  struct SectorData
   {
     uint8_t num_instances = 0;
     uint16_t dropped_instances = 0;
@@ -79,13 +83,17 @@ namespace payload_data_manager
   inline mutex_t launch_data_mtx;
   inline mutex_t active_sector_mtx;
 
-  inline LaunchSectorData* active_sector_buff = nullptr;
+  inline SectorData* active_sector_buff = nullptr;
 
   inline auto current_launch_data = LaunchData(std::format("Unknown launch {:016x}", get_rand_64()));
 
   void init_data_manager();
   void init_launch_data();
   void init_active_sector();
+
+  void encode_launch_data(const LaunchData& launch_data, uint8_t* data_buff);
+  void encode_data_instance(const DataInstance& data_inst,uint8_t* sector_buff);
+  void encode_sector_data(const SectorData& sector_data, uint8_t* sector_buff);
 
   bool new_launch(const std::string& new_launch_name);
   bool write_current_launch_data();

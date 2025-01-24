@@ -6,18 +6,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 
 # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
-if(WIN32)
+if (WIN32)
     set(USERHOME $ENV{USERPROFILE})
-else()
+else ()
     set(USERHOME $ENV{HOME})
-endif()
+endif ()
 set(sdkVersion 2.1.0)
 set(toolchainVersion 13_3_Rel1)
 set(picotoolVersion 2.1.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
-endif()
+endif ()
 # ====================================================================================
 
 set(PICO_BOARD pico CACHE STRING "Board type")
@@ -55,15 +55,17 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src fast-fs-build)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/CRCpp crc-build)
 
-if(ENTER_USB_BOOT_ON_EXIT)
+if (ENTER_USB_BOOT_ON_EXIT)
     target_compile_definitions(${PROJECT_NAME} PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
-endif(ENTER_USB_BOOT_ON_EXIT)
+endif (ENTER_USB_BOOT_ON_EXIT)
 
 target_compile_definitions(${PROJECT_NAME}
         PUBLIC
         $<$<CONFIG:Debug>:DEBUG>
         $<$<CONFIG:Release>:RELEASE>
 )
+
+target_compile_definitions(${PROJECT_NAME} PUBLIC W25Q64FV_FLASH_SIM)
 
 # Add any user requested libraries
 target_link_libraries(${PROJECT_NAME}

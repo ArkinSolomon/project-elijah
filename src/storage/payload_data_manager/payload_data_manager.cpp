@@ -3,10 +3,11 @@
 #include <cstring>
 #include <ff.h>
 #include <f_util.h>
-#include <sd_card.h>
 
+#include "byte_util.h"
 #include "main.h"
 #include "pin_outs.h"
+#include "status_manager.h"
 #include "usb_communication.h"
 #include "storage/w25q64fv/w25q64fv.h"
 
@@ -15,7 +16,6 @@ payload_data_manager::LaunchData::LaunchData(const std::string& new_launch_name)
   strcpy(launch_name, new_launch_name.c_str());
   start_sector = START_SECTOR;
   next_sector = START_SECTOR;
-  present_check = LAUNCH_DATA_PRESENT_CHECK;
 }
 
 payload_data_manager::DataInstance::DataInstance()
@@ -44,7 +44,7 @@ payload_data_manager::DataInstance::DataInstance(const CollectionData& collectio
 payload_data_manager::DataInstance::DataInstance(const CollectionData& collection_data,
                                                  const uint64_t us_since_last_data,
                                                  const DataInstanceEvent events) : us_since_last_data(
-  us_since_last_data), events(events)
+    us_since_last_data), events(events)
 {
   tm time_inst = collection_data.time_inst;
   collected_time = mktime(&time_inst);
@@ -73,10 +73,6 @@ void payload_data_manager::init_launch_data()
   const bool did_load_launch_data = load_stored_launch_data();
   if (!did_load_launch_data)
   {
-    usb_communication::send_string(std::format(
-      "Writing launch data for launch \"{}\" starting at sector {} (next sector {})",
-      std::string(current_launch_data.launch_name), current_launch_data.start_sector, current_launch_data.next_sector));
-
     write_current_launch_data();
   }
   else
@@ -92,7 +88,50 @@ void payload_data_manager::init_launch_data()
 
 void payload_data_manager::init_active_sector()
 {
-  active_sector_buff = new LaunchSectorData;
+  active_sector_buff = new SectorData;
+}
+
+void payload_data_manager::encode_launch_data(const LaunchData& launch_data, uint8_t* data_buff)
+{
+  memcpy(data_buff, launch_data.launch_name, 64);
+  byte_util::encode_uint32(launch_data.start_sector, data_buff + 64);
+  byte_util::encode_uint32(launch_data.next_sector, data_buff + 68);
+  byte_util::encode_uint32(LAUNCH_DATA_PRESENT_CHECK, data_buff + 72);
+}
+
+void payload_data_manager::encode_data_instance(const DataInstance& data_inst, uint8_t* sector_buff)
+{
+  byte_util::encode_uint64(data_inst.us_since_last_data, sector_buff);
+  byte_util::encode_uint32(data_inst.packet_seq, sector_buff + 8);
+  byte_util::encode_uint64(data_inst.us_since_last_data, sector_buff + 12);
+  // Pressure encoded later
+
+  byte_util::encode_double(data_inst.temperature, sector_buff + 24);
+  byte_util::encode_double(data_inst.altitude, sector_buff + 32);
+  byte_util::encode_double(data_inst.accel_x, sector_buff + 40);
+  byte_util::encode_double(data_inst.accel_y, sector_buff + 48);
+  byte_util::encode_double(data_inst.accel_z, sector_buff + 56);
+  byte_util::encode_double(data_inst.bat_voltage, sector_buff + 64);
+  byte_util::encode_double(data_inst.bat_voltage, sector_buff + 72);
+
+  sector_buff[80] = static_cast<uint8_t>(data_inst.events);
+  byte_util::encode_int32(data_inst.pressure, sector_buff + 20, sector_buff[80], 7);
+}
+
+void payload_data_manager::encode_sector_data(const SectorData& sector_data, uint8_t* sector_buff)
+{
+  sector_buff[0] = sector_data.num_instances;
+  byte_util::encode_uint16(sector_data.dropped_instances, sector_buff + 1);
+  byte_util::encode_uint64(sector_data.crc, sector_buff + 3);
+
+
+  uint8_t* write_loc = sector_buff + 11;
+  for (size_t i = 1; i <= sector_data.num_instances; write_loc += ENCODED_DATA_INSTANCE_SIZE, ++i)
+  {
+    encode_data_instance(sector_data.data[i], write_loc);
+  }
+
+  byte_util::encode_uint32(SECTOR_DATA_PRESENT_CHECK, write_loc);
 }
 
 bool payload_data_manager::new_launch(const std::string& new_launch_name)
@@ -104,7 +143,7 @@ bool payload_data_manager::new_launch(const std::string& new_launch_name)
   const bool success = write_current_launch_data();
 
   delete active_sector_buff;
-  active_sector_buff = new LaunchSectorData;
+  active_sector_buff = new SectorData;
 
   mutex_exit(&active_sector_mtx);
   mutex_exit(&launch_data_mtx);
@@ -113,79 +152,74 @@ bool payload_data_manager::new_launch(const std::string& new_launch_name)
 
 bool payload_data_manager::write_current_launch_data()
 {
+  usb_communication::send_string(std::format(
+    "Writing launch data for launch (current) \"{}\" starting at sector {} (next sector {})",
+    std::string(current_launch_data.launch_name), current_launch_data.start_sector, current_launch_data.next_sector));
+
+
+  FIL fil;
   FATFS fs;
-  FRESULT fr = f_mount(&fs, "0:", 1);
+  FRESULT fr = f_mount(&fs, "", 1);
   if (fr != FR_OK)
   {
-    usb_communication::send_string(std::format("ERROR: Could not mount filesystem ({})", static_cast<uint8_t>(fr)));
+    usb_communication::send_string(std::format("TEST MicroSD card failed to mount, error: {} ({})", FRESULT_str(fr), static_cast<uint8_t>(fr)));
     return false;
   }
 
-  std::string filename = std::format("{}.flight-data", current_launch_data.launch_name);
-  FIL fil;
-  fr = f_open(&fil, filename.c_str(), FA_OPEN_APPEND | FA_WRITE);
-  if (FR_OK != fr && FR_EXIST != fr)
+  fr = f_open(&fil, "test.txt", FA_OPEN_APPEND | FA_WRITE);
+  if (fr != FR_OK && fr != FR_EXIST)
   {
-    usb_communication::send_string(std::format("f_open({}) error: {} ({})\n", filename, FRESULT_str(fr),
-                                               static_cast<uint8_t>(fr)));
-    return false;
-  }
-  fr = f_lseek(&fil, 0);
-
-  if (FR_OK != fr)
-  {
-    usb_communication::send_string(std::format("f_lseek error: {} ({})\n", FRESULT_str(fr),
-                                               static_cast<uint8_t>(fr)));
+    usb_communication::send_string(std::format("Could not open test file on microSD card, error: {} ({})",
+                                               FRESULT_str(fr), static_cast<uint8_t>(fr)));
+    f_close(&fil);
+    f_unmount("");
     return false;
   }
 
-  uint bytes_written = 0;
-  uint8_t data[4096];
-  memcpy(data, &current_launch_data, sizeof(LaunchData));
-  fr = f_write(&fil, data, 4096, &bytes_written);
-  if (FR_OK != fr)
-  {
-    usb_communication::send_string(
-      std::format("f_write failed error: {} {}", FRESULT_str(fr), static_cast<uint8_t>(fr)));
-    return false;
-  }
+  const uint8_t data[5] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+  uint bytes_written;
+  f_write(&fil, data, 5, &bytes_written);
+  usb_communication::send_string(std::format("Wrote {} bytes", bytes_written));
 
-  usb_communication::send_string(std::format("Wrote {} bytes, expected {} bytes [LaunchData]", bytes_written,
-                                             4096 /*sizeof(LaunchData)*/));
-
-  // Close the file
   fr = f_close(&fil);
-  if (FR_OK != fr)
+  if (fr != FR_OK)
   {
-    usb_communication::send_string(std::format("f_close error: {} ({})", FRESULT_str(fr), static_cast<uint8_t>(fr)));
+    usb_communication::send_string(std::format(
+      "TEST could not close open file on microSD card, error: {} ({})",
+      FRESULT_str(fr), static_cast<uint8_t>(fr)));
+    f_unmount("");
     return false;
   }
 
   f_unmount("");
-  // return w25q64fv::write_sector(METADATA_SECTOR * 4096, reinterpret_cast<uint8_t*>(&current_launch_data),
-  //                               sizeof(LaunchData));
   return true;
+
+  uint8_t encoded_launch_data[LAUNCH_DATA_SIZE];
+  encode_launch_data(current_launch_data, encoded_launch_data);
+  return w25q64fv::write_sector(METADATA_SECTOR * SECTOR_SIZE, encoded_launch_data, LAUNCH_DATA_SIZE);
 }
 
 bool payload_data_manager::load_stored_launch_data()
 {
+  return false;
   auto read_data = LaunchData("tmp");
   const bool success =
-    w25q64fv::read_data(METADATA_SECTOR * 4096, reinterpret_cast<uint8_t*>(&read_data), sizeof(LaunchData));
+    w25q64fv::read_data(METADATA_SECTOR * SECTOR_SIZE, reinterpret_cast<uint8_t*>(&read_data), sizeof(LaunchData));
   if (!success)
   {
     return false;
   }
 
-  usb_communication::send_string(std::format(
-    "Tried reading launch data for launch \"{}\" starting at sector {} (next sector {}) 0x{:08X}",
-    std::string(read_data.launch_name), read_data.start_sector, read_data.next_sector, read_data.present_check));
-  if (read_data.present_check != LAUNCH_DATA_PRESENT_CHECK)
-  {
-    usb_communication::send_string(std::format("present check failed {} != {}", read_data.present_check,
-                                               LAUNCH_DATA_PRESENT_CHECK));
-    return false;
-  }
+  // usb_communication::send_string(std::format(
+  //   "Tried reading launch data for launch \"{}\" starting at sector {} (next sector {}) 0x{:08X}",
+  //   std::string(read_data.launch_name), read_data.start_sector, read_data.next_sector, read_data.present_check));
+
+  // if (read_data.present_check != LAUNCH_DATA_PRESENT_CHECK)
+  // {
+  //   usb_communication::send_string(std::format("present check failed {} != {}", read_data.present_check,
+  //                                              LAUNCH_DATA_PRESENT_CHECK));
+  //   return false;
+  // }
 
   memcpy(current_launch_data.launch_name, read_data.launch_name, sizeof(LaunchData::launch_name));
   current_launch_data.start_sector = read_data.start_sector;
@@ -245,66 +279,18 @@ bool payload_data_manager::try_write_active_data(const bool only_full_buff)
     return false;
   }
 
-  const LaunchSectorData* write_data = active_sector_buff;
+  const SectorData* write_data = active_sector_buff;
   init_active_sector();
   mutex_exit(&active_sector_mtx);
 
-  const size_t empty_data_slots = instances_per_sector - write_data->num_instances;
-  const size_t write_size = sizeof(LaunchSectorData) + 4 - empty_data_slots * sizeof(DataInstance);
-  // uint8_t write_bytes[write_size];
-  uint8_t write_bytes[4096];
-  *reinterpret_cast<uint32_t*>(&write_bytes) = SECTOR_DATA_PRESENT_CHECK;
-  write_bytes[4] = write_data->num_instances - 1;
-  *reinterpret_cast<typeof(LaunchSectorData::dropped_instances)*>(write_bytes + 5) = write_data->dropped_instances;
-  *reinterpret_cast<typeof(LaunchSectorData::crc)*>(write_bytes + 9) = write_data->crc;
-  memcpy(write_bytes + 17, write_data->data, write_size);
+  const size_t write_size = sizeof(SectorData::num_instances) + sizeof(SectorData::dropped_instances) + sizeof(
+    SectorData::crc) + 4 + write_data->num_instances * ENCODED_DATA_INSTANCE_SIZE;
+  uint8_t write_bytes[write_size];
+  encode_sector_data(*write_data, write_bytes);
   delete write_data;
 
-  // bool write_success = w25q64fv::write_sector(current_launch_data.next_sector * 4096, write_bytes, write_size);
+  bool write_success = w25q64fv::write_sector(current_launch_data.next_sector * SECTOR_SIZE, write_bytes, write_size);
 
-  FATFS fs;
-  FRESULT fr = f_mount(&fs, "0:", 1);
-  if (fr != FR_OK)
-  {
-    usb_communication::send_string(std::format("ERROR: Could not mount filesystem [1] ({})", static_cast<uint8_t>(fr)));
-    mutex_exit(&launch_data_mtx);
-    return false;
-  }
-
-  std::string filename = std::format("{}.flight-data", current_launch_data.launch_name);
-  FIL fil;
-  fr = f_open(&fil, filename.c_str(), FA_OPEN_APPEND | FA_WRITE);
-  if (FR_OK != fr && FR_EXIST != fr)
-  {
-    usb_communication::send_string(std::format("f_open({}) error: {} ({})\n", filename, FRESULT_str(fr),
-                                               static_cast<uint8_t>(fr)));
-    mutex_exit(&launch_data_mtx);
-    return false;
-  }
-  uint bytes_written = 0;
-  fr = f_write(&fil, write_bytes, 4096/*write_size*/, &bytes_written);
-  if (FR_OK != fr)
-  {
-    usb_communication::send_string(
-      std::format("f_write failed error: {} {}", FRESULT_str(fr), static_cast<uint8_t>(fr)));
-    mutex_exit(&launch_data_mtx);
-    return false;
-  }
-
-  usb_communication::send_string(std::format("Wrote {} bytes, expected {}", bytes_written, 4096/*write_size*/));
-
-  // Close the file
-  fr = f_close(&fil);
-  if (FR_OK != fr)
-  {
-    usb_communication::send_string(std::format("f_close error: {} ({})", FRESULT_str(fr), static_cast<uint8_t>(fr)));
-    mutex_exit(&launch_data_mtx);
-    return false;
-  }
-
-  f_unmount("");
-
-  bool write_success = true;
   current_launch_data.next_sector++;
   if (!write_success)
   {
