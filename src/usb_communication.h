@@ -4,6 +4,8 @@
 #include <memory>
 #include <pico/critical_section.h>
 
+#include "storage/payload_data_manager/payload_data_manager.h"
+
 #define MAX_RAW_STR_WRITE_BYTES 128
 
 struct CollectionData;
@@ -33,7 +35,10 @@ namespace usb_communication
     MPU_6050_ST = 0x13,
     W25Q64FV_DEV_INFO = 0x14,
     FAULT_DATA = 0x15,
-    RESTART = 0x16
+    RESTART = 0x16,
+    NEW_LAUNCH = 0x17,
+    LAUNCH_DATA = 0x18,
+    FLUSH_TO_SD_CARD = 0x19
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -66,7 +71,7 @@ namespace usb_communication
       CALIBRATION_DATA_BMP_280, 34
     },
     {
-      LOOP_TIME, 32
+      LOOP_TIME, 24
     },
     {
       I2C_SCAN_0, 0
@@ -103,7 +108,15 @@ namespace usb_communication
     },
     {
       RESTART, 0
-    }
+    },
+    {
+      NEW_LAUNCH, MAX_LAUNCH_NAME_SIZE
+    },
+    {
+      LAUNCH_DATA, ENCODED_LAUNCH_DATA_SIZE
+    },
+     {
+     FLUSH_TO_SD_CARD, 0}
   };
 
   inline critical_section_t usb_cs;

@@ -7,7 +7,7 @@
 #include <pico/mutex.h>
 
 #include "byte_util.h"
-#include "cs_lock_num.h"
+#include "lock_nums.h"
 #include "pin_outs.h"
 #include "status_led_controller.pio.h"
 #include "usb_communication.h"

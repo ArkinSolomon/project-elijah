@@ -53,7 +53,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
 )
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src fast-fs-build)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/CRCpp crc-build)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/)
 
 if (ENTER_USB_BOOT_ON_EXIT)
     target_compile_definitions(${PROJECT_NAME} PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
@@ -65,7 +65,7 @@ target_compile_definitions(${PROJECT_NAME}
         $<$<CONFIG:Release>:RELEASE>
 )
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC W25Q64FV_FLASH_SIM)
+target_compile_definitions(${PROJECT_NAME} PRIVATE W25Q64FV_FLASH_SIM)
 
 # Add any user requested libraries
 target_link_libraries(${PROJECT_NAME}
@@ -81,7 +81,6 @@ target_link_libraries(${PROJECT_NAME}
         pico_int64_ops_default
         pico_aon_timer
         no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
-        CRCpp
 )
 
 pico_add_extra_outputs(${PROJECT_NAME})

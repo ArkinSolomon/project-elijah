@@ -4,7 +4,7 @@
 #include <string>
 #include <pico/rand.h>
 
-#include "pin_outs.h"
+#include "lock_nums.h"
 #include "usb_communication.h"
 #include "w25q64fv.h"
 #include "status_manager.h"
@@ -29,7 +29,7 @@ bool mount_card(FATFS* fs)
   return true;
 }
 
-bool open_file(FATFS* fs, FIL* fil, BYTE mode)
+bool open_file(FATFS* fs, FIL* fil, const BYTE mode)
 {
   if (!mount_card(fs))
   {
@@ -84,7 +84,7 @@ bool try_seek(FIL* fil, const FSIZE_t seek_pos)
 bool w25q64fv::init()
 {
   usb_communication::send_string("Initializing flash simulator");
-  critical_section_init(&flash_sim_cs);
+  critical_section_init_with_lock_num(&flash_sim_cs, CS_LOCK_NUM_FLASH_SIM);
 
   if (!sd_init_driver())
   {
@@ -117,11 +117,9 @@ bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t 
 {
   if (sector_addr > LARGEST_SECTOR_ADDR)
   {
-    usb_communication::send_string(std::format("Sector too large, can not write to 0x{:06X}", sector_addr));
+    usb_communication::send_string(std::format("Sector address too large, can not simulate write to 0x{:06X}", sector_addr));
     return false;
   }
-
-  usb_communication::send_string(std::format("Writing sector 0x{:06X}", sector_addr));
 
   critical_section_enter_blocking(&flash_sim_cs);
 
@@ -213,7 +211,7 @@ bool w25q64fv::read_data(uint32_t data_addr, uint8_t* data_buff, size_t data_len
   const uint32_t end_addr = data_addr + data_len;
   if (end_addr > LARGEST_READABLE_ADDR)
   {
-    usb_communication::send_string(std::format("Can not read {} bytes from 0x{:06X}, would overflow flash", data_len,
+    usb_communication::send_string(std::format("Can not simulate read {} bytes from 0x{:06X}, would overflow flash", data_len,
                                                data_addr));
     return false;
   }
@@ -235,8 +233,6 @@ bool w25q64fv::read_data(uint32_t data_addr, uint8_t* data_buff, size_t data_len
       critical_section_exit(&flash_sim_cs);
       return false;
     }
-
-    usb_communication::send_string(std::format("Reading {} bytes from 0x{:06X}", data_len, data_addr));
 
     size_t bytes_read;
     const FRESULT fr = f_read(&fil, data_buff, data_len, &bytes_read);

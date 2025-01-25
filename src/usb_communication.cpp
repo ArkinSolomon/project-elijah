@@ -6,11 +6,13 @@
 #include <string>
 #include <hardware/watchdog.h>
 #include <pico/critical_section.h>
+#include <pico/multicore.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
 
 #include "byte_util.h"
-#include "cs_lock_num.h"
+#include "core_1.h"
+#include "lock_nums.h"
 #include "main.h"
 #include "pin_outs.h"
 #include "status_manager.h"
@@ -18,6 +20,7 @@
 #include "sensors/ds_1307/ds_1307.h"
 #include "sensors/i2c/i2c_util.h"
 #include "sensors/mpu_6050/mpu_6050.h"
+#include "storage/payload_data_manager/payload_data_manager.h"
 #include "storage/w25q64fv/w25q64fv.h"
 
 void usb_communication::init_usb_com()
@@ -42,17 +45,17 @@ void usb_communication::scan_for_packets()
   }
   const uint8_t data_len = it->second;
 
-  const auto packet_data = new char[data_len];
+  uint8_t packet_data[data_len];
   if (data_len > 0)
   {
-    num_read = stdio_get_until(packet_data, data_len, delayed_by_ms(get_absolute_time(), 750));
+    num_read = stdio_get_until(reinterpret_cast<char*>(packet_data), data_len, delayed_by_ms(get_absolute_time(), 750));
     if (num_read != data_len)
     {
       return;
     }
   }
 
-  handle_usb_packet(static_cast<packet_type_id>(packet_type), reinterpret_cast<unsigned char*>(packet_data));
+  handle_usb_packet(static_cast<packet_type_id>(packet_type), packet_data);
 }
 
 void usb_communication::send_packet(const packet_type_id type_id)
@@ -92,10 +95,6 @@ void usb_communication::send_string(const std::string& str)
   const uint16_t total_len = str_len + 3;
 
   uint8_t write_data[total_len];
-  for (int i = 0; i < total_len; i++)
-  {
-    write_data[i] = 'A';
-  }
 
   write_data[0] = STRING;
   write_data[1] = str_len >> 8;
@@ -187,7 +186,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
   case GET_BUILD_INFO:
     {
 #ifdef DEBUG
-      std::string build_mode ="Debug";
+      std::string build_mode = "Debug";
 #elifdef RELEASE
       std::string build_mode = "Release";
 #else
@@ -223,10 +222,24 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
 
   // ReSharper disable once CppPossiblyErroneousEmptyStatements CppDFAEndlessLoop
     while (true);
+  case NEW_LAUNCH:
+    {
+      const auto launch_name_c_str = new char[MAX_LAUNCH_NAME_SIZE];
+      memcpy(launch_name_c_str, packet_data, MAX_LAUNCH_NAME_SIZE);
+
+      constexpr uint64_t command = NEW_LAUNCH_CMD;
+      queue_add_blocking(&core_1::command_queue, &command);
+
+      queue_add_blocking(&core_1::command_queue, &launch_name_c_str);
+      break;
+    }
+  case FLUSH_TO_SD_CARD:
+    {
+      constexpr uint64_t command = FLUSH_DATA_COMMAND;
+      queue_add_blocking(&core_1::command_queue, &command);
+    }
   default: ;
   }
-
-  delete [] packet_data;
 }
 
 void usb_communication::write_packet(const uint8_t* packet_data, const size_t packet_len)

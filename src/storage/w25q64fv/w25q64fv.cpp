@@ -1,16 +1,15 @@
-#include "w25q64fv.h"
-#include <format>
-#include "usb_communication.h"
-
-#ifndef W25Q64FV_FLASH_SIM
-
 #include <cstring>
+#include <format>
 #include <hardware/gpio.h>
 #include <hardware/spi.h>
 #include <sys/unistd.h>
 
+#include "w25q64fv.h"
 #include "pin_outs.h"
 #include "status_manager.h"
+#include "usb_communication.h"
+
+#ifndef W25Q64FV_FLASH_SIM
 
 bool w25q64fv::init()
 {
@@ -35,7 +34,7 @@ bool w25q64fv::init()
   manufacturer_id = device_id_read[0];
   manufacturer_device_id = device_id_read[1];
 
-  if (manufacturer_id != WINBOND_MANUFACTURER_DEVICE_ID)
+  if (manufacturer_id != WINBOND_MANUFACTURER_ID)
   {
     return false;
   }
@@ -125,6 +124,12 @@ bool w25q64fv::write_disable()
 
 bool w25q64fv::write_sector(const uint32_t sector_addr, const uint8_t* data, const uint16_t data_len)
 {
+  if (sector_addr > LARGEST_SECTOR_ADDR)
+  {
+    usb_communication::send_string(std::format("Sector address too large, can not write to 0x{:06X}", sector_addr));
+    return false;
+  }
+
   wait_for_not_busy();
   if (!write_enable())
   {
@@ -216,6 +221,14 @@ bool w25q64fv::page_program(const uint32_t page_addr, const uint8_t* data, const
 
 bool w25q64fv::read_data(const uint32_t data_addr, uint8_t* data_buff, const size_t data_len)
 {
+  const uint32_t end_addr = data_addr + data_len;
+  if (end_addr > LARGEST_READABLE_ADDR)
+  {
+    usb_communication::send_string(std::format("Can not read {} bytes from 0x{:06X}, would overflow flash", data_len,
+                                               data_addr));
+    return false;
+  }
+
   wait_for_not_busy();
 
   const uint8_t read_command[5] = {

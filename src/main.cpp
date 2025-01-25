@@ -46,7 +46,6 @@ int main()
   mpu_6050::configure_default_with_lock();
 
   gpio_put(CORE_0_LED_PIN, true);
-  multicore_reset_core1();
   sleep_ms(200);
   gpio_put(CORE_1_LED_PIN, true);
   sleep_ms(200);
@@ -60,7 +59,7 @@ int main()
   sleep_ms(1000);
   gpio_put(CORE_0_LED_PIN, false);
 
-  launch_core_1();
+  core_1::launch_core_1();
 
   while (multicore_fifo_get_status() & 0x1 == 0)
   {
@@ -107,6 +106,7 @@ int main()
         usb_communication::say_hello();
         bmp_280::send_calibration_data();
         status_manager::send_status();
+        payload_data_manager::send_current_launch_data();
         usb_connected = true;
       }
 
@@ -115,20 +115,15 @@ int main()
       usb_communication::scan_for_packets();
       usb_communication::send_collection_data(collection_data);
 
-      uint8_t loop_time_data[32];
+      uint8_t loop_time_data[usb_communication::packet_type_lens.at(usb_communication::LOOP_TIME)];
       byte_util::encode_uint64(main_loop_time, loop_time_data);
 
-      mutex_enter_blocking(&core_1_stats::loop_time_mtx);
-      byte_util::encode_uint64(core_1_stats::loop_time, &loop_time_data[8]);
-      mutex_exit(&core_1_stats::loop_time_mtx);
-
-      const absolute_time_t time_between_loops = last_loop_end_time > 0
-                                                   ? absolute_time_diff_us(last_loop_end_time, start_time)
-                                                   : 0;
-      byte_util::encode_uint64(time_between_loops, &loop_time_data[16]);
+      mutex_enter_blocking(&core_1::stats::loop_time_mtx);
+      byte_util::encode_uint64(core_1::stats::loop_time, loop_time_data + 8);
+      mutex_exit(&core_1::stats::loop_time_mtx);
 
       const absolute_time_t usb_loop_time = absolute_time_diff_us(usb_start_time, get_absolute_time());
-      byte_util::encode_uint64(usb_loop_time, &loop_time_data[24]);
+      byte_util::encode_uint64(usb_loop_time, loop_time_data + 16);
 
       send_packet(usb_communication::LOOP_TIME, loop_time_data);
     }
@@ -159,17 +154,7 @@ void pin_init()
   gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
   gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true, mpu_6050::data_int);
 
-  // // SPI at 25MHz for MicroSD
-  // gpio_set_function(SPI0_SCK_PIN, GPIO_FUNC_SPI);
-  // gpio_set_function(SPI0_TX_PIN, GPIO_FUNC_SPI);
-  // gpio_set_function(SPI0_RX_PIN, GPIO_FUNC_SPI);
-  //
-  // gpio_init(SPI0_CSN_PIN);
-  // gpio_set_dir(SPI0_CSN_PIN, GPIO_OUT);
-  // gpio_put(SPI0_CSN_PIN, true);
-  //
-  // spi_set_slave(spi0, false);
-  // spi_init(spi0, 25 * 1000 * 1000);
+  // See sd_hw_config.c for microSD card SPI setup
 
   // SPI at 33MHz for W25Q64FV
   gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);

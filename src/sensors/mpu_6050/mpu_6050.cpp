@@ -4,7 +4,7 @@
 #include <format>
 
 #include "pico/rand.h"
-#include "cs_lock_num.h"
+#include "lock_nums.h"
 #include "main.h"
 #include "pin_outs.h"
 #include "status_manager.h"
