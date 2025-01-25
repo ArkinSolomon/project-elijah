@@ -16,7 +16,7 @@
 #define LAUNCH_DATA_PRESENT_CHECK 0xA64B39FC
 #define SECTOR_DATA_PRESENT_CHECK 0xC8A7E312
 
-#define LAUNCH_DATA_SIZE 76
+#define ENCODED_LAUNCH_DATA_SIZE 76
 #define ENCODED_DATA_INSTANCE_SIZE 81
 
 struct CollectionData;
@@ -92,6 +92,8 @@ namespace payload_data_manager
   void init_active_sector();
 
   void encode_launch_data(const LaunchData& launch_data, uint8_t* data_buff);
+  bool decode_launch_data(LaunchData& launch_data, const uint8_t* data_buff);
+
   void encode_data_instance(const DataInstance& data_inst,uint8_t* sector_buff);
   void encode_sector_data(const SectorData& sector_data, uint8_t* sector_buff);
 

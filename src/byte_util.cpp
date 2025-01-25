@@ -68,6 +68,15 @@ void byte_util::encode_sign(const bool sign_set, uint8_t& sign, const uint8_t si
   }
 }
 
+uint32_t byte_util::decode_uint32(const uint8_t* input)
+{
+  const uint32_t result = static_cast<uint32_t>(input[0]) << 0x18
+    | (static_cast<uint32_t>(input[1]) << 0x10)
+    | (static_cast<uint32_t>(input[2]) << 0x08)
+    | (static_cast<uint32_t>(input[3]));
+  return result;
+}
+
 double byte_util::decode_double(const uint8_t* data)
 {
   double output;

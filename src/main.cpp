@@ -96,7 +96,7 @@ int main()
     buffer_data(payload_data_manager::DataInstance(collection_data, time_since_last_collection));
 
     watchdog_update();
-    // gpio_put(CORE_0_LED_PIN, led_on = !led_on);
+    gpio_put(CORE_0_LED_PIN, led_on = !led_on);
 
     const absolute_time_t main_loop_time = absolute_time_diff_us(start_time, get_absolute_time());
     if (stdio_usb_connected())

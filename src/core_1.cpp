@@ -49,14 +49,14 @@ void core_1_main()
   //                                              test_data_out[i]));
   // }
 
-  // gpio_put(CORE_1_LED_PIN, false);
+  gpio_put(CORE_1_LED_PIN, false);
   multicore_fifo_push_blocking(CORE_1_READY_FLAG);
 
   bool led_on = false;
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-    // gpio_put(CORE_1_LED_PIN, led_on = !led_on);
+    gpio_put(CORE_1_LED_PIN, led_on = !led_on);
 
     if (!did_w25q64fv_init)
     {
@@ -65,7 +65,7 @@ void core_1_main()
 
     if (did_w25q64fv_init)
     {
-      // payload_data_manager::try_write_active_data();
+      payload_data_manager::try_write_active_data();
     }
 
     mutex_enter_blocking(&core_1_stats::loop_time_mtx);

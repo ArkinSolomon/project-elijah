@@ -16,10 +16,11 @@ inline const auto filename = "flash_data.binary";
 
 bool mount_card(FATFS* fs)
 {
-  const FRESULT fr = f_mount(fs, "", 1);
+  const FRESULT fr = f_mount(fs, "0:", 1);
   if (fr != FR_OK)
   {
-    usb_communication::send_string(std::format("Fault: microSD card failed to mount, error {} ({})", FRESULT_str(fr), static_cast<uint8_t>(fr)));
+    usb_communication::send_string(std::format("Fault: microSD card failed to mount, error {} ({})", FRESULT_str(fr),
+                                               static_cast<uint8_t>(fr)));
     set_fault(status_manager::MICRO_SD, true);
     return false;
   }
@@ -28,15 +29,14 @@ bool mount_card(FATFS* fs)
   return true;
 }
 
-bool open_file(FIL* fil)
+bool open_file(FATFS* fs, FIL* fil, BYTE mode)
 {
-  FATFS fs;
-  if (!mount_card(&fs))
+  if (!mount_card(fs))
   {
     return false;
   }
 
-  const FRESULT fr = f_open(fil, filename, FA_OPEN_ALWAYS | FA_WRITE);
+  const FRESULT fr = f_open(fil, filename, mode);
   if (fr != FR_OK && fr != FR_EXIST)
   {
     usb_communication::send_string(std::format("Fault: could not open {} on microSD card, error: {} ({})",
@@ -52,16 +52,19 @@ bool open_file(FIL* fil)
 bool try_close_and_unmount(FIL* fil)
 {
   const FRESULT fr = f_close(fil);
+
+  bool success = true;
   if (fr != FR_OK)
   {
     usb_communication::send_string(std::format(
       "Fault: could not close open file on microSD card, error: {} ({})",
       FRESULT_str(fr), static_cast<uint8_t>(fr)));
     set_fault(status_manager::MICRO_SD, true);
+    success = false;
   }
 
-  f_unmount("");
-  return true;
+  success = success && f_unmount("") == FR_OK;
+  return success;
 }
 
 bool try_seek(FIL* fil, const FSIZE_t seek_pos)
@@ -112,12 +115,21 @@ bool w25q64fv::write_disable()
 
 bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t data_len)
 {
+  if (sector_addr > LARGEST_SECTOR_ADDR)
+  {
+    usb_communication::send_string(std::format("Sector too large, can not write to 0x{:06X}", sector_addr));
+    return false;
+  }
+
   usb_communication::send_string(std::format("Writing sector 0x{:06X}", sector_addr));
 
   critical_section_enter_blocking(&flash_sim_cs);
+
+  FATFS fs;
   FIL fil;
   FRESULT fr;
-  if (!open_file(&fil))
+
+  if (!open_file(&fs, &fil, FA_OPEN_APPEND | FA_WRITE))
   {
     critical_section_exit(&flash_sim_cs);
     return false;
@@ -146,23 +158,17 @@ bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t 
         bytes_remaining = 0;
       }
 
-      // usb_communication::send_string(std::format("Filling {} blank bytes", write_size));
-
-      gpio_put(CORE_0_LED_PIN, true);
-
       fr = f_write(&fil, sector_buffer, write_size, &bytes_written);
-      gpio_put(CORE_1_LED_PIN, false);
-
       if (fr != FR_OK || bytes_written != write_size)
       {
         usb_communication::send_string(std::format(
-          "Fault: failed to write {} blank bytes (only wrote {} blank bytes) to microSD, error: {} ({}) [[{}]]",
+          "Fault: failed to write {} blank bytes (only wrote {} blank bytes) to microSD, error: {} ({}) f_ptr={}",
           write_size, bytes_written,
           FRESULT_str(fr), static_cast<uint8_t>(fr), fil.fptr));
 
-        set_fault(status_manager::MICRO_SD, true);
         try_close_and_unmount(&fil);
         critical_section_exit(&flash_sim_cs);
+        set_fault(status_manager::MICRO_SD, true);
         return false;
       }
 
@@ -170,10 +176,8 @@ bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t 
     }
   }
 
-  // usb_communication::send_string(std::format("Seeking to sector 0x{:06X}", sector_addr));
   if (!try_seek(&fil, sector_addr))
   {
-    try_close_and_unmount(&fil);
     critical_section_exit(&flash_sim_cs);
     return false;
   }
@@ -186,15 +190,16 @@ bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t 
       "Fault: failed to write {} bytes (only wrote {}) (simulating sector address 0x{:06X}) to microSD, error: {} ({})",
       SECTOR_SIZE, sector_addr, bytes_written,
       FRESULT_str(fr), static_cast<uint8_t>(fr)));
-    set_fault(status_manager::MICRO_SD, true);
     try_close_and_unmount(&fil);
     critical_section_exit(&flash_sim_cs);
+    set_fault(status_manager::MICRO_SD, true);
     return false;
   }
 
-  const bool unmount_success = try_close_and_unmount(&fil);
+  const bool did_unmount_succeed = try_close_and_unmount(&fil);
   critical_section_exit(&flash_sim_cs);
-  return unmount_success;
+  set_fault(status_manager::MICRO_SD, !did_unmount_succeed);
+  return did_unmount_succeed;
 }
 
 bool w25q64fv::page_program(uint32_t page_addr, const uint8_t* data, size_t data_len)
@@ -205,14 +210,88 @@ bool w25q64fv::page_program(uint32_t page_addr, const uint8_t* data, size_t data
 
 bool w25q64fv::read_data(uint32_t data_addr, uint8_t* data_buff, size_t data_len)
 {
-  return false;
+  const uint32_t end_addr = data_addr + data_len;
+  if (end_addr > LARGEST_READABLE_ADDR)
+  {
+    usb_communication::send_string(std::format("Can not read {} bytes from 0x{:06X}, would overflow flash", data_len,
+                                               data_addr));
+    return false;
+  }
+
+  FATFS fs;
+  FIL fil;
+
+  critical_section_enter_blocking(&flash_sim_cs);
+  if (!open_file(&fs, &fil, FA_OPEN_APPEND | FA_READ))
+  {
+    critical_section_exit(&flash_sim_cs);
+    return false;
+  }
+
+  if (fil.fptr >= end_addr)
+  {
+    if (!try_seek(&fil, data_addr))
+    {
+      critical_section_exit(&flash_sim_cs);
+      return false;
+    }
+
+    usb_communication::send_string(std::format("Reading {} bytes from 0x{:06X}", data_len, data_addr));
+
+    size_t bytes_read;
+    const FRESULT fr = f_read(&fil, data_buff, data_len, &bytes_read);
+    if (fr != FR_OK)
+    {
+      usb_communication::send_string(std::format(
+        "Fault: failed to read {} bytes (only read {}) (simulating address 0x{:06X}) from microSD, error: {} ({})",
+        data_len, bytes_read, data_addr, FRESULT_str(fr), static_cast<uint8_t>(fr)));
+      try_close_and_unmount(&fil);
+      critical_section_exit(&flash_sim_cs);
+      set_fault(status_manager::MICRO_SD, true);
+      return false;
+    }
+  }
+  else if (fil.fptr < data_addr)
+  {
+    usb_communication::send_string(std::format("No data to read, filling {} 0x01s", data_len));
+    std::fill_n(data_buff, data_len, 0x01);
+  }
+  else
+  {
+    // data_addr <= fptr < end_addr
+
+    const size_t avail_size = fil.fptr - data_addr + 1;
+    const size_t fill_size = data_len - avail_size;
+    std::fill_n(data_buff + avail_size, fill_size, 0x01);
+
+    size_t bytes_read;
+    const FRESULT fr = f_read(&fil, data_buff, avail_size, &bytes_read);
+    if (fr != FR_OK)
+    {
+      usb_communication::send_string(std::format(
+        "Fault: failed to read {} bytes (partial read) (only read {}) (simulating address 0x{:06X}) from microSD, error: {} ({})",
+        data_len, bytes_read, data_addr, FRESULT_str(fr), static_cast<uint8_t>(fr)));
+      try_close_and_unmount(&fil);
+      critical_section_exit(&flash_sim_cs);
+      set_fault(status_manager::MICRO_SD, true);
+      return false;
+    }
+  }
+
+
+  const bool did_unmount_succeed = try_close_and_unmount(&fil);
+  critical_section_exit(&flash_sim_cs);
+  set_fault(status_manager::MICRO_SD, !did_unmount_succeed);
+  return did_unmount_succeed;
 }
 
 bool w25q64fv::chip_erase()
 {
   FATFS fs;
+  critical_section_enter_blocking(&flash_sim_cs);
   if (!mount_card(&fs))
   {
+    critical_section_exit(&flash_sim_cs);
     return false;
   }
 
@@ -221,6 +300,7 @@ bool w25q64fv::chip_erase()
   {
     set_fault(status_manager::MICRO_SD, false);
     f_unmount("");
+    critical_section_exit(&flash_sim_cs);
     return true;
   }
 
@@ -231,11 +311,13 @@ bool w25q64fv::chip_erase()
       FRESULT_str(fr), static_cast<uint8_t>(fr)));
     set_fault(status_manager::MICRO_SD, true);
     f_unmount("");
+    critical_section_exit(&flash_sim_cs);
     return false;
   }
 
   fr = f_unlink(filename);
   f_unmount("");
+  critical_section_exit(&flash_sim_cs);
 
   if (fr != FR_OK)
   {

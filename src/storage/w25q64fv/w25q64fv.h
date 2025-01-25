@@ -3,6 +3,8 @@
 #define WINBOND_MANUFACTURER_ID 0xEF
 
 #define SECTOR_SIZE 4096
+#define LARGEST_SECTOR_ADDR 0x7FF000
+#define LARGEST_READABLE_ADDR 0x7FFFFF
 
 #include <cstdint>
 #include <cstddef>
