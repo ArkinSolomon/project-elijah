@@ -113,13 +113,13 @@ bool payload_data_manager::decode_launch_data(LaunchData& launch_data, const uin
   memcpy(launch_data.launch_name, data_buff, MAX_LAUNCH_NAME_SIZE);
   launch_data.start_sector = byte_util::decode_uint32(data_buff + MAX_LAUNCH_NAME_SIZE);
   launch_data.next_sector = byte_util::decode_uint32(data_buff + MAX_LAUNCH_NAME_SIZE + 4);
-  launch_data.sector_data_present_check = byte_util::decode_uint32(data_buff + MAX_LAUNCH_NAME_SIZE + 20);
+  launch_data.sector_data_present_check = byte_util::decode_uint32(data_buff + MAX_LAUNCH_NAME_SIZE + 8);
   return true;
 }
 
 void payload_data_manager::encode_data_instance(const DataInstance& data_inst, uint8_t* sector_buff)
 {
-  byte_util::encode_uint64(data_inst.us_since_last_data, sector_buff);
+  byte_util::encode_uint64(data_inst.collected_time, sector_buff);
   byte_util::encode_uint32(data_inst.packet_seq, sector_buff + 8);
   byte_util::encode_uint64(data_inst.us_since_last_data, sector_buff + 12);
   // Pressure encoded later
@@ -130,7 +130,7 @@ void payload_data_manager::encode_data_instance(const DataInstance& data_inst, u
   byte_util::encode_double(data_inst.accel_y, sector_buff + 48);
   byte_util::encode_double(data_inst.accel_z, sector_buff + 56);
   byte_util::encode_double(data_inst.bat_voltage, sector_buff + 64);
-  byte_util::encode_double(data_inst.bat_voltage, sector_buff + 72);
+  byte_util::encode_double(data_inst.bat_percent, sector_buff + 72);
 
   sector_buff[80] = static_cast<uint8_t>(data_inst.events);
   byte_util::encode_int32(data_inst.pressure, sector_buff + 20, sector_buff[80], 7);
