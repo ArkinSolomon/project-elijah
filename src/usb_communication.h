@@ -4,6 +4,7 @@
 #include <memory>
 #include <pico/critical_section.h>
 
+#include "sensors/mpu_6050/mpu_6050.h"
 #include "storage/payload_data_manager/payload_data_manager.h"
 
 #define MAX_RAW_STR_WRITE_BYTES 128
@@ -20,7 +21,6 @@ namespace usb_communication
     COLLECTION_DATA = 0x04,
     STRING = 0x05,
     REQ_CALIBRATION_DATA = 0x06,
-    CALIBRATION_DATA_BMP_180 = 0x07,
     HELLO = 0x08,
     CALIBRATION_DATA_BMP_280 = 0x09,
     LOOP_TIME = 0x0A,
@@ -32,13 +32,14 @@ namespace usb_communication
     BARO_PRESS_ACK_SUCCESS = 0x10,
     BARO_PRESS_ACK_FAIL = 0x11,
     GET_BUILD_INFO = 0x12,
-    MPU_6050_ST = 0x13,
     W25Q64FV_DEV_INFO = 0x14,
     FAULT_DATA = 0x15,
     RESTART = 0x16,
     NEW_LAUNCH = 0x17,
     LAUNCH_DATA = 0x18,
-    FLUSH_TO_SD_CARD = 0x19
+    FLUSH_TO_SD_CARD = 0x19,
+    CALIBRATE_MPU_6050 = 0x1A,
+    CALIBRATION_DATA_MPU_6050 = 0x1B
   };
 
   inline const std::map<packet_type_id, uint8_t> packet_type_lens = {
@@ -53,16 +54,13 @@ namespace usb_communication
       TIME_SET_FAIL, 0
     },
     {
-      COLLECTION_DATA, 68
+      COLLECTION_DATA, 92
     },
     {
       STRING, 0,
     },
     {
       REQ_CALIBRATION_DATA, 0
-    },
-    {
-      CALIBRATION_DATA_BMP_180, 23
     },
     {
       HELLO, 0
@@ -98,9 +96,6 @@ namespace usb_communication
       GET_BUILD_INFO, 0
     },
     {
-      MPU_6050_ST, 0
-    },
-    {
       W25Q64FV_DEV_INFO, 0
     },
     {
@@ -115,8 +110,15 @@ namespace usb_communication
     {
       LAUNCH_DATA, ENCODED_LAUNCH_DATA_SIZE
     },
-     {
-     FLUSH_TO_SD_CARD, 0}
+    {
+      FLUSH_TO_SD_CARD, 0
+    },
+    {
+      CALIBRATE_MPU_6050, 0
+    },
+    {
+      CALIBRATION_DATA_MPU_6050, MPU_6050_CALIBRATION_SIZE
+    }
   };
 
   inline critical_section_t usb_cs;

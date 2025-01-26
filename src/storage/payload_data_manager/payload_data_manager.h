@@ -16,7 +16,7 @@
 #define LAUNCH_DATA_PRESENT_CHECK 0xA64B39FC
 
 #define ENCODED_LAUNCH_DATA_SIZE 88
-#define ENCODED_DATA_INSTANCE_SIZE 81
+#define ENCODED_DATA_INSTANCE_SIZE 105
 
 #define DATA_BUFF_SIZE 128
 #define MAX_ACTIVE_SECTOR_LOCK_WAIT_MS 15
@@ -62,6 +62,7 @@ namespace payload_data_manager
     double temperature;
     double altitude;
     double accel_x, accel_y, accel_z;
+    double gyro_x, gyro_y, gyro_z;
     double bat_voltage, bat_percent;
 
     DataInstanceEvent events;

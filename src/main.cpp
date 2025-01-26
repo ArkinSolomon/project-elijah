@@ -38,12 +38,11 @@ int main()
 #endif
 
   pin_init();
+  flash_safe_execute_core_init();
 
   usb_communication::init_usb_com();
   status_manager::status_manager_init();
-  flash_safe_execute_core_init();
-  mpu_6050::init_crit_section();
-  mpu_6050::configure_default_with_lock();
+  mpu_6050::init();
 
   gpio_put(CORE_0_LED_PIN, true);
   sleep_ms(200);
@@ -88,7 +87,7 @@ int main()
 
     onboard_clock::clock_loop(collection_data);
     bmp_280::data_collection_loop(collection_data);
-    mpu_6050::accel_loop(collection_data);
+    mpu_6050::data_loop(collection_data);
     battery::collect_bat_information(collection_data);
 
     const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
@@ -105,6 +104,7 @@ int main()
       {
         usb_communication::say_hello();
         bmp_280::send_calibration_data();
+        mpu_6050::send_calibration_data();
         status_manager::send_status();
         payload_data_manager::send_current_launch_data();
         usb_connected = true;
@@ -149,10 +149,6 @@ void pin_init()
   gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);
   gpio_init(CORE_1_LED_PIN);
   gpio_set_dir(CORE_1_LED_PIN, GPIO_OUT);
-
-  gpio_init(MPU_6050_INT_PIN);
-  gpio_set_dir(MPU_6050_INT_PIN, GPIO_IN);
-  gpio_set_irq_enabled_with_callback(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true, mpu_6050::data_int);
 
   // See sd_hw_config.c for microSD card SPI setup
 

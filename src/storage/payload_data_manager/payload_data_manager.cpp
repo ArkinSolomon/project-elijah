@@ -129,11 +129,15 @@ void payload_data_manager::encode_data_instance(const DataInstance& data_inst, u
   byte_util::encode_double(data_inst.accel_x, sector_buff + 40);
   byte_util::encode_double(data_inst.accel_y, sector_buff + 48);
   byte_util::encode_double(data_inst.accel_z, sector_buff + 56);
-  byte_util::encode_double(data_inst.bat_voltage, sector_buff + 64);
-  byte_util::encode_double(data_inst.bat_percent, sector_buff + 72);
+  byte_util::encode_double(data_inst.gyro_x, sector_buff + 64);
+  byte_util::encode_double(data_inst.gyro_y, sector_buff + 72);
+  byte_util::encode_double(data_inst.gyro_z, sector_buff + 80);
+  byte_util::encode_double(data_inst.bat_voltage, sector_buff + 88);
+  byte_util::encode_double(data_inst.bat_percent, sector_buff + 96);
 
-  sector_buff[80] = static_cast<uint8_t>(data_inst.events);
-  byte_util::encode_int32(data_inst.pressure, sector_buff + 20, sector_buff[80], 7);
+
+  sector_buff[104] = static_cast<uint8_t>(data_inst.events);
+  byte_util::encode_int32(data_inst.pressure, sector_buff + 20, sector_buff[104], 7);
 }
 
 void payload_data_manager::encode_sector_data(const SectorData& sector_data, uint8_t* sector_buff,

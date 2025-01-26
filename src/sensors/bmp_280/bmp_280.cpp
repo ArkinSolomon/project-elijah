@@ -82,15 +82,14 @@ bool bmp_280::update_baro_pressure(const double pressure, const bool write)
 bool bmp_280::read_stored_baro_press()
 {
   double stored_pressure;
-  int read_result = flash_safe_execute([](void* stored_pressure_vp)
+  const int read_result = flash_safe_execute([](void* stored_pressure_vp)
   {
     const auto stored_pressure_ptr = static_cast<double*>(stored_pressure_vp);
 
     constexpr uint32_t flash_offset = BMP_280_BARO_FLASH_SECTOR_NUM * 4096;
     const uint8_t* flash_contents = reinterpret_cast<uint8_t*>(XIP_BASE + flash_offset);
 
-    constexpr uint64_t flash_check = BMP_280_BARO_FLASH_DATA_CHECK;
-    if (*reinterpret_cast<const uint64_t*>(flash_contents) != flash_check)
+    if (*reinterpret_cast<const uint64_t*>(flash_contents) != BMP_280_BARO_FLASH_DATA_CHECK)
     {
       *stored_pressure_ptr = -50;
     }

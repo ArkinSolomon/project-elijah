@@ -7,10 +7,17 @@
 #define MPU_6050_ADDR 0x68
 #define MPU_6050_DEVICE_ID 0x68
 
-#define CONFIG_MPU_6050_DLPF_CFG 0b110 // See datasheet
+#define CONFIG_MPU_6050_DLPF_CFG 3 // See datasheet
 
 #define GRAVITY_CONSTANT 9.80665
 #define MAX_CYCLE_DELAY_DIFF_MS 300
+
+#define MPU_6050_CALIBRATION_SIZE 48
+#define MPU_6050_FLASH_TIMEOUT_MS 100
+#define MPU_6050_CALIBRATION_CHECK 0xB04374211578AE55
+#define MPU_6050_CALIB_FLASH_SECTOR_NUM 499
+#define MPU_6050_CALIBRATION_CYCLES 100
+#define MS_BETWEEN_CALIBRATION_CYCLES 10
 
 struct CollectionData;
 
@@ -61,49 +68,34 @@ namespace mpu_6050
     RANGE_16g = 0b11
   };
 
-  enum class lp_wake_ctrl
+  struct CalibrationData
   {
-    FREQ_1250mHz = 0b00,
-    FREQ_5Hz = 0b01,
-    FREQ_20Hz = 0b10,
-    FREQ_40Hz = 0b11
+    double diff_xa, diff_ya, diff_za;
+    double diff_xg, diff_yg, diff_zg;
+    double accel_scale, gyro_scale;
   };
 
-  struct FactoryTrimData
-  {
-    double ft_xa, ft_ya, ft_za;
-    double ft_xa_change_percent, ft_ya_change_percent, ft_za_change_percent;
-  };
-
-  struct ReadSensorData
-  {
-    double accel_x, accel_y, accel_z;
-    absolute_time_t update_time;
-
-    ReadSensorData();
-    ReadSensorData(volatile const ReadSensorData &read_sensor_data);
-  };
-
-  inline FactoryTrimData mpu_6050_factory_trim_data{};
-  inline double accel_scale;
-  inline uint16_t max_time_since_irq;
-
-  inline ReadSensorData irq_sens_data;
+  inline CalibrationData calibration_data{};
   inline critical_section_t mpu_6050_cs;
 
+  void init();
   bool check_chip_id();
+
   bool configure(uint8_t dlpf_cfg, gyro_full_scale_range gyro_range, accel_full_scale_range accel_range,
-                 lp_wake_ctrl wake_ctrl, bool self_test);
-  bool configure_default();
-  bool configure_default_with_lock();
+                 bool self_test_en, bool enable_ints);
   double get_accel_scale(accel_full_scale_range accel_range);
-  void init_crit_section();
+  double get_gyro_scale(gyro_full_scale_range gyro_range);
 
-  bool self_test();
-  double factory_trim_accel(double test_value);
-  double calculate_self_test_change_percent(double str, double ft);
+  bool configure_default();
 
-  bool get_data(double& accel_x, double& accel_y, double& accel_z);
-  void data_int(uint gpio, uint32_t event_mask);
-  void accel_loop(CollectionData& collection_data);
+  void write_calibration_data(void*);
+  bool read_calibration_data();
+  void encode_calibration_data(uint8_t* encoded_data);
+  void send_calibration_data();
+  void calibrate();
+
+  bool get_raw_data(int16_t& raw_xa, int16_t& raw_ya, int16_t& raw_za, int16_t& raw_xg, int16_t& raw_yg, int16_t& raw_zg);
+  bool get_uncompensated_data(double& uncomp_xa, double& uncomp_ya, double& uncomp_za, double& uncomp_xg, double& uncomp_yg, double& uncomp_zg);
+
+  void data_loop(CollectionData& collection_data);
 }

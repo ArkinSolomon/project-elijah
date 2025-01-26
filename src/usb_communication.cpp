@@ -120,7 +120,7 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
     return;
   }
 
-  uint8_t serialized_data[68];
+  uint8_t serialized_data[92];
 
   serialized_data[0] = collection_data.time_inst.tm_sec;
   serialized_data[1] = collection_data.time_inst.tm_min;
@@ -139,8 +139,12 @@ void usb_communication::send_collection_data(const CollectionData& collection_da
   byte_util::encode_double(collection_data.accel_y, &serialized_data[36]);
   byte_util::encode_double(collection_data.accel_z, &serialized_data[44]);
 
-  byte_util::encode_double(collection_data.bat_voltage, &serialized_data[52]);
-  byte_util::encode_double(collection_data.bat_percent, &serialized_data[60]);
+  byte_util::encode_double(collection_data.gyro_x, &serialized_data[52]);
+  byte_util::encode_double(collection_data.gyro_y, &serialized_data[60]);
+  byte_util::encode_double(collection_data.gyro_z, &serialized_data[68]);
+
+  byte_util::encode_double(collection_data.bat_voltage, &serialized_data[76]);
+  byte_util::encode_double(collection_data.bat_percent, &serialized_data[84]);
 
   send_packet(COLLECTION_DATA, serialized_data);
 }
@@ -154,6 +158,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     break;
   case REQ_CALIBRATION_DATA:
     bmp_280::send_calibration_data();
+    mpu_6050::send_calibration_data();
     break;
   case HELLO:
     say_hello();
@@ -196,28 +201,11 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
       send_string(std::format("Elijah Payload compiled {} at {} [Build mode: {}]", __DATE__, __TIME__, build_mode));
       break;
     }
-  case MPU_6050_ST:
-    {
-      const bool success = mpu_6050::self_test();
-      if (!success)
-      {
-        send_string("MPU 6050 self-test failed to execute");
-        break;
-      }
-
-      send_string(std::format(
-        "Change from factory trim (x, y, z): {:.7}%, {:.7}%, {:.7}%",
-        mpu_6050::mpu_6050_factory_trim_data.ft_xa_change_percent,
-        mpu_6050::mpu_6050_factory_trim_data.ft_ya_change_percent,
-        mpu_6050::mpu_6050_factory_trim_data.ft_za_change_percent
-      ));
-      break;
-    }
   case W25Q64FV_DEV_INFO:
     w25q64fv::print_device_info();
     break;
   case RESTART:
-    send_string("Restarting...");
+    send_string("Restarting payload...");
     watchdog_enable(10, false);
 
   // ReSharper disable once CppPossiblyErroneousEmptyStatements CppDFAEndlessLoop
@@ -238,6 +226,9 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
       constexpr uint64_t command = FLUSH_DATA_COMMAND;
       queue_add_blocking(&core_1::command_queue, &command);
     }
+  case CALIBRATE_MPU_6050:
+    mpu_6050::calibrate();
+    break;
   default: ;
   }
 }

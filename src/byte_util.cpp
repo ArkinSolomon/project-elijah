@@ -71,9 +71,22 @@ void byte_util::encode_sign(const bool sign_set, uint8_t& sign, const uint8_t si
 uint32_t byte_util::decode_uint32(const uint8_t* input)
 {
   const uint32_t result = static_cast<uint32_t>(input[0]) << 0x18
-    | (static_cast<uint32_t>(input[1]) << 0x10)
-    | (static_cast<uint32_t>(input[2]) << 0x08)
-    | (static_cast<uint32_t>(input[3]));
+    | static_cast<uint32_t>(input[1]) << 0x10
+    | static_cast<uint32_t>(input[2]) << 0x08
+    | static_cast<uint32_t>(input[3]);
+  return result;
+}
+
+uint64_t byte_util::decode_uint64(const uint8_t* output)
+{
+  const uint64_t result = static_cast<uint64_t>(output[0]) << 0x38
+  | static_cast<uint64_t>(output[1]) << 0x30
+  | static_cast<uint64_t>(output[2]) << 0x28
+  | static_cast<uint64_t>(output[3]) << 0x20
+  | static_cast<uint64_t>(output[4]) << 0x18
+  | static_cast<uint64_t>(output[5]) << 0x10
+  | static_cast<uint64_t>(output[6]) << 0x08
+  | static_cast<uint64_t>(output[7]);
   return result;
 }
 

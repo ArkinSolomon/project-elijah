@@ -1,9 +1,11 @@
 #include "mpu_6050.h"
 
-#include <cmath>
 #include <format>
+#include <hardware/flash.h>
+#include <hardware/watchdog.h>
+#include <pico/flash.h>
 
-#include "pico/rand.h"
+#include "byte_util.h"
 #include "lock_nums.h"
 #include "main.h"
 #include "pin_outs.h"
@@ -11,18 +13,21 @@
 #include "usb_communication.h"
 #include "sensors/i2c/i2c_util.h"
 
-mpu_6050::ReadSensorData::ReadSensorData()
+void mpu_6050::init()
 {
-  accel_x = accel_y = accel_z = -1;
-  update_time = 0;
-}
+  if (!critical_section_is_initialized(&mpu_6050_cs))
+  {
+    critical_section_init_with_lock_num(&mpu_6050_cs, CS_LOCK_NUM_MPU_SENS_DATA);
+  }
 
-mpu_6050::ReadSensorData::ReadSensorData(volatile const ReadSensorData& read_sensor_data)
-{
-  accel_x = read_sensor_data.accel_x;
-  accel_y = read_sensor_data.accel_y;
-  accel_z = read_sensor_data.accel_z;
-  update_time = read_sensor_data.update_time;
+  critical_section_enter_blocking(&mpu_6050_cs);
+  configure_default();
+  critical_section_exit(&mpu_6050_cs);
+
+  if (!read_calibration_data())
+  {
+    usb_communication::send_string("Could not read calibration data for MPU 6050");
+  }
 }
 
 /**
@@ -38,30 +43,14 @@ bool mpu_6050::check_chip_id()
 }
 
 bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyro_range,
-                         const accel_full_scale_range accel_range, lp_wake_ctrl wake_ctrl,
-                         const bool self_test)
+                         const accel_full_scale_range accel_range,
+                         const bool self_test_en, const bool enable_ints)
 {
-  switch (wake_ctrl)
-  {
-  case lp_wake_ctrl::FREQ_1250mHz:
-    max_time_since_irq = 1500;
-    break;
-  case lp_wake_ctrl::FREQ_5Hz:
-    max_time_since_irq = 500;
-    break;
-  case lp_wake_ctrl::FREQ_20Hz:
-    max_time_since_irq = 110;
-    break;
-  case lp_wake_ctrl::FREQ_40Hz:
-    max_time_since_irq = 75;
-    break;
-  }
-
   const uint8_t config_reg_data = dlpf_cfg & 0x07;
   uint8_t gyro_config_reg_data = static_cast<uint8_t>(gyro_range) << 3 & 0x18;
-  uint8_t accel_config_reg_dat = static_cast<uint8_t>(accel_range) << 2 & 0x18;
+  uint8_t accel_config_reg_dat = static_cast<uint8_t>(accel_range) << 3 & 0x18;
 
-  if (self_test)
+  if (self_test_en)
   {
     gyro_config_reg_data |= 0xE0;
     accel_config_reg_dat |= 0xE0;
@@ -78,9 +67,10 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
     return false;
   }
 
-  accel_scale = get_accel_scale(accel_range);
+  calibration_data.accel_scale = get_accel_scale(accel_range);
+  calibration_data.gyro_scale = get_gyro_scale(gyro_range);
 
-  constexpr uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, 0x01};
+  const uint8_t int_en_data[2] = {_reg_defs::REG_INT_ENABLE, static_cast<uint8_t>(enable_ints ? 0x01 : 0x00)};
   bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, int_en_data, 2, false,
                                            delayed_by_ms(get_absolute_time(), 32));
   if (bytes_written != 2)
@@ -88,25 +78,10 @@ bool mpu_6050::configure(const uint8_t dlpf_cfg, const gyro_full_scale_range gyr
     return false;
   }
 
-  const uint8_t wake_ctrl_reg_val = static_cast<uint8_t>(wake_ctrl) << 6 | 0x07;
-  const uint8_t sleep_disable_data[3] = {_reg_defs::REG_PWR_MGMT_1, 0x28, wake_ctrl_reg_val};
-  bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, sleep_disable_data, 3, false,
+  constexpr uint8_t power_mgmt_data[2] = {_reg_defs::REG_PWR_MGMT_1, 0x08};
+  bytes_written = i2c_write_blocking_until(I2C_BUS1, MPU_6050_ADDR, power_mgmt_data, 2, false,
                                            delayed_by_ms(get_absolute_time(), 32));
-  return bytes_written == 3;
-}
-
-bool mpu_6050::configure_default()
-{
-  return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                   accel_full_scale_range::RANGE_2g, lp_wake_ctrl::FREQ_20Hz, false);
-}
-
-bool mpu_6050::configure_default_with_lock()
-{
-  critical_section_enter_blocking(&mpu_6050_cs);
-  const bool ret_val = configure_default();
-  critical_section_exit(&mpu_6050_cs);
-  return ret_val;
+  return bytes_written == 2;
 }
 
 double mpu_6050::get_accel_scale(const accel_full_scale_range accel_range)
@@ -114,204 +89,262 @@ double mpu_6050::get_accel_scale(const accel_full_scale_range accel_range)
   switch (accel_range)
   {
   case accel_full_scale_range::RANGE_2g:
-    return 0.000061 * GRAVITY_CONSTANT;
+    return GRAVITY_CONSTANT / 16384.0;
   case accel_full_scale_range::RANGE_4g:
-    return 0.000122 * GRAVITY_CONSTANT;
+    return GRAVITY_CONSTANT / 8192.0;
   case accel_full_scale_range::RANGE_8g:
-    return 0.000244 * GRAVITY_CONSTANT;
+    return GRAVITY_CONSTANT / 4096.0;
   case accel_full_scale_range::RANGE_16g:
-    return 0.0004882 * GRAVITY_CONSTANT;
+    return GRAVITY_CONSTANT / 2048.0;
   }
   return 0;
 }
 
-void mpu_6050::init_crit_section()
+double mpu_6050::get_gyro_scale(const gyro_full_scale_range gyro_range)
 {
-  if (!critical_section_is_initialized(&mpu_6050_cs))
+  switch (gyro_range)
   {
-    critical_section_init_with_lock_num(&mpu_6050_cs, CS_LOCK_NUM_MPU_SENS_DATA);
+  case gyro_full_scale_range::RANGE_250:
+    return 1.0 / 131.0;
+  case gyro_full_scale_range::RANGE_500:
+    return 1.0 / 65.5;
+  case gyro_full_scale_range::RANGE_1000:
+    return 1.0 / 32.8;
+  case gyro_full_scale_range::RANGE_2000:
+    return 1.0 / 16.4;
   }
+  return 0;
 }
 
-bool mpu_6050::self_test()
+bool mpu_6050::configure_default()
+{
+  return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
+                   accel_full_scale_range::RANGE_2g, false, false);
+}
+
+void mpu_6050::write_calibration_data(void*)
+{
+  uint8_t encoded_calibration_data[256];
+
+  constexpr uint64_t flash_check = MPU_6050_CALIBRATION_CHECK;
+  *reinterpret_cast<uint64_t*>(encoded_calibration_data) = flash_check;
+  encode_calibration_data(encoded_calibration_data + sizeof(flash_check));
+
+  constexpr uint32_t flash_offset = MPU_6050_CALIB_FLASH_SECTOR_NUM * 4096;
+  flash_range_erase(flash_offset, 256);
+  flash_range_program(flash_offset, encoded_calibration_data, 256);
+}
+
+bool mpu_6050::read_calibration_data()
+{
+  // ReSharper disable once CppLocalVariableMayBeConst
+  bool flash_data_exists = false;
+  const int status = flash_safe_execute([](void* data_exists_v_ptr)
+  {
+    const auto data_exists_ptr = static_cast<bool*>(data_exists_v_ptr);
+
+    constexpr uint32_t flash_offset = MPU_6050_CALIB_FLASH_SECTOR_NUM * 4096;
+    const uint8_t* flash_contents = reinterpret_cast<uint8_t*>(XIP_BASE + flash_offset);
+
+    constexpr uint64_t flash_check = MPU_6050_CALIBRATION_CHECK;
+    const uint64_t read_flash_check = *reinterpret_cast<const uint64_t*>(flash_contents);
+    if (read_flash_check != flash_check)
+    {
+      *data_exists_ptr = false;
+      return;
+    }
+
+    calibration_data.diff_xa = byte_util::decode_double(flash_contents + sizeof(flash_check));
+    calibration_data.diff_ya = byte_util::decode_double(flash_contents + sizeof(flash_check) + 8);
+    calibration_data.diff_za = byte_util::decode_double(flash_contents + sizeof(flash_check) + 16);
+    calibration_data.diff_xg = byte_util::decode_double(flash_contents + sizeof(flash_check) + 24);
+    calibration_data.diff_yg = byte_util::decode_double(flash_contents + sizeof(flash_check) + 32);
+    calibration_data.diff_zg = byte_util::decode_double(flash_contents + sizeof(flash_check) + 40);
+    *data_exists_ptr = true;
+  }, &flash_data_exists, MPU_6050_FLASH_TIMEOUT_MS);
+  return status == PICO_OK && flash_data_exists;
+}
+
+void mpu_6050::encode_calibration_data(uint8_t* encoded_data)
+{
+  byte_util::encode_double(calibration_data.diff_xa, encoded_data);
+  byte_util::encode_double(calibration_data.diff_ya, encoded_data + 8);
+  byte_util::encode_double(calibration_data.diff_za, encoded_data + 16);
+
+  byte_util::encode_double(calibration_data.diff_xg, encoded_data + 24);
+  byte_util::encode_double(calibration_data.diff_yg, encoded_data + 32);
+  byte_util::encode_double(calibration_data.diff_zg, encoded_data + 40);
+}
+
+void mpu_6050::send_calibration_data()
+{
+  uint8_t encoded_calibration_data[MPU_6050_CALIBRATION_SIZE];
+  encode_calibration_data(encoded_calibration_data);
+  send_packet(usb_communication::CALIBRATION_DATA_MPU_6050, encoded_calibration_data);
+}
+
+void mpu_6050::calibrate()
 {
   critical_section_enter_blocking(&mpu_6050_cs);
-  gpio_set_irq_enabled(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, false);
-  bool success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                           accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, true);
-  if (!success)
+  usb_communication::send_string(std::format("Calibrating MPU 6050 with {} cycles", MPU_6050_CALIBRATION_CYCLES));
+
+  bool configure_success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
+                                     accel_full_scale_range::RANGE_2g, false, false);
+
+  if (!configure_success)
   {
-    return false;
-  }
-
-  uint8_t self_test_registers[5];
-  success = i2c_util::read_bytes(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_SELF_TEST_X, self_test_registers, 5);
-  if (!success)
-  {
-    return false;
-  }
-
-  const uint8_t xa_test = self_test_registers[1] >> 5 << 2 | self_test_registers[4] & 0x30
-                , ya_test = self_test_registers[2] >> 5 << 2 | self_test_registers[4] & 0x0C
-                , za_test = self_test_registers[3] >> 5 << 2 | self_test_registers[4] & 0x03;
-
-  mpu_6050_factory_trim_data.ft_xa = factory_trim_accel(xa_test);
-  mpu_6050_factory_trim_data.ft_ya = factory_trim_accel(ya_test);
-  mpu_6050_factory_trim_data.ft_za = factory_trim_accel(za_test);
-
-  while (gpio_get(MPU_6050_INT_PIN))
-  {
-  }
-  while (!gpio_get(MPU_6050_INT_PIN))
-  {
-  }
-
-  double xa_st_en, ya_st_en, za_st_en;
-  success = get_data(xa_st_en, ya_st_en, za_st_en);
-  if (!success)
-  {
-    return false;
-  }
-
-  success = configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
-                      accel_full_scale_range::RANGE_8g, lp_wake_ctrl::FREQ_40Hz, false);
-  if (!success)
-  {
-    return false;
-  }
-
-  while (gpio_get(MPU_6050_INT_PIN))
-  {
-  }
-  while (!gpio_get(MPU_6050_INT_PIN))
-  {
-  }
-
-  double xa_st_dis, ya_st_dis, za_st_dis;
-  success = get_data(xa_st_dis, ya_st_dis, za_st_dis);
-  if (!success)
-  {
-    return false;
-  }
-
-  const double str_xa = xa_st_en - xa_st_dis
-               , str_ya = ya_st_dis - ya_st_en
-               , str_za = za_st_dis - za_st_en;
-
-  usb_communication::send_string(std::format("{} - {}, {} - {}, {} - {}", xa_st_en, xa_st_dis, ya_st_en, ya_st_dis,
-                                             za_st_en, za_st_dis));
-
-  mpu_6050_factory_trim_data.ft_xa_change_percent = calculate_self_test_change_percent(
-    str_xa, mpu_6050_factory_trim_data.ft_xa);
-  mpu_6050_factory_trim_data.ft_ya_change_percent = calculate_self_test_change_percent(
-    str_ya, mpu_6050_factory_trim_data.ft_ya);
-  mpu_6050_factory_trim_data.ft_za_change_percent = calculate_self_test_change_percent(
-    str_za, mpu_6050_factory_trim_data.ft_za);
-
-  const bool ret_val = configure_default();
-  gpio_set_irq_enabled(MPU_6050_INT_PIN, GPIO_IRQ_EDGE_RISE, true);
-  while (gpio_get(MPU_6050_INT_PIN))
-  {
-  }
-
-  critical_section_exit(&mpu_6050_cs);
-  return ret_val;
-}
-
-double mpu_6050::factory_trim_accel(const double test_value)
-{
-  if (test_value == 0)
-  {
-    return 0;
-  }
-
-  return 4096 * 0.34 * std::pow(0.92 / 0.34, (test_value - 1) / 30);
-}
-
-double mpu_6050::calculate_self_test_change_percent(const double str, const double ft)
-{
-  if (ft == 0)
-  {
-    return -9999999;
-  }
-
-  return (str - ft) / ft;
-}
-
-bool mpu_6050::get_data(double& accel_x, double& accel_y, double& accel_z)
-{
-  uint8_t read_data[6];
-  const bool success = i2c_util::read_bytes(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_ACCEL_XOUT, read_data, 6);
-  if (!success)
-  {
-    return false;
-  }
-
-  accel_x = static_cast<int16_t>(read_data[0] << 8 | read_data[1]) * accel_scale; // * mpu_6050_factory_trim_data.
-  // ft_xa_change;
-  accel_y = static_cast<int16_t>(read_data[2] << 8 | read_data[3]) * accel_scale; // * mpu_6050_factory_trim_data.
-  // ft_ya_change;
-  accel_z = static_cast<int16_t>(read_data[4] << 8 | read_data[5]) * accel_scale; // * mpu_6050_factory_trim_data.
-  // ft_za_change;
-
-  return true;
-}
-
-void mpu_6050::data_int(uint gpio, uint32_t event_mask)
-{
-  critical_section_enter_blocking(&mpu_6050_cs);
-
-  ReadSensorData data;
-  const bool success = get_data(data.accel_x, data.accel_y, data.accel_z);
-  if (!success)
-  {
-    usb_communication::send_string("MPU 6050 failed to get data on interrupt");
-    set_fault(status_manager::DEVICE_MPU_6050, true);
+    usb_communication::send_string("Failed to configure MPU 6050 for calibration");
+    critical_section_exit(&mpu_6050_cs);
     return;
   }
 
-  set_fault(status_manager::DEVICE_MPU_6050, false);
+  constexpr double expected_xa = 0, expected_ya = 0, expected_za = GRAVITY_CONSTANT;
+  constexpr double expected_xg = 0, expected_yg = 0, expected_zg = 0;
 
-  data.update_time = get_absolute_time();
+  double total_xa = 0, total_ya = 0, total_za = 0;
+  double total_xg = 0, total_yg = 0, total_zg = 0;
+  for (int i = 1; i <= MPU_6050_CALIBRATION_CYCLES; i++)
+  {
+    watchdog_update();
 
-  irq_sens_data.accel_x = data.accel_x;
-  irq_sens_data.accel_y = data.accel_y;
-  irq_sens_data.accel_z = data.accel_z;
-  irq_sens_data.update_time = data.update_time;
+    double new_xa, new_ya, new_za;
+    double new_xg, new_yg, new_zg;
+    get_uncompensated_data(new_xa, new_ya, new_za, new_xg, new_yg, new_zg);
+
+    total_xa += new_xa;
+    total_ya += new_ya;
+    total_za += new_za;
+
+    total_xg += new_xg;
+    total_yg += new_yg;
+    total_zg += new_zg;
+
+    sleep_ms(MS_BETWEEN_CALIBRATION_CYCLES);
+  }
+
+  const double avg_xa = total_xa / MPU_6050_CALIBRATION_CYCLES
+               , avg_ya = total_ya / MPU_6050_CALIBRATION_CYCLES
+               , avg_za = total_za / MPU_6050_CALIBRATION_CYCLES;
+
+  const double avg_xg = total_xg / MPU_6050_CALIBRATION_CYCLES
+               , avg_yg = total_yg / MPU_6050_CALIBRATION_CYCLES
+               , avg_zg = total_zg / MPU_6050_CALIBRATION_CYCLES;
+
+  calibration_data.diff_xa = expected_xa - avg_xa;
+  calibration_data.diff_ya = expected_ya - avg_ya;
+  calibration_data.diff_za = expected_za - avg_za;
+
+  calibration_data.diff_xg = expected_xg - avg_xg;
+  calibration_data.diff_yg = expected_yg - avg_yg;
+  calibration_data.diff_zg = expected_zg - avg_zg;
+
+  usb_communication::send_string(std::format(
+    "MPU 6050 calibrated: xa = {:.03f}, ya = {:.03f}, za = {:.03f}, xg = {:.03f}, yg = {:.03f}, zg = {:.03f}",
+    calibration_data.diff_xa, calibration_data.diff_ya,
+    calibration_data.diff_za, calibration_data.diff_xg,
+    calibration_data.diff_yg, calibration_data.diff_zg
+  ));
+
+  configure_success = configure_default();
   critical_section_exit(&mpu_6050_cs);
+
+  if (!configure_success)
+  {
+    usb_communication::send_string("Failed to re-configure MPU 6050 to default settings after calibration");
+    return;
+  }
+
+  send_calibration_data();
+  const int write_status = flash_safe_execute(write_calibration_data, nullptr, MPU_6050_FLASH_TIMEOUT_MS);
+  if (write_status != PICO_OK)
+  {
+    usb_communication::send_string(std::format("Failed to write calibration data to flash, code {}", write_status));
+  }
 }
 
-void mpu_6050::accel_loop(CollectionData& collection_data)
+bool mpu_6050::get_raw_data(int16_t& raw_xa, int16_t& raw_ya, int16_t& raw_za, int16_t& raw_xg, int16_t& raw_yg,
+                            int16_t& raw_zg)
 {
-  critical_section_enter_blocking(&mpu_6050_cs);
-  const ReadSensorData last_sensor_data = irq_sens_data;
+  uint8_t read_data[14];
+  const bool success = i2c_util::read_bytes(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_ACCEL_XOUT, read_data, 14);
+  if (!success)
+  {
+    return false;
+  }
 
-  if (absolute_time_diff_us(last_sensor_data.update_time, get_absolute_time()) > MAX_CYCLE_DELAY_DIFF_MS * 1000)
+  raw_xa = static_cast<int16_t>(read_data[0] << 8 | read_data[1]);
+  raw_ya = static_cast<int16_t>(read_data[2] << 8 | read_data[3]);
+  raw_za = static_cast<int16_t>(read_data[4] << 8 | read_data[5]);
+  // Two bytes skipped for unused temperature
+  raw_xg = static_cast<int16_t>(read_data[8] << 8 | read_data[9]);
+  raw_yg = static_cast<int16_t>(read_data[10] << 8 | read_data[11]);
+  raw_zg = static_cast<int16_t>(read_data[12] << 8 | read_data[13]);
+  return true;
+}
+
+bool mpu_6050::get_uncompensated_data(double& uncomp_xa, double& uncomp_ya, double& uncomp_za, double& uncomp_xg,
+                                      double& uncomp_yg, double& uncomp_zg)
+{
+  int16_t raw_xa, raw_ya, raw_za, raw_xg, raw_yg, raw_zg;
+  if (!get_raw_data(raw_xa, raw_ya, raw_za, raw_xg, raw_yg, raw_zg))
+  {
+    return false;
+  }
+
+  uncomp_xa = raw_xa * calibration_data.accel_scale;
+  uncomp_ya = raw_ya * calibration_data.accel_scale;
+  uncomp_za = raw_za * calibration_data.accel_scale;
+
+  uncomp_xg = raw_xg * calibration_data.gyro_scale;
+  uncomp_yg = raw_yg * calibration_data.gyro_scale;
+  uncomp_zg = raw_zg * calibration_data.gyro_scale;
+  return true;
+}
+
+void mpu_6050::data_loop(CollectionData& collection_data)
+{
+  static bool device_detected = false;
+  critical_section_enter_blocking(&mpu_6050_cs);
+
+  if (!device_detected)
   {
     if (!check_chip_id())
     {
-      // usb_communication::send_string(std::format(
-      //     "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), and the device is not detected",
-      //     MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
-      // );
-    }
-    else
-    {
-      usb_communication::send_string(std::format(
-          "Fault: MPU 6050, it's been more than {}ms since a sensor update (updated at {}), but the device is still detected",
-          MAX_CYCLE_DELAY_DIFF_MS, last_sensor_data.update_time)
-      );
-      configure_default();
+      usb_communication::send_string("Fault: MPU 6050, device is not detected");
+      set_fault(status_manager::DEVICE_MPU_6050, true);
+      critical_section_exit(&mpu_6050_cs);
+      return;
     }
 
+    device_detected = configure_default();
+    if (!device_detected)
+    {
+      usb_communication::send_string("Fault: MPU 6050, device was detected, but failed to configure");
+      set_fault(status_manager::DEVICE_MPU_6050, true);
+      critical_section_exit(&mpu_6050_cs);
+      return;
+    }
+  }
+
+  device_detected = get_uncompensated_data(collection_data.accel_x, collection_data.accel_y, collection_data.accel_z,
+                                           collection_data.gyro_x, collection_data.gyro_y, collection_data.gyro_z);
+  if (!device_detected)
+  {
+    usb_communication::send_string("Fault: MPU 6050, failed to get values from device");
     set_fault(status_manager::DEVICE_MPU_6050, true);
     critical_section_exit(&mpu_6050_cs);
     return;
   }
 
-  collection_data.accel_x = last_sensor_data.accel_x;
-  collection_data.accel_y = last_sensor_data.accel_y;
-  collection_data.accel_z = last_sensor_data.accel_z;
+  collection_data.accel_x += calibration_data.diff_xa;
+  collection_data.accel_y += calibration_data.diff_ya;
+  collection_data.accel_z += calibration_data.diff_za;
+
+  collection_data.gyro_x += calibration_data.diff_xg;
+  collection_data.gyro_y += calibration_data.diff_yg;
+  collection_data.gyro_z += calibration_data.diff_zg;
+
+  read_calibration_data();
 
   set_fault(status_manager::DEVICE_MPU_6050, false);
   critical_section_exit(&mpu_6050_cs);

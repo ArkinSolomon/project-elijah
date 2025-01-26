@@ -13,5 +13,6 @@ namespace byte_util
   void encode_sign(bool sign_set, uint8_t& sign, uint8_t sign_bit);
 
   uint32_t decode_uint32(const uint8_t* input);
+  uint64_t decode_uint64(const uint8_t* output);
   double decode_double(const uint8_t* data);
 }

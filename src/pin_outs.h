@@ -17,8 +17,6 @@
 #define CORE_1_LED_PIN 20 // Pin 26
 #define STATUS_LED_PIN 25 // Onboard
 
-#define MPU_6050_INT_PIN 1 // Pin 2
-
 #define SPI0_SCK_PIN 18 // Pin 24
 #define SPI0_TX_PIN 19 // Pin 25
 #define SPI0_RX_PIN 16 // Pin 21
