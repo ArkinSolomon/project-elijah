@@ -48,7 +48,7 @@ namespace status_manager
     DEVICE_MPU_6050, _end_of_device_list
   };
 
-  enum device_status
+  enum device_status : uint32_t
   {
     STATUS_NOT_SET = 0,
     BOOTING = 0xFFFF0000,

@@ -108,6 +108,7 @@ void core_1::handle_new_launch_cmd()
 
 void core_1::handle_flush_data_cmd()
 {
-  tmp_stop_data_writing = !tmp_stop_data_writing;
+  tmp_stop_data_writing = false;
+  set_status(status_manager::DONE);
   // usb_communication::send_string("Flush data not implemented");
 }

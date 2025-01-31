@@ -117,8 +117,8 @@ bool w25q64fv::write_sector(uint32_t sector_addr, const uint8_t* data, uint16_t 
 {
   if (sector_addr > LARGEST_SECTOR_ADDR)
   {
-    usb_communication::send_string(std::format("Sector address too large, can not simulate write to 0x{:06X}", sector_addr));
-    return false;
+    // usb_communication::send_string(std::format("Sector address too large, can not simulate write to 0x{:06X}", sector_addr));
+    // return false;
   }
 
   critical_section_enter_blocking(&flash_sim_cs);

@@ -37,8 +37,10 @@ void mpu_6050::init()
  */
 bool mpu_6050::check_chip_id()
 {
-  uint8_t read_id;
+  uint8_t read_id = 0x55;
   const bool success = i2c_util::read_ubyte(I2C_BUS1, MPU_6050_ADDR, _reg_defs::REG_WHO_AM_I, read_id);
+  usb_communication::send_string(std::format("Chip ID: 0x{:02X}", read_id));
+
   return success && read_id == MPU_6050_DEVICE_ID;
 }
 
@@ -118,6 +120,7 @@ double mpu_6050::get_gyro_scale(const gyro_full_scale_range gyro_range)
 
 bool mpu_6050::configure_default()
 {
+  usb_communication::send_string("configuring mpu6050");
   return configure(CONFIG_MPU_6050_DLPF_CFG, gyro_full_scale_range::RANGE_250,
                    accel_full_scale_range::RANGE_2g, false, false);
 }

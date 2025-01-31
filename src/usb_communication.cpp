@@ -225,6 +225,7 @@ void usb_communication::handle_usb_packet(const packet_type_id packet_type_id, c
     {
       constexpr uint64_t command = FLUSH_DATA_COMMAND;
       queue_add_blocking(&core_1::command_queue, &command);
+      break;
     }
   case CALIBRATE_MPU_6050:
     mpu_6050::calibrate();

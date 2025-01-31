@@ -27,23 +27,28 @@ payload_data_manager::DataInstance::DataInstance()
   pressure = -1;
   temperature = -1;
   altitude = -1;
+
   accel_x = -1;
   accel_y = -1;
   accel_z = -1;
+
+  gyro_x = -1;
+  gyro_y = -1;
+  gyro_z = -1;
 
   bat_voltage = -1;
   bat_percent = -1;
 }
 
-payload_data_manager::DataInstance::DataInstance(const CollectionData& collection_data, uint64_t us_since_last_data) :
+payload_data_manager::DataInstance::DataInstance(const CollectionData& collection_data, const uint64_t us_since_last_data) :
   DataInstance(collection_data, us_since_last_data, DataInstanceEvent::NONE)
 {
 }
 
 payload_data_manager::DataInstance::DataInstance(const CollectionData& collection_data,
                                                  const uint64_t us_since_last_data,
-                                                 const DataInstanceEvent events) : us_since_last_data(
-    us_since_last_data), events(events)
+                                                 const DataInstanceEvent events) :
+us_since_last_data(us_since_last_data), events(events)
 {
   tm time_inst = collection_data.time_inst;
   collected_time = mktime(&time_inst);
@@ -55,6 +60,10 @@ payload_data_manager::DataInstance::DataInstance(const CollectionData& collectio
   accel_x = collection_data.accel_x;
   accel_y = collection_data.accel_y;
   accel_z = collection_data.accel_z;
+
+  gyro_x = collection_data.gyro_x;
+  gyro_y = collection_data.gyro_y;
+  gyro_z = collection_data.gyro_z;
 
   bat_voltage = collection_data.bat_voltage;
   bat_percent = collection_data.bat_percent;

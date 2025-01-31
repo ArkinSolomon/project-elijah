@@ -232,6 +232,6 @@ void status_manager::send_status()
   }
   while (faults[++i] != END_OF_FAULT_LIST);
 
-  send_data[0] = current_status;
+  byte_util::encode_uint32(current_status, send_data);
   send_packet(usb_communication::FAULT_DATA, send_data);
 }
