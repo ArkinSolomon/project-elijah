@@ -12,15 +12,17 @@
 
 namespace status_manager
 {
-  inline PIO pio;
-  inline uint sm;
-  inline uint offset;
+#ifdef STATUS_MANAGER_LED_ENABLE
+  inline PIO sm_pio;
+  inline uint sm_state_machine;
+  inline uint gpio_offset;
+#endif
 
   inline uint8_t faults[11] = {false, false, false, false, false, false, false, false, false, false, END_OF_FAULT_LIST};
 
   enum fault_id
   {
-    DEVICE_BMP_180 = 0,
+    /*DEVICE_BMP_180 = 0,*/
     DEVICE_DS_1307 = 1,
     _i2c_bus0 = 2,
     DEVICE_BMP_280 = 3,
@@ -57,7 +59,6 @@ namespace status_manager
     DONE = 0xF0000A00,
   };
 
-  inline mutex status_mtx;
   inline critical_section_t status_cs;
 
   inline device_status current_status = STATUS_NOT_SET;

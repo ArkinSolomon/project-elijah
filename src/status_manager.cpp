@@ -4,33 +4,32 @@
 #include <format>
 #include <hardware/clocks.h>
 #include <hardware/pio.h>
-#include <pico/mutex.h>
 
 #include "byte_util.h"
 #include "lock_nums.h"
 #include "pin_outs.h"
-#include "status_led_controller.pio.h"
+
 #include "usb_communication.h"
 #include "sensors/i2c/i2c_util.h"
 
+#ifdef STATUS_MANAGER_LED_ENABLE
+#include "status_led_controller.pio.h"
+#endif
+
 void status_manager::status_manager_init()
 {
-  if (!mutex_is_initialized(&status_mtx))
-  {
-    mutex_init(&status_mtx);
-  }
-
   if (!critical_section_is_initialized(&status_cs))
   {
-    critical_section_init_with_lock_num(&status_cs, CS_LOCK_NUM_STATUS);
+    critical_section_init_with_lock_num(&status_cs, LOCK_NUM_STATUS_CS);
   }
 
-
-  static constexpr float pio_freq = 10;
+#ifdef STATUS_MANAGER_LED_ENABLE
+  // This freq math is technically wrong, but it's a good speed so who cares ig
+  constexpr float pio_freq = 10;
+  uint mem_offset;
   const float div = static_cast<float>(clock_get_hz(clk_sys)) / pio_freq;
-
-  const bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&status_led_controller_program, &pio, &sm,
-                                                                        &offset, STATUS_LED_PIN, 1, true);
+  const bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&status_led_controller_program, &sm_pio, &sm_state_machine,
+                                                                        &mem_offset, STATUS_LED_PIN, 1, true);
 
   if (!success)
   {
@@ -39,7 +38,7 @@ void status_manager::status_manager_init()
     gpio_set_dir(STATUS_LED_PIN, true);
     while (err_pattern_count <= 10)
     {
-      usb_communication::send_string("Fault: PIO not started, no free state machines");
+      usb_communication::send_string("Fault: status manager PIO not started, no free state machines");
       gpio_put(STATUS_LED_PIN, true);
       sleep_ms(500);
       gpio_put(STATUS_LED_PIN, false);
@@ -55,7 +54,8 @@ void status_manager::status_manager_init()
     return;
   }
 
-  status_led_controller_program_init(pio, sm, offset, STATUS_LED_PIN, div);
+  status_led_controller_program_init(sm_pio, sm_state_machine, mem_offset, STATUS_LED_PIN, div);
+#endif
   set_status(BOOTING);
 }
 
@@ -72,7 +72,9 @@ void status_manager::set_status(const device_status status)
                                                : "Unknown status")
   );
   current_status = status;
-  pio_sm_put_blocking(pio, sm, status);
+#ifdef STATUS_MANAGER_LED_ENABLE
+  pio_sm_put_blocking(sm_pio, sm_state_machine, status);
+#endif
 }
 
 status_manager::device_status status_manager::get_current_status()
@@ -83,7 +85,6 @@ status_manager::device_status status_manager::get_current_status()
 void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
 {
   critical_section_enter_blocking(&status_cs);
-  mutex_enter_blocking(&status_mtx);
 
   const bool original_fault_state =  faults[fault_id] ;
   faults[fault_id] = fault_state;
@@ -95,7 +96,6 @@ void status_manager::set_fault(const fault_id fault_id, const bool fault_state)
     send_status();
   }
 
-  mutex_exit(&status_mtx);
   critical_section_exit(&status_cs);
 }
 

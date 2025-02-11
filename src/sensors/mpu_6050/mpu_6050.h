@@ -97,5 +97,6 @@ namespace mpu_6050
   bool get_raw_data(int16_t& raw_xa, int16_t& raw_ya, int16_t& raw_za, int16_t& raw_xg, int16_t& raw_yg, int16_t& raw_zg);
   bool get_uncompensated_data(double& uncomp_xa, double& uncomp_ya, double& uncomp_za, double& uncomp_xg, double& uncomp_yg, double& uncomp_zg);
 
+  double get_magnitude(double x, double y, double z);
   void data_loop(CollectionData& collection_data);
 }

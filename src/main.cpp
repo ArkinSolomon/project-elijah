@@ -1,29 +1,30 @@
 #include "main.h"
 
-#include <cmath>
-#include <format>
+#include <aprs_pico.h>
+#include <sd_card.h>
+
+#include <hardware/adc.h>
 #include <hardware/clocks.h>
+#include <hardware/i2c.h>
+#include <hardware/pwm.h>
 #include <hardware/watchdog.h>
+#include <pico/aon_timer.h>
 #include <pico/flash.h>
 #include <pico/multicore.h>
 #include <pico/time.h>
-#include <pico/aon_timer.h>
 
+#include "aprs.h"
 #include "byte_util.h"
 #include "core_1.h"
 #include "pin_outs.h"
 #include "status_manager.h"
 #include "usb_communication.h"
-#include "hardware/i2c.h"
-#include "hardware/adc.h"
-#include "pico/stdlib.h"
-#include "sensors/onboard_clock/onboard_clock.h"
 #include "sensors/battery/battery.h"
 #include "sensors/bmp_280/bmp_280.h"
 #include "sensors/i2c/i2c_util.h"
-#include "sensors/mpu_6050/mpu_6050.h"
+#include "sensors/onboard_clock/onboard_clock.h"
 
-#include "sd_card.h"
+#define APRS_FLAG 0x7E
 
 int main()
 {
@@ -32,8 +33,10 @@ int main()
 #endif
 
 #ifdef PICO_RP2040
-  set_sys_clock_khz(133000, true);
+#define CLOCK_SPEED_KHZ 133000
+  set_sys_clock_khz(CLOCK_SPEED_KHZ, true);
 #elifdef PICO_RP2350
+#define CLOCK_SPEED_KHZ 150000
     set_sys_clock_khz(150000, true);
 #endif
 
@@ -49,30 +52,58 @@ int main()
   gpio_put(CORE_1_LED_PIN, true);
   sleep_ms(200);
 
-  if (watchdog_caused_reboot())
+  // if (watchdog_caused_reboot())
+  // {
+  //   usb_communication::send_string("Reboot caused by watchdog");
+  // }
+  // watchdog_enable(5000, true);
+  //
+  // sleep_ms(1000);
+  // gpio_put(CORE_0_LED_PIN, false);
+  //
+  // core_1::launch_core_1();
+  //
+  // while (multicore_fifo_get_status() & 0x1 == 0)
+  // {
+  //   if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
+  //   {
+  //     usb_communication::send_string("Core 1 ready");
+  //     break;
+  //   }
+  // }
+  //
+  // if (status_manager::get_current_status() == status_manager::BOOTING)
+  // {
+  //   set_status(status_manager::NORMAL);
+  // }
+
+  size_t message_data_len;
+  const std::unique_ptr<uint8_t> message_data = aprs::encode_aprs_string_message("KJ5HXE", "Hello!", message_data_len);
+
+  while (true)
   {
-    usb_communication::send_string("Reboot caused by watchdog");
-  }
-  watchdog_enable(5000, true);
-
-  sleep_ms(1000);
-  gpio_put(CORE_0_LED_PIN, false);
-
-  core_1::launch_core_1();
-
-  while (multicore_fifo_get_status() & 0x1 == 0)
-  {
-    if (multicore_fifo_pop_blocking() == CORE_1_READY_FLAG)
-    {
-      usb_communication::send_string("Core 1 ready");
-      break;
-    }
+    aprs::transmit_bytes(message_data.get(), message_data_len, 50);
+    watchdog_update();
   }
 
-  if (status_manager::get_current_status() == status_manager::BOOTING)
-  {
-    set_status(status_manager::NORMAL);
-  }
+  // audio_buffer_pool_t* audio_buffer_pool = aprs_pico_init();
+  // while (true)
+  // {
+  //   usb_communication::send_string("loop");
+  //   aprs_pico_sendAPRS(audio_buffer_pool,
+  //                      "KJ5HXE", // Source call sign
+  //                      "APPIPI", // Destination call sign
+  //                      "WIDE1-1", // APRS path #1
+  //                      "WIDE2-2", // APRS path #2
+  //                      "APRS by RPi-Pico - https://github.com/eleccoder/raspi-pico-aprs-tnc", // Text message
+  //                      48.75588, // Latitude  (in deg)
+  //                      9.19011, // Longitude (in deg)
+  //                      483, // Altitude  (in m)
+  //                      '/', // APRS symbol table: Primary
+  //                      '>', // APRS symbol code:  Car
+  //                      255u); // Volume    (0 ... 256)
+  //   watchdog_update();
+  // }
 
   constexpr uint64_t us_between_loops = 1000000 / MAX_UPDATES_PER_SECOND;
 
@@ -84,14 +115,6 @@ int main()
   while (true)
   {
     const absolute_time_t start_time = get_absolute_time();
-
-    onboard_clock::clock_loop(collection_data);
-    bmp_280::data_collection_loop(collection_data);
-    mpu_6050::data_loop(collection_data);
-    battery::collect_bat_information(collection_data);
-
-    const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
-    buffer_data(payload_data_manager::DataInstance(collection_data, time_since_last_collection));
 
     watchdog_update();
     gpio_put(CORE_0_LED_PIN, led_on = !led_on);
@@ -168,4 +191,21 @@ void pin_init()
   adc_init();
   adc_gpio_init(BAT_VOLTAGE_PIN);
   adc_select_input(BAT_ADC_INPUT);
+
+  aprs::init_aprs_system(CLOCK_SPEED_KHZ, RADIO_SEL_PIN, PWM_CHAN_B);
+  // gpio_init(RADIO_SEL_PIN);
+  // gpio_set_dir(RADIO_SEL_PIN, GPIO_OUT);
+}
+
+void flight_loop(CollectionData& collection_data, absolute_time_t last_loop_start_time)
+{
+  onboard_clock::clock_loop(collection_data);
+  bmp_280::data_collection_loop(collection_data);
+  mpu_6050::data_loop(collection_data);
+  battery::collect_bat_information(collection_data);
+
+  const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
+  payload_data_manager::DataInstance data_inst(collection_data, time_since_last_collection);
+
+  buffer_data(data_inst);
 }

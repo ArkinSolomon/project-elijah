@@ -26,7 +26,7 @@
 void usb_communication::init_usb_com()
 {
   stdio_init_all();
-  critical_section_init_with_lock_num(&usb_cs, CS_LOCK_NUM_USB);
+  critical_section_init_with_lock_num(&usb_cs, LOCK_NUM_USB_CS);
 }
 
 void usb_communication::scan_for_packets()

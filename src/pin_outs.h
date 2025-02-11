@@ -5,7 +5,6 @@
 
 #define I2C_BUS0 i2c0
 #define I2C_BUS1 i2c1
-#define STATUS_PIO pio0
 
 #define I2C0_SDA_PIN 8 // Pin 11
 #define I2C0_SCL_PIN 9 // Pin 12
@@ -36,3 +35,7 @@
 #elif BAT_VOLTAGE_PIN == 28
 #define BAT_ADC_INPUT 2
 #endif
+
+#define RADIO_CLK_PIN 2
+#define RADIO_SEL_PIN 3
+#define RADIO_PTT_PIN 6

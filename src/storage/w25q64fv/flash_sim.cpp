@@ -84,7 +84,7 @@ bool try_seek(FIL* fil, const FSIZE_t seek_pos)
 bool w25q64fv::init()
 {
   usb_communication::send_string("Initializing flash simulator");
-  critical_section_init_with_lock_num(&flash_sim_cs, CS_LOCK_NUM_FLASH_SIM);
+  critical_section_init_with_lock_num(&flash_sim_cs, LOCK_NUM_FLASH_SIM_CS);
 
   if (!sd_init_driver())
   {

@@ -17,7 +17,7 @@ void mpu_6050::init()
 {
   if (!critical_section_is_initialized(&mpu_6050_cs))
   {
-    critical_section_init_with_lock_num(&mpu_6050_cs, CS_LOCK_NUM_MPU_SENS_DATA);
+    critical_section_init_with_lock_num(&mpu_6050_cs, LOCK_NUM_MPU_SENS_DATA_CS);
   }
 
   critical_section_enter_blocking(&mpu_6050_cs);
@@ -302,6 +302,11 @@ bool mpu_6050::get_uncompensated_data(double& uncomp_xa, double& uncomp_ya, doub
   uncomp_yg = raw_yg * calibration_data.gyro_scale;
   uncomp_zg = raw_zg * calibration_data.gyro_scale;
   return true;
+}
+
+double mpu_6050::get_magnitude(const double x, const double y, const double z)
+{
+  return sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
 }
 
 void mpu_6050::data_loop(CollectionData& collection_data)

@@ -15,7 +15,7 @@ void core_1::launch_core_1()
   mutex_init(&stats::loop_time_mtx);
   payload_data_manager::init_data_manager();
 
-  queue_init_with_spinlock(&command_queue, sizeof(uint64_t), MAX_CORE_1_CMD_Q_LEN, CORE_1_CMD_Q_SL_NUM);
+  queue_init_with_spinlock(&command_queue, sizeof(uint64_t), MAX_CORE_1_CMD_Q_LEN, LOCK_NUM_CORE_1_CMD_Q);
 
   multicore_reset_core1();
   sleep_ms(100);
