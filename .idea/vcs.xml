@@ -2,13 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-debug/_deps/aprs_pico-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-debug/_deps/ax25_aprs_lib-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-debug/_deps/pico_extras-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-release/_deps/aprs_pico-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-release/_deps/ax25_aprs_lib-src" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/build-release/_deps/pico_extras-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/lib/CRCpp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/lib/extras/pico_extras-src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico" vcs="Git" />
   </component>
 </project>
