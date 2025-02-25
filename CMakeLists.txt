@@ -114,7 +114,9 @@ function(create_elijah_target SRC_DIR_NAME)
     )
 
     pico_add_extra_outputs(${EXEC_NAME})
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/install.sh "#!/bin/sh\n" ${picotool_INSTALL_DIR} "/picotool load \"$1\" -fx")
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${picotool_DIR} "/picotool load \"$1\" -fx")
+    file(COPY ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
 endfunction()
 
 create_elijah_target(payload)

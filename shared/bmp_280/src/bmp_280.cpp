@@ -3,14 +3,13 @@
 #include <format>
 #include <ranges>
 #include <cmath>
-#include <math.h>
 #include <hardware/flash.h>
-#include <pico/flash.h>
 
 #include "main.h"
 #include "pin_outs.h"
 #include "status_manager.h"
 #include "i2c_util.h"
+#include "payload_state_manager.h"
 
 BMP280::BMP280(i2c_inst_t* i2c, uint8_t addr) : is_i2c_interface(true), i2c_inst(i2c), i2c_addr(addr)
 {
@@ -25,23 +24,23 @@ const BMP280::CalibrationData& BMP280::get_calibration_data() const
   return calibration_data;
 }
 
-bool BMP280::check_chip_id()
+bool BMP280::check_chip_id() const
 {
   uint8_t read_id;
-  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_280_ADDR, BMP280::REG_CHIP_ID, read_id);
+  const bool success = read_byte(REG_CHIP_ID, read_id);
   return success && read_id == BMP_280_CHIP_ID;
 }
 
-bool BMP280::soft_reset()
+bool BMP280::soft_reset() const
 {
   constexpr uint8_t data[2] = {REG_SOFT_RESET, BMP_280_RESET_VALUE};
-  return i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, data, 2, false, delayed_by_ms(get_absolute_time(), 32)) == 2;
+  return write_bytes_to_device(data, 2);
 }
 
-bool BMP280::check_status(bool& is_measuring, bool& is_updating)
+bool BMP280::check_status(bool& is_measuring, bool& is_updating) const
 {
   uint8_t read_status;
-  const bool success = i2c_util::read_ubyte(I2C_BUS0, BMP_280_ADDR, REG_STATUS, read_status);
+  const bool success = read_byte(REG_STATUS, read_status);
   if (!success)
   {
     return false;
@@ -53,38 +52,38 @@ bool BMP280::check_status(bool& is_measuring, bool& is_updating)
 }
 
 bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting,
-                             OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss)
+                             OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss) const
 {
   const uint8_t ctrl_meas = static_cast<uint8_t>(temperature_oss) << 5 | static_cast<uint8_t>(pressure_oss) << 2 |
     static_cast<uint8_t>(mode);
   const uint8_t config_data = static_cast<uint8_t>(standby_time) << 5 | static_cast<uint8_t>(filter_setting) << 2;
 
   const uint8_t write_data[3] = {REG_CTRL_MEAS, ctrl_meas, config_data};
-  const bool success = i2c_write_blocking_until(I2C_BUS0, BMP_280_ADDR, write_data, 3, false,
-                                                delayed_by_ms(get_absolute_time(), 50)) == 3;
+  PayloadStateManager::log_message("settings changed");
+  const bool success = write_bytes_to_device( write_data, 3);
   return success;
 }
 
 bool BMP280::read_calibration_data()
 {
   const bool success =
-    i2c_util::read_ushort_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_T1, calibration_data.dig_T1) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_T2, calibration_data.dig_T2) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_T3, calibration_data.dig_T3) &&
-    i2c_util::read_ushort_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P1, calibration_data.dig_P1) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P2, calibration_data.dig_P2) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P3, calibration_data.dig_P3) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P4, calibration_data.dig_P4) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P5, calibration_data.dig_P5) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P6, calibration_data.dig_P6) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P7, calibration_data.dig_P7) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P8, calibration_data.dig_P8) &&
-    i2c_util::read_short_reversed(I2C_BUS0, BMP_280_ADDR, REG_DIG_P9, calibration_data.dig_P9);
+    read_ushort(REG_DIG_T1, calibration_data.dig_T1) &&
+    read_short(REG_DIG_T2, calibration_data.dig_T2) &&
+    read_short(REG_DIG_T3, calibration_data.dig_T3) &&
+    read_ushort(REG_DIG_P1, calibration_data.dig_P1) &&
+    read_short(REG_DIG_P2, calibration_data.dig_P2) &&
+    read_short(REG_DIG_P3, calibration_data.dig_P3) &&
+    read_short(REG_DIG_P4, calibration_data.dig_P4) &&
+    read_short(REG_DIG_P5, calibration_data.dig_P5) &&
+    read_short(REG_DIG_P6, calibration_data.dig_P6) &&
+    read_short(REG_DIG_P7, calibration_data.dig_P7) &&
+    read_short(REG_DIG_P8, calibration_data.dig_P8) &&
+    read_short(REG_DIG_P9, calibration_data.dig_P9);
 
   return success;
 }
 
-bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude)
+bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude) const
 {
   bool measuring, writing;
   bool success = check_status(measuring, writing);
@@ -108,7 +107,7 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   }
 
   uint8_t raw_data[6];
-  success = i2c_util::read_bytes(I2C_BUS0, BMP_280_ADDR, REG_PRESS_MSB, raw_data, 6);
+  success =  read_bytes(REG_PRESS_MSB, raw_data, 6);
   if (!success)
   {
     return false;
@@ -145,7 +144,7 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   return true;
 }
 
-bool BMP280::read_byte(uint8_t reg_addr, uint8_t& value)
+bool BMP280::read_byte(const uint8_t reg_addr, uint8_t& value) const
 {
   if (is_i2c_interface)
   {
@@ -154,34 +153,37 @@ bool BMP280::read_byte(uint8_t reg_addr, uint8_t& value)
   else
   {
     //TODO spi
+    return false;
   }
 }
 
-bool BMP280::read_short(uint8_t reg_addr, int16_t& value)
+bool BMP280::read_short(const uint8_t reg_addr, int16_t& value) const
 {
   if (is_i2c_interface)
   {
-    return i2c_util::read_short_reversed(i2c_inst, i2c_addr, reg_addr, value);
+    return i2c_util::read_short_little_endian(i2c_inst, i2c_addr, reg_addr, value);
   }
   else
   {
     //TODO spi
+    return false;
   }
 }
 
-bool BMP280::read_ushort(uint8_t reg_addr, uint16_t& value)
+bool BMP280::read_ushort(const uint8_t reg_addr, uint16_t& value) const
 {
   if (is_i2c_interface)
   {
-    return i2c_util::read_ushort_reversed(i2c_inst, i2c_addr, reg_addr, value);
+    return i2c_util::read_ushort_little_endian(i2c_inst, i2c_addr, reg_addr, value);
   }
   else
   {
     //TODO spi
+    return false;
   }
 }
 
-bool BMP280::read_bytes(uint8_t reg_addr, uint8_t* data, uint8_t len)
+bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len) const
 {
   if (is_i2c_interface)
   {
@@ -190,5 +192,20 @@ bool BMP280::read_bytes(uint8_t reg_addr, uint8_t* data, uint8_t len)
   else
   {
     //TODO spi
+    return false;
+  }
+}
+
+bool BMP280::write_bytes_to_device(const uint8_t* data, const size_t len) const
+{
+  if (is_i2c_interface)
+  {
+    const  size_t bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, data, len, false, delayed_by_ms(get_absolute_time(), 5 * len));
+    return bytes_written == len;
+  }
+  else
+  {
+    //TODO spi
+    return false;
   }
 }

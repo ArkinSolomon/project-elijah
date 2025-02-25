@@ -78,10 +78,10 @@ bool i2c_util::read_ushort(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_
   return success;
 }
 
-bool i2c_util::read_short_reversed(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t reg_addr, int16_t& output)
+bool i2c_util::read_short_little_endian(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t reg_addr, int16_t& output)
 {
   uint16_t read_value;
-  const bool success = read_ushort_reversed(i2c, dev_addr, reg_addr, read_value);
+  const bool success = read_ushort_little_endian(i2c, dev_addr, reg_addr, read_value);
   if (!success)
   {
     return false;
@@ -91,7 +91,7 @@ bool i2c_util::read_short_reversed(i2c_inst_t* i2c, const uint8_t dev_addr, cons
   return true;
 }
 
-bool i2c_util::read_ushort_reversed(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t reg_addr, uint16_t& output)
+bool i2c_util::read_ushort_little_endian(i2c_inst_t* i2c, const uint8_t dev_addr, const uint8_t reg_addr, uint16_t& output)
 {
   uint8_t read_data[2];
   const bool success = read_bytes(i2c, dev_addr, reg_addr, read_data, 2);

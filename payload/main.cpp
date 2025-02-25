@@ -1,5 +1,6 @@
 #include "main.h"
 
+#include <format>
 #include <sd_card.h>
 
 #include <hardware/adc.h>
@@ -29,7 +30,6 @@
 
 int main()
 {
-
 #ifdef PICO_RP2040
 #define CLOCK_SPEED_KHZ 133000
   set_sys_clock_khz(CLOCK_SPEED_KHZ, true);
@@ -43,10 +43,24 @@ int main()
   multicore_lockout_victim_init();
 
   PayloadStateManager::initialize_communication();
+  PayloadStateManager::log_message("Initializing...");
+
+  i2c_util::i2c_bus_init(i2c0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
+
+  CollectionData data{};
+
+  BMP280 bmp280(i2c0, BMP_280_ADDR);
+  bmp280.read_calibration_data();
+  bmp280.change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
+                         BMP280::FilterCoefficientSetting::Filter4x, BMP280::OssSettingPressure::PressureOss2,
+                         BMP280::OssSettingTemperature::TemperatureOss2);
+
   while (true)
   {
-    PayloadStateManager::log_message("test");
-    sleep_ms(500);
+    bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
+    payload_state_manager.data_collected(data);
+    PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}", data.pressure, data.temperature, data.altitude));
+    sleep_ms(10);
   }
 
   // status_manager::status_manager_init();

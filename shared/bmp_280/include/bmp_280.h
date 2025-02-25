@@ -4,8 +4,6 @@
 #include <hardware/i2c.h>
 #include <hardware/spi.h>
 
-#define BMP_280_ADDR 0b1110110
-
 #define BMP_280_CHIP_ID 0x58
 #define BMP_280_RESET_VALUE 0xB6
 
@@ -63,7 +61,7 @@ public:
   struct CalibrationData
   {
     uint16_t dig_T1 = 0;
-    int16_t dig_T2 = -1 , dig_T3 = -1;
+    int16_t dig_T2 = -1, dig_T3 = -1;
     uint16_t dig_P1 = 0;
     int16_t dig_P2 = -1, dig_P3 = -1, dig_P4 = -1, dig_P5 = -1, dig_P6 = -1, dig_P7 = -1, dig_P8 = -1, dig_P9 = -1;
     double baro_pressure = 101325; // Pascals
@@ -74,15 +72,15 @@ public:
 
   [[nodiscard]] const CalibrationData& get_calibration_data() const;
 
-  bool check_chip_id();
-  bool soft_reset();
+  [[nodiscard]] bool check_chip_id() const;
+  bool soft_reset() const; // NOLINT(*-use-nodiscard)
 
-  bool check_status(bool& is_measuring, bool& is_updating);
-  bool change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting,
-                       OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss);
+  bool check_status(bool& is_measuring, bool& is_updating) const;
+  bool change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting, // NOLINT(*-use-nodiscard)
+                       OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss) const;
 
   bool read_calibration_data();
-  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude);
+  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude) const;
   // void data_collection_loop(CollectionData& collection_data);
 
 private:
@@ -122,10 +120,11 @@ private:
   spi_inst_t* spi_inst = nullptr;
   uint8_t csn_pin = 0xFF;
 
-  CalibrationData calibration_data {};
+  CalibrationData calibration_data{};
 
-  bool read_byte(uint8_t reg_addr, uint8_t& value);
-  bool read_short(uint8_t reg_addr, int16_t& value);
-  bool read_ushort(uint8_t reg_addr, uint16_t& value);
-  bool read_bytes(uint8_t reg_addr, uint8_t* data, uint8_t len);
+  bool read_byte(uint8_t reg_addr, uint8_t& value) const;
+  bool read_short(uint8_t reg_addr, int16_t& value) const;
+  bool read_ushort(uint8_t reg_addr, uint16_t& value) const;
+  bool read_bytes(uint8_t reg_addr, uint8_t* data, size_t len) const;
+  bool write_bytes_to_device(const uint8_t* data, size_t len) const;
 };

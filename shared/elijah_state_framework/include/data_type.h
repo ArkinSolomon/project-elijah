@@ -20,22 +20,32 @@ enum class DataType : uint8_t
 
 namespace data_type_helpers
 {
-#define DATA_TYPE_SIZE_CASE(TYPE, CPP_TYPE) case DataType::TYPE: return sizeof(CPP_TYPE)
   inline size_t get_size_for_data_type(const DataType type)
   {
     switch (type)
     {
-      DATA_TYPE_SIZE_CASE(INT8, int8_t);
-      DATA_TYPE_SIZE_CASE(UINT8, uint8_t);
-      DATA_TYPE_SIZE_CASE(INT16, int16_t);
-      DATA_TYPE_SIZE_CASE(UINT16, uint16_t);
-      DATA_TYPE_SIZE_CASE(INT32, int32_t);
-      DATA_TYPE_SIZE_CASE(UINT32, uint32_t);
-      DATA_TYPE_SIZE_CASE(INT64, int64_t);
-      DATA_TYPE_SIZE_CASE(UINT64, uint64_t);
-      DATA_TYPE_SIZE_CASE(FLOAT, float);
-      DATA_TYPE_SIZE_CASE(DOUBLE, double);
-      DATA_TYPE_SIZE_CASE(TIME, tm);
+    case DataType::INT8:
+      return sizeof(int8_t);
+    case DataType::UINT8:
+      return sizeof(uint8_t);
+    case DataType::INT16:
+      return sizeof(int16_t);
+    case DataType::UINT16:
+      return sizeof(uint16_t);
+    case DataType::INT32:
+      return sizeof(int32_t);
+    case DataType::UINT32:
+      return sizeof(uint32_t);
+    case DataType::INT64:
+      return sizeof(int64_t);
+    case DataType::UINT64:
+      return sizeof(uint64_t);
+    case DataType::FLOAT:
+      return sizeof(float);
+    case DataType::DOUBLE:
+      return sizeof(double);
+    case DataType::TIME:
+      return sizeof(tm);
     case DataType::STRING:
     default:
       return 0;

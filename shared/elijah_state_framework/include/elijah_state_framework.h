@@ -241,7 +241,7 @@ void ElijahStateFramework<CollectionDataType, PersistentKeyType>::log_message(co
     send_message += message.substr(0, std::numeric_limits<uint16_t>::max() - send_message.size());
   }
 
-  const size_t total_packet_size = 1 /* packet id */ + 1 /* message type */ + 2 /* message length */ + send_message.
+  const size_t total_packet_size = 1 /* packet id */ + 1 /* log level */ + 2 /* message length */ + send_message.
     size();
   uint8_t packet_data[total_packet_size] = {
     static_cast<uint8_t>(OutputPacketId::LOG_MESSAGE), static_cast<uint8_t>(log_level)
