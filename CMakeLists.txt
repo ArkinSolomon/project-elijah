@@ -40,6 +40,7 @@ include(FetchContent)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src fast-fs-build)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/elijah_state_framework)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/bmp_280)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/mpu_6050)
 
 function(create_elijah_target SRC_DIR_NAME)
     SET(EXEC_NAME elijah-${SRC_DIR_NAME})
@@ -111,6 +112,7 @@ function(create_elijah_target SRC_DIR_NAME)
             no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
             elijah_state_framework
             bmp_280
+            mpu_6050
     )
 
     pico_add_extra_outputs(${EXEC_NAME})

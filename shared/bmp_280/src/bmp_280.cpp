@@ -51,15 +51,15 @@ bool BMP280::check_status(bool& is_measuring, bool& is_updating) const
   return true;
 }
 
+// ReSharper disable once CppMemberFunctionMayBeConst
 bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting,
-                             OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss) const
+                             OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss)
 {
   const uint8_t ctrl_meas = static_cast<uint8_t>(temperature_oss) << 5 | static_cast<uint8_t>(pressure_oss) << 2 |
     static_cast<uint8_t>(mode);
   const uint8_t config_data = static_cast<uint8_t>(standby_time) << 5 | static_cast<uint8_t>(filter_setting) << 2;
 
   const uint8_t write_data[3] = {REG_CTRL_MEAS, ctrl_meas, config_data};
-  PayloadStateManager::log_message("settings changed");
   const bool success = write_bytes_to_device( write_data, 3);
   return success;
 }

@@ -76,8 +76,8 @@ public:
   bool soft_reset() const; // NOLINT(*-use-nodiscard)
 
   bool check_status(bool& is_measuring, bool& is_updating) const;
-  bool change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting, // NOLINT(*-use-nodiscard)
-                       OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss) const;
+  bool change_settings(DeviceMode mode, StandbyTimeSetting standby_time, FilterCoefficientSetting filter_setting,
+                       OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss);
 
   bool read_calibration_data();
   bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude) const;

@@ -14,6 +14,8 @@
 #include <pico/time.h>
 
 #include "aprs.h"
+#include "bmp_280.h"
+#include "mpu_6050.h"
 #include "byte_util.h"
 #include "core_1.h"
 #include "pin_outs.h"
@@ -21,10 +23,8 @@
 #include "elijah_state_framework.h"
 #include "status_manager.h"
 #include "sensors/battery/battery.h"
-#include "sensors/mpu_6050/mpu_6050.h"
 #include "sensors/onboard_clock/onboard_clock.h"
 #include "i2c_util.h"
-#include "../shared/bmp_280/include/bmp_280.h"
 
 #define APRS_FLAG 0x7E
 
@@ -42,25 +42,33 @@ int main()
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
 
-  PayloadStateManager::initialize_communication();
   PayloadStateManager::log_message("Initializing...");
 
-  i2c_util::i2c_bus_init(i2c0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
+  // i2c_util::i2c_bus_init(i2c0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
+  // i2c_util::i2c_bus_init(i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
 
   CollectionData data{};
 
-  BMP280 bmp280(i2c0, BMP_280_ADDR);
-  bmp280.read_calibration_data();
-  bmp280.change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
-                         BMP280::FilterCoefficientSetting::Filter4x, BMP280::OssSettingPressure::PressureOss2,
-                         BMP280::OssSettingTemperature::TemperatureOss2);
-
+  // BMP280 bmp280(i2c0, BMP_280_ADDR);
+  // MPU6050 mpu6050(i2c1, 0x68, MPU6050::GyroFullScaleRange::Range250, MPU6050::AccelFullScaleRange::Range4g);
+  // bmp280.read_calibration_data();
+  // bmp280.change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
+  //                        BMP280::FilterCoefficientSetting::Filter4x, BMP280::OssSettingPressure::PressureOss2,
+  //                        BMP280::OssSettingTemperature::TemperatureOss2);
+  //
+  // bmp280.get_calibration_data();
+  // mpu6050.get_calibration_data();
+  //
+  // mpu6050.calibrate(50);
+  // mpu6050.check_chip_id();
   while (true)
   {
-    bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
-    payload_state_manager.data_collected(data);
-    PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}", data.pressure, data.temperature, data.altitude));
-    sleep_ms(10);
+    // bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
+    // mpu6050.get_data(data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z);
+    // payload_state_manager.data_collected(data);
+    // PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}, xa = {}, ya ={}, za = {}, xg ={}, yg ={} , zg = {}", data.pressure, data.temperature, data.altitude, data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z));
+    // sleep_ms(10);
+    payload_state_manager.send_framework_metadata();
   }
 
   // status_manager::status_manager_init();
@@ -190,10 +198,10 @@ void pin_init()
 void flight_loop(CollectionData& collection_data, absolute_time_t last_loop_start_time)
 {
   onboard_clock::clock_loop(collection_data);
-  mpu_6050::data_loop(collection_data);
+  // mpu_6050::data_loop(collection_data);
   battery::collect_bat_information(collection_data);
 
   // const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
   // payload_data_manager::DataInstance data_inst(collection_data, time_since_last_collection);
-  payload_state_manager.data_collected(collection_data);
+  payload_state_manager.state_changed(collection_data);
 }

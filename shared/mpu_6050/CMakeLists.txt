@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 include(${CMAKE_CURRENT_LIST_DIR}/../../pico_sdk_import.cmake)
 
-project(bmp_280 VERSION 1.0.0 DESCRIPTION "BMP 280 sensor for Project Elijah" LANGUAGES C CXX)
+project(mpu_6050 VERSION 1.0.0 DESCRIPTION "MPU 6050 sensor for Project Elijah" LANGUAGES C CXX)
 pico_sdk_init()
 
 add_library(${PROJECT_NAME} INTERFACE)

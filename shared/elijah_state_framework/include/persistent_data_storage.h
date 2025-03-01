@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 #include <hardware/flash.h>
 #include <hardware/regs/addressmap.h>
@@ -56,6 +57,8 @@
     return value; \
   }
 
+using commit_callback_t = std::function<void(const void*, size_t)>;
+
 template <EnumType PersistentKeyType>
 class PersistentDataStorage
 {
@@ -103,8 +106,12 @@ public:
   CREATE_GETTER_FOR_TYPE(double, double)
   CREATE_GETTER_FOR_TYPE(tm, time)
 
-  void commit_data();
   void finish_registration();
+
+  [[nodiscard]] size_t get_total_size() const;
+
+  void commit_data();
+  void on_commit(commit_callback_t&& commit_callback);
 
 private:
   shared_mutex_t persistent_storage_smtx;
@@ -124,7 +131,7 @@ private:
   std::vector<PersistentDataEntry<PersistentKeyType>*> string_registrations;
   std::map<PersistentKeyType, PersistentDataEntry<PersistentKeyType>*> data_entries;
 
-  [[nodiscard]] size_t get_total_size() const;
+  commit_callback_t commit_callback;
 };
 
 template <EnumType PersistentKeyType>
@@ -214,7 +221,8 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
 
   if (post_data_size > 0)
   {
-    memcpy(reinterpret_cast<uint8_t*>(new_str_end_off) + 1, static_cast<uint8_t*>(active_data_loc) + prev_data_size + old_str_bytes, post_data_size);
+    memcpy(reinterpret_cast<uint8_t*>(new_str_end_off) + 1,
+           static_cast<uint8_t*>(active_data_loc) + prev_data_size + old_str_bytes, post_data_size);
   }
 
   if (active_data_loc != flash_data_loc)
@@ -227,33 +235,8 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
 }
 
 template <EnumType PersistentKeyType>
-void PersistentDataStorage<PersistentKeyType>::commit_data()
-{
-  const uint32_t saved_ints = save_and_disable_interrupts();
-  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
-
-  flash_safe_execute([](void* storage_ptr)
-  {
-    auto storage = static_cast<PersistentDataStorage*>(storage_ptr);
-
-    constexpr uint32_t flash_offset = PERSISTENT_DATA_START_SECTOR_NUM * 4096;
-
-    const size_t total_size = storage->get_total_size();
-    const auto pages = static_cast<size_t>(ceil(total_size / 256.0));
-
-    flash_range_erase(flash_offset, pages * 256);
-    flash_range_program(flash_offset, storage->active_data_loc, total_size);
-    free(storage->active_data_loc);
-    storage->active_data_loc = storage->flash_data_loc;
-  }, this, 100);
-
-  shared_mutex_exit_exclusive(&persistent_storage_smtx);
-  restore_interrupts_from_disabled(saved_ints);
-}
-
-template <EnumType PersistentKeyType>
 void PersistentDataStorage<PersistentKeyType>::register_key(PersistentKeyType key, const std::string& display_name,
-                                                               const std::string& default_value)
+                                                            const std::string& default_value)
 {
   assert(!done_registering_keys);
 
@@ -280,9 +263,7 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
     for (auto& map_entry : data_entries)
     {
       auto data_entry = map_entry.second;
-
-      free(data_entry->default_value);
-      data_entry->default_value = nullptr;
+      data_entry->delete_default_value();
     }
 
     string_registrations.clear();
@@ -297,27 +278,26 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
   for (auto& map_entry : data_entries)
   {
     auto data_entry = map_entry.second;
-    if (data_entry->data_type == DataType::STRING)
+    if (data_entry->get_data_type() == DataType::STRING)
     {
       continue;
     }
 
-    memcpy(static_data_loc + data_entry->offset, data_entry->default_value, data_entry->default_value_size);
-
-    free(data_entry->default_value);
-    data_entry->default_value = nullptr;
+    memcpy(static_data_loc + data_entry->get_offset(), data_entry->get_default_value_ptr(),
+           data_entry->get_default_value_size());
+    data_entry->delete_default_value();
   }
 
   auto string_data_loc = reinterpret_cast<char*>(static_data_loc + static_size);
   size_t string_offset = 0;
   for (auto& string_entry : string_registrations)
   {
-    memcpy(string_data_loc + string_offset, string_entry->default_value, string_entry->default_value_size);
-    *(string_data_loc + string_offset + string_entry->default_value_size) = '\0';
-    string_offset += string_entry->default_value_size + 1;
+    memcpy(string_data_loc + string_offset, string_entry->get_default_value_ptr(),
+           string_entry->get_default_value_size());
+    *(string_data_loc + string_offset + string_entry->get_default_value_size()) = '\0';
+    string_offset += string_entry->get_default_value_size() + 1;
 
-    free(string_entry->default_value);
-    string_entry->default_value = nullptr;
+    string_entry->delete_default_value();
   }
 
   string_registrations.clear();
@@ -327,4 +307,44 @@ template <EnumType PersistentKeyType>
 size_t PersistentDataStorage<PersistentKeyType>::get_total_size() const
 {
   return sizeof(tag) + static_size + string_size;
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::commit_data()
+{
+  const uint32_t saved_ints = save_and_disable_interrupts();
+  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+
+  // Just assume it worked tbh
+  flash_safe_execute([](void* storage_ptr)
+  {
+    auto storage = static_cast<PersistentDataStorage*>(storage_ptr);
+
+    constexpr uint32_t flash_offset = PERSISTENT_DATA_START_SECTOR_NUM * 4096;
+
+    const size_t total_size = storage->get_total_size();
+    const auto pages = static_cast<size_t>(ceil(total_size / 256.0));
+
+    flash_range_erase(flash_offset, pages * 256);
+    flash_range_program(flash_offset, storage->active_data_loc, total_size);
+    free(storage->active_data_loc);
+    storage->active_data_loc = storage->flash_data_loc;
+  }, this, 250);
+
+  shared_mutex_exit_exclusive(&persistent_storage_smtx);
+
+  if (commit_callback)
+  {
+    shared_mutex_enter_blocking_shared(&persistent_storage_smtx);
+    commit_callback(flash_data_loc, get_total_size());
+    shared_mutex_exit_shared(&persistent_storage_smtx);
+  }
+
+  restore_interrupts_from_disabled(saved_ints);
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::on_commit(commit_callback_t&& commit_callback)
+{
+  this->commit_callback = commit_callback;
 }
