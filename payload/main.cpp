@@ -30,17 +30,16 @@
 
 int main()
 {
-#ifdef PICO_RP2040
-#define CLOCK_SPEED_KHZ 133000
-  set_sys_clock_khz(CLOCK_SPEED_KHZ, true);
-#elifdef PICO_RP2350
-#define CLOCK_SPEED_KHZ 150000
-    set_sys_clock_khz(150000, true);
-#endif
-
   // pin_init();
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
+
+  gpio_init(CORE_0_LED_PIN);
+  gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);
+  gpio_init(CORE_1_LED_PIN);
+  gpio_set_dir(CORE_1_LED_PIN, GPIO_OUT);
+  gpio_init(STATUS_LED_PIN);
+  gpio_set_dir(STATUS_LED_PIN, GPIO_OUT);
 
   PayloadStateManager::log_message("Initializing...");
 
@@ -61,14 +60,16 @@ int main()
   //
   // mpu6050.calibrate(50);
   // mpu6050.check_chip_id();
+
+  bool is_usb_connected = false;
   while (true)
   {
+    payload_state_manager.check_for_commands();
     // bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
     // mpu6050.get_data(data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z);
     // payload_state_manager.data_collected(data);
     // PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}, xa = {}, ya ={}, za = {}, xg ={}, yg ={} , zg = {}", data.pressure, data.temperature, data.altitude, data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z));
     // sleep_ms(10);
-    payload_state_manager.send_framework_metadata();
   }
 
   // status_manager::status_manager_init();
@@ -190,7 +191,7 @@ void pin_init()
   adc_gpio_init(BAT_VOLTAGE_PIN);
   adc_select_input(BAT_ADC_INPUT);
 
-  aprs::init_aprs_system(CLOCK_SPEED_KHZ, RADIO_SEL_PIN, PWM_CHAN_B);
+  aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_SEL_PIN, PWM_CHAN_B);
   // gpio_init(RADIO_SEL_PIN);
   // gpio_set_dir(RADIO_SEL_PIN, GPIO_OUT);
 }

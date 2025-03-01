@@ -4,18 +4,18 @@
 
 enum class DataType : uint8_t
 {
-  STRING = 1,
-  INT8 = 2,
-  UINT8 = 3,
-  INT16 = 4,
-  UINT16 = 5,
-  INT32 = 6,
-  UINT32 = 7,
-  INT64 = 8,
-  UINT64 = 9,
-  FLOAT = 10,
-  DOUBLE = 11,
-  TIME = 12
+  String = 1,
+  Int8 = 2,
+  Uint8 = 3,
+  Int16 = 4,
+  UInt16 = 5,
+  Int32 = 6,
+  UInt32 = 7,
+  Int64 = 8,
+  UInt64 = 9,
+  Float = 10,
+  Double = 11,
+  Time = 12
 };
 
 namespace data_type_helpers
@@ -24,29 +24,29 @@ namespace data_type_helpers
   {
     switch (type)
     {
-    case DataType::INT8:
+    case DataType::Int8:
       return sizeof(int8_t);
-    case DataType::UINT8:
+    case DataType::Uint8:
       return sizeof(uint8_t);
-    case DataType::INT16:
+    case DataType::Int16:
       return sizeof(int16_t);
-    case DataType::UINT16:
+    case DataType::UInt16:
       return sizeof(uint16_t);
-    case DataType::INT32:
+    case DataType::Int32:
       return sizeof(int32_t);
-    case DataType::UINT32:
+    case DataType::UInt32:
       return sizeof(uint32_t);
-    case DataType::INT64:
+    case DataType::Int64:
       return sizeof(int64_t);
-    case DataType::UINT64:
+    case DataType::UInt64:
       return sizeof(uint64_t);
-    case DataType::FLOAT:
+    case DataType::Float:
       return sizeof(float);
-    case DataType::DOUBLE:
+    case DataType::Double:
       return sizeof(double);
-    case DataType::TIME:
+    case DataType::Time:
       return sizeof(tm);
-    case DataType::STRING:
+    case DataType::String:
     default:
       return 0;
     }

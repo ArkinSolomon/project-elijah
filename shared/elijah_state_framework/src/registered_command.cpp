@@ -7,7 +7,7 @@
 #include "elijah_state_framework.h"
 
 RegisteredCommand::RegisteredCommand()  : command_id(0xFF),
-                          command_input(CommandInputType::NONE),
+                          command_input(CommandInputType::None),
                           callback({})
 {
 }

@@ -7,19 +7,14 @@ option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_LED_ENABLE "Enable onboard status LED" OFF)
 option(FLASH_SIM_ENABLE "Use flash simulator on microSd" OFF)
 
-if (NOT DEFINED PICO_SDK_VERSION)
-    message(FATAL_ERROR "PICO_SDK_VERSION is not defined")
-endif ()
+set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 
-set(sdkVersion ${PICO_SDK_VERSION})
-set(toolchainVersion 13_3_Rel1)
-set(PICO_BOARD pico CACHE STRING "Board type")
-
-set(PICO_SDK_FETCH_FROM_GIT 1)
-set(PICO_SDK_FETCH_FROM_GIT_PATH ${CMAKE_CURRENT_LIST_DIR}/tools/sdk)
-
-set(PICO_EXTRAS_FETCH_FROM_GIT 1)
-set(PICO_EXTRAS_FETCH_FROM_GIT_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/extras)
+find_program(PICOTOOL_INSTALL_LOC "picotool")
+if (NOT PICOTOOL_INSTALL_LOC)
+    message(FATAL_ERROR "picotool installation not found, is it in your path?")
+else()
+    message("Using picotool installation at ${PICOTOOL_INSTALL_LOC}")
+endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
@@ -94,6 +89,8 @@ function(create_elijah_target SRC_DIR_NAME)
             $<$<CONFIG:Release>:RELEASE>
     )
 
+    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=1024 SYS_CLK_KHZ=200000)
+
     target_link_libraries(${EXEC_NAME}
 #            aprs_pico
             hardware_i2c
@@ -116,9 +113,9 @@ function(create_elijah_target SRC_DIR_NAME)
     )
 
     pico_add_extra_outputs(${EXEC_NAME})
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${picotool_DIR} "/picotool load \"$1\" -fx")
-    file(COPY ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-    )
+
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${PICOTOOL_INSTALL_LOC} " load \"$1\" -fx")
+    file(COPY ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endfunction()
 
 create_elijah_target(payload)

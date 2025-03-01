@@ -47,19 +47,19 @@ public:
 
 protected:
   START_STATE_ENCODER(CollectionData)
-     ENCODE_STATE(sequence, DataType::UINT64, "Sequence", "")
-     ENCODE_STATE(time_inst, DataType::TIME, "Time", "")
-     ENCODE_STATE(pressure, DataType::DOUBLE, "Pressure", "Pa")\
-     ENCODE_STATE(temperature, DataType::DOUBLE, "Temperature", "°C")
-     ENCODE_STATE(altitude, DataType::DOUBLE, "Altitude", "m")
-     ENCODE_STATE(accel_x, DataType::DOUBLE, "Acceleration X", "m/s^2")
-     ENCODE_STATE(accel_y, DataType::DOUBLE, "Acceleration Y", "m/s^2")
-     ENCODE_STATE(accel_z, DataType::DOUBLE, "Acceleration Z", "m/s^2")
-     ENCODE_STATE(gyro_x, DataType::DOUBLE, "Gyro X", "deg/s")
-     ENCODE_STATE(gyro_y, DataType::DOUBLE, "Gyro Y", "deg/s")
-     ENCODE_STATE(gyro_z, DataType::DOUBLE, "Gyro Z", "deg/s")
-     ENCODE_STATE(bat_voltage, DataType::DOUBLE, "Voltage", "V")
-     ENCODE_STATE(bat_percent, DataType::DOUBLE, "Battery percentage", "%")
+     ENCODE_STATE(sequence, DataType::UInt64, "Sequence", "")
+     ENCODE_STATE(time_inst, DataType::Time, "Time", "")
+     ENCODE_STATE(pressure, DataType::Double, "Pressure", "Pa")\
+     ENCODE_STATE(temperature, DataType::Double, "Temperature", "°C")
+     ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
+     ENCODE_STATE(accel_x, DataType::Double, "Acceleration X", "m/s^2")
+     ENCODE_STATE(accel_y, DataType::Double, "Acceleration Y", "m/s^2")
+     ENCODE_STATE(accel_z, DataType::Double, "Acceleration Z", "m/s^2")
+     ENCODE_STATE(gyro_x, DataType::Double, "Gyro X", "deg/s")
+     ENCODE_STATE(gyro_y, DataType::Double, "Gyro Y", "deg/s")
+     ENCODE_STATE(gyro_z, DataType::Double, "Gyro Z", "deg/s")
+     ENCODE_STATE(bat_voltage, DataType::Double, "Voltage", "V")
+     ENCODE_STATE(bat_percent, DataType::Double, "Battery percentage", "%")
    END_STATE_ENCODER()
 };
 

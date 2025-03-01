@@ -4,6 +4,7 @@
 #include <functional>
 #include <ranges>
 #include <map>
+#include <format>
 #include <string>
 #include <variant>
 #include <pico/critical_section.h>
@@ -11,10 +12,11 @@
 
 #include "data_type.h"
 #include "persistent_data_storage.h"
+#include "pin_outs.h"
 #include "registered_command.h"
 #include "variable_definition.h"
 
-#define STDIO_WRITE_SIZE 512
+#define STDIO_WRITE_SIZE 128
 constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
 
 #define START_STATE_ENCODER(STATE_DATA_TYPE) void encode_state(void* encode_dest, const STATE_DATA_TYPE& state, bool register_data) override \
@@ -65,7 +67,7 @@ public:
   void check_for_commands();
   void state_changed(const StateDataType& new_state);
 
-  void send_framework_metadata();
+  [[nodiscard]] bool is_computer_connected() const;
 
 protected:
   void register_command(const std::string& command, std::function<void()> callback);
@@ -81,7 +83,7 @@ protected:
   void finish_registration();
   void encode_state(void* encode_dest, const StateDataType& state);
   virtual void encode_state(void* encode_dest, const StateDataType& encode_data,
-                           bool register_data) = 0;
+                            bool register_data) = 0;
 
 private:
   template <class... Ts>
@@ -95,38 +97,41 @@ private:
 
   enum class OutputPacketId : uint8_t
   {
-    Metadata = 1,
-    LogMessage = 2,
-    CollectionData = 3,
-    PersistentState = 4
+    LogMessage = 1,
+    StateUpdate = 2,
+    PersistentState = 3
   };
 
   enum class MetadataSegmentId : uint8_t
   {
     ApplicationName = 1,
     Commands = 2,
-    VariableDefinitions = 3
+    VariableDefinitions = 3,
+    MetadataEnd = 255
   };
 
   static inline critical_section_t usb_cs;
 
   std::string application_name;
+  bool is_usb_connected = false;
 
-  uint8_t command_id_counter = 0;
-  uint8_t variable_id_counter = 0;
+  uint8_t command_id_counter = 1;
+  uint8_t variable_id_counter = 1;
 
   std::map<uint8_t, RegisteredCommand> registered_commands;
   std::map<uint8_t, VariableDefinition> variable_definitions;
 
   bool is_size_calculated = false;
-  size_t encoded_collection_data_size = 0;
+  size_t encoded_state_size = 0;
 
   PersistentDataStorage<PersistentKeyType>* persistent_data_storage = new PersistentDataStorage<PersistentKeyType>();
 
   static void initialize_communication();
   static void write_to_serial(const uint8_t* packet_data, size_t packet_len);
+  static void write_to_serial(const uint8_t* packet_data, size_t packet_len, bool flush);
 
   void register_command(const std::string& command, CommandInputType command_input, command_callback_t callback);
+  void send_framework_metadata();
 };
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -140,10 +145,19 @@ ElijahStateFramework<StateDataType, PersistentKeyType>::ElijahStateFramework(std
     critical_section_enter_blocking(&usb_cs);
     const auto packet_id = static_cast<uint8_t>(OutputPacketId::PersistentState);
 
-    write_to_serial(&packet_id, 1);
+    write_to_serial(&packet_id, 1, false);
     write_to_serial(static_cast<const uint8_t*>(data), data_len);
 
     critical_section_exit(&usb_cs);
+  });
+
+  register_command("_", [this]
+  {
+    gpio_put(STATUS_LED_PIN, true);
+    is_usb_connected = true;
+    send_framework_metadata();
+    gpio_put(STATUS_LED_PIN, false);
+    log_message("Log");
   });
 }
 
@@ -159,6 +173,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::check_for_commands(
 {
   if (!stdio_usb_connected())
   {
+    is_usb_connected = false;
     return;
   }
 
@@ -185,7 +200,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::check_for_commands(
 
   switch (command->get_input_type())
   {
-  case CommandInputType::DOUBLE:
+  case CommandInputType::Double:
     {
       double value;
       bytes_read = stdio_get_until(reinterpret_cast<char*>(&value), sizeof(value),
@@ -197,8 +212,8 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::check_for_commands(
       }
       break;
     }
-  case CommandInputType::ALPHANUMERIC:
-  case CommandInputType::STRING:
+  case CommandInputType::AlphaNumeric:
+  case CommandInputType::String:
     {
       uint8_t str_size_buf[2];
       bytes_read = stdio_get_until(reinterpret_cast<char*>(str_size_buf), 2, delayed_by_ms(get_absolute_time(), 10));
@@ -222,11 +237,11 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::check_for_commands(
 
       break;
     }
-  case CommandInputType::TIME:
+  case CommandInputType::Time:
     critical_section_exit(&usb_cs);
   // TODO time input
     break;
-  case CommandInputType::NONE:
+  case CommandInputType::None:
   default:
     critical_section_exit(&usb_cs);
     break;
@@ -243,7 +258,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::check_for_commands(
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::state_changed(const StateDataType& new_state)
 {
-  const size_t total_packet_size = encoded_collection_data_size + 1;
+  const size_t total_packet_size = encoded_state_size + 1;
   const auto packet_data = new uint8_t[total_packet_size];
   packet_data[0] = static_cast<uint8_t>(OutputPacketId::CollectionData);
   encode_state(packet_data + 1, new_state);
@@ -259,67 +274,26 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::state_changed(const
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
-void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_metadata()
+bool ElijahStateFramework<StateDataType, PersistentKeyType>::is_computer_connected() const
 {
-  if (!stdio_usb_connected())
-  {
-    return;
-  }
-
-  critical_section_enter_blocking(&usb_cs);
-
-  write_to_serial(reinterpret_cast<const uint8_t*>(&FRAMEWORK_TAG), sizeof(FRAMEWORK_TAG));
-  //
-  // auto segment_id = static_cast<uint8_t>(MetadataSegmentId::ApplicationName);
-  // write_to_serial(&segment_id, 1);
-  // write_to_serial(reinterpret_cast<const uint8_t*>(application_name.c_str()), application_name.size());
-  //
-  // const uint8_t command_count = registered_commands.size();
-  // if (command_count > 0)
-  // {
-  //   segment_id = static_cast<uint8_t>(MetadataSegmentId::Commands);
-  //   const uint8_t segment_header[2] = {segment_id, command_count};
-  //   write_to_serial(segment_header, 2);
-  //
-  //   for (const auto& command : std::views::values(registered_commands))
-  //   {
-  //     size_t encoded_size;
-  //     std::unique_ptr<uint8_t> encoded = command.encode_command(encoded_size);
-  //     write_to_serial(encoded.get(), encoded_size);
-  //   }
-  // }
-  //
-  // const uint8_t var_count = variable_definitions.size();
-  // if (var_count > 0)
-  // {
-  //   segment_id = static_cast<uint8_t>(MetadataSegmentId::VariableDefinitions);
-  //   const uint8_t segment_header[2] = {segment_id, var_count};
-  //   write_to_serial(segment_header, 2);
-  //
-  //   for (const auto& var_def : std::views::values(variable_definitions))
-  //   {
-  //     size_t encoded_size;
-  //     std::unique_ptr<uint8_t> encoded = var_def.encode_var(encoded_size);
-  //     write_to_serial(encoded.get(), encoded_size);
-  //   }
-  // }
-
-  critical_section_exit(&usb_cs);
+  return is_usb_connected;
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::encode_state(void* encode_dest,
-                                                                              const StateDataType& state)
+                                                                          const StateDataType& state)
 {
   encode_state(encode_dest, state, false);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::log_message(const std::string& message,
-                                                                              LogLevel log_level)
+                                                                         LogLevel log_level)
 {
   if (!stdio_usb_connected())
   {
+    // TODO: this needs to be non-static
+    // is_usb_connected = false;
     return;
   }
 
@@ -353,30 +327,31 @@ const std::string& ElijahStateFramework<StateDataType, PersistentKeyType>::get_a
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
-  std::function<void()> callback)
+                                                                              std::function<void()> callback)
 {
-  register_command(command, CommandInputType::NONE, callback);
+  register_command(command, CommandInputType::None, callback);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
-  std::function<void(double)> callback)
+                                                                              std::function<void(double)> callback)
 {
-  register_command(command, CommandInputType::DOUBLE, callback);
+  register_command(command, CommandInputType::Double, callback);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
-  const bool is_alphanumeric, std::function<void(std::string)> callback)
+                                                                              const bool is_alphanumeric,
+                                                                              std::function<void(std::string)> callback)
 {
-  register_command(command, is_alphanumeric ? CommandInputType::ALPHANUMERIC : CommandInputType::STRING, callback);
+  register_command(command, is_alphanumeric ? CommandInputType::AlphaNumeric : CommandInputType::String, callback);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
-  std::function<void(tm)> callback)
+                                                                              std::function<void(tm)> callback)
 {
-  register_command(command, CommandInputType::TIME, callback);
+  register_command(command, CommandInputType::Time, callback);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -395,7 +370,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::set_encoded_state_s
   const size_t encoded_data_size)
 {
   is_size_calculated = true;
-  encoded_collection_data_size = encoded_data_size;
+  encoded_state_size = encoded_data_size;
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -414,20 +389,84 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::initialize_communic
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::write_to_serial(const uint8_t* packet_data,
-  const size_t packet_len)
+  size_t packet_len)
 {
-  for (size_t buff_idx = 0; buff_idx < packet_len; buff_idx += STDIO_WRITE_SIZE)
+  write_to_serial(packet_data, packet_len, true);
+}
+
+template <typename StateDataType, EnumType PersistentKeyType>
+void ElijahStateFramework<StateDataType, PersistentKeyType>::write_to_serial(const uint8_t* packet_data,
+                                                                             const size_t packet_len, const bool flush)
+{
+  stdio_put_string(reinterpret_cast<const char*>(packet_data), static_cast<int>(packet_len), false, false);
+  if (flush)
   {
-    const size_t write_size = std::min(static_cast<size_t>(STDIO_WRITE_SIZE), packet_len - buff_idx);
-    stdio_put_string(reinterpret_cast<const char*>(packet_data) + buff_idx, static_cast<int>(write_size), false, false);
     stdio_flush();
   }
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
-  const CommandInputType command_input, command_callback_t callback)
+                                                                              const CommandInputType command_input,
+                                                                              command_callback_t callback)
 {
   const uint8_t new_id = command_id_counter++;
   registered_commands[new_id] = RegisteredCommand(new_id, command, command_input, std::move(callback));
+}
+
+template <typename StateDataType, EnumType PersistentKeyType>
+void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_metadata()
+{
+  if (!stdio_usb_connected())
+  {
+    is_usb_connected = false;
+    return;
+  }
+
+  critical_section_enter_blocking(&usb_cs);
+
+  auto segment_id = static_cast<uint8_t>(MetadataSegmentId::ApplicationName);
+  const size_t initial_size = sizeof(FRAMEWORK_TAG) + sizeof(uint8_t) + application_name.size() + 1;
+  auto initial_data = new uint8_t[initial_size];
+
+  *reinterpret_cast<uint64_t*>(initial_data) = FRAMEWORK_TAG;
+  initial_data[sizeof(FRAMEWORK_TAG)] = segment_id;
+  memcpy(initial_data + sizeof(FRAMEWORK_TAG) + sizeof(segment_id), application_name.c_str(), application_name.size() + 1);
+  write_to_serial(initial_data, initial_size, false);
+
+  const uint8_t command_count = registered_commands.size();
+  if (command_count > 0)
+  {
+    segment_id = static_cast<uint8_t>(MetadataSegmentId::Commands);
+    const uint8_t segment_header[2] = {segment_id, command_count};
+    write_to_serial(segment_header, 2, false);
+
+    for (const auto& command : std::views::values(registered_commands))
+    {
+      size_t encoded_size;
+      std::unique_ptr<uint8_t> encoded = command.encode_command(encoded_size);
+      write_to_serial(encoded.get(), encoded_size, false);
+    }
+  }
+
+  const uint8_t var_count = variable_definitions.size();
+
+  if (var_count > 0)
+  {
+    segment_id = static_cast<uint8_t>(MetadataSegmentId::VariableDefinitions);
+    const uint8_t segment_header[3] = {segment_id, var_count, static_cast<uint8_t>(sizeof(size_t))};
+    write_to_serial(segment_header, 3, false);
+
+    for (const auto& var_def : std::views::values(variable_definitions))
+    {
+      size_t encoded_size;
+      std::unique_ptr<uint8_t> encoded = var_def.encode_var(encoded_size);
+      write_to_serial(encoded.get(), encoded_size, false);
+    }
+  }
+
+  segment_id = static_cast<uint8_t>(MetadataSegmentId::MetadataEnd);
+  write_to_serial(&segment_id, 1);
+
+  critical_section_exit(&usb_cs);
 }

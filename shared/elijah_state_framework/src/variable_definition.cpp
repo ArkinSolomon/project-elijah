@@ -5,7 +5,7 @@
 VariableDefinition::VariableDefinition() :
   variable_id(0),
   data_offset(0),
-  data_type(DataType::INT8)
+  data_type(DataType::Int8)
 {
 }
 
@@ -50,9 +50,11 @@ std::unique_ptr<uint8_t> VariableDefinition::encode_var(size_t& encoded_size) co
     + display_name.size() + 1 + display_unit.size() + 1;
   std::unique_ptr<uint8_t> encoded_command(new uint8_t[encoded_size]);
 
-  encoded_command.get()[0] = variable_id;
-  *reinterpret_cast<decltype(data_offset)*>(encoded_command.get()[sizeof(variable_id)]) = data_offset;
-  encoded_command.get()[sizeof(variable_id) + sizeof(data_offset)] = static_cast<uint8_t>(data_type);
+  memcpy(encoded_command.get(), &variable_id, sizeof(variable_id));
+  memcpy(encoded_command.get() + sizeof(variable_id), &data_offset, sizeof(data_offset));
+
+  const auto data_type_id = static_cast<uint8_t>(data_type);
+  memcpy(encoded_command.get() + sizeof(variable_id) + sizeof(data_offset), &data_type_id, sizeof(data_type_id));
 
   constexpr size_t str_off = sizeof(variable_id) + sizeof(data_offset) + sizeof(uint8_t);
   memcpy(encoded_command.get() + str_off, display_name.c_str(), display_name.size() + 1);

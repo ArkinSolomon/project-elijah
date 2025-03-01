@@ -10,11 +10,11 @@ using command_callback_t = std::variant<std::function<void()>, std::function<voi
 
 enum class CommandInputType : uint8_t
 {
-  NONE = 0,
-  DOUBLE = 1,
-  ALPHANUMERIC = 2,
-  STRING = 3,
-  TIME = 4
+  None = 0,
+  Double = 1,
+  AlphaNumeric = 2,
+  String = 3,
+  Time = 4
 };
 
 class RegisteredCommand

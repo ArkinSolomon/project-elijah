@@ -70,17 +70,17 @@ public:
   std::string get_string(PersistentKeyType key);
   void set_string(PersistentKeyType key, const std::string& value);
 
-  CREATE_REGISTRATION_FOR_TYPE(int8_t, DataType::INT8)
-  CREATE_REGISTRATION_FOR_TYPE(uint8_t, DataType::UINT8)
-  CREATE_REGISTRATION_FOR_TYPE(int16_t, DataType::INT16)
-  CREATE_REGISTRATION_FOR_TYPE(uint16_t, DataType::UINT16)
-  CREATE_REGISTRATION_FOR_TYPE(int32_t, DataType::INT32)
-  CREATE_REGISTRATION_FOR_TYPE(uint32_t, DataType::UINT32)
-  CREATE_REGISTRATION_FOR_TYPE(int64_t, DataType::INT64)
-  CREATE_REGISTRATION_FOR_TYPE(uint64_t, DataType::UINT64)
-  CREATE_REGISTRATION_FOR_TYPE(float, DataType::FLOAT)
-  CREATE_REGISTRATION_FOR_TYPE(double, DataType::DOUBLE)
-  CREATE_REGISTRATION_FOR_TYPE(tm, DataType::TIME)
+  CREATE_REGISTRATION_FOR_TYPE(int8_t, DataType::Int8)
+  CREATE_REGISTRATION_FOR_TYPE(uint8_t, DataType::Uint8)
+  CREATE_REGISTRATION_FOR_TYPE(int16_t, DataType::Int16)
+  CREATE_REGISTRATION_FOR_TYPE(uint16_t, DataType::UInt16)
+  CREATE_REGISTRATION_FOR_TYPE(int32_t, DataType::Int32)
+  CREATE_REGISTRATION_FOR_TYPE(uint32_t, DataType::UInt32)
+  CREATE_REGISTRATION_FOR_TYPE(int64_t, DataType::Int64)
+  CREATE_REGISTRATION_FOR_TYPE(uint64_t, DataType::UInt64)
+  CREATE_REGISTRATION_FOR_TYPE(float, DataType::Float)
+  CREATE_REGISTRATION_FOR_TYPE(double, DataType::Double)
+  CREATE_REGISTRATION_FOR_TYPE(tm, DataType::Time)
 
   CREATE_SETTER_FOR_TYPE(int8_t, int8)
   CREATE_SETTER_FOR_TYPE(uint8_t, uint8)
@@ -278,7 +278,7 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
   for (auto& map_entry : data_entries)
   {
     auto data_entry = map_entry.second;
-    if (data_entry->get_data_type() == DataType::STRING)
+    if (data_entry->get_data_type() == DataType::String)
     {
       continue;
     }
