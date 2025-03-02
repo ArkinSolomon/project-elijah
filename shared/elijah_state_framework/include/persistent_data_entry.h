@@ -12,7 +12,7 @@ class PersistentDataEntry
 {
 public:
   PersistentDataEntry();
-  PersistentDataEntry(PersistentKeyType key, std::string  display_value, DataType data_type, size_t offset,
+  PersistentDataEntry(PersistentKeyType key, std::string display_value, DataType data_type, size_t offset,
                       void* default_value, size_t default_value_size);
 
   ~PersistentDataEntry();
@@ -41,12 +41,13 @@ private:
 };
 
 template <EnumType PersistentKeyType>
-PersistentDataEntry<PersistentKeyType>::PersistentDataEntry(): data_type(), offset(0), default_value(nullptr), default_value_size(0)
+PersistentDataEntry<PersistentKeyType>::PersistentDataEntry(): data_type(), offset(0), default_value(nullptr),
+                                                               default_value_size(0)
 {
 }
 
 template <EnumType PersistentKeyType>
-PersistentDataEntry<PersistentKeyType>::PersistentDataEntry(PersistentKeyType key, std::string  display_value,
+PersistentDataEntry<PersistentKeyType>::PersistentDataEntry(PersistentKeyType key, std::string display_value,
                                                             const DataType data_type, const size_t offset,
                                                             void* default_value,
                                                             const size_t default_value_size) : key(key),
@@ -128,4 +129,3 @@ std::unique_ptr<uint8_t> PersistentDataEntry<PersistentKeyType>::encode_data_ent
 
   return encoded_entry;
 }
-

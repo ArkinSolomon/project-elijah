@@ -17,13 +17,13 @@ struct CollectionData
 
 enum class PayloadPersistentDataKey
 {
-  BAROMETRIC_PRESSURE,
-  ACCEL_CALIB_X,
-  ACCEL_CALIB_Y,
-  ACCEL_CALIB_Z,
-  GYRO_CALIB_X,
-  GYRO_CALIB_Y,
-  GYRO_CALIB_Z
+  SeaLevelPressure,
+  AccelCalibX,
+  AccelCalibY,
+  AccelCalibZ,
+  GyroCalibX,
+  GyroCalibY,
+  GyroCalibZ
 };
 
 class PayloadStateManager final : public ElijahStateFramework<CollectionData, PayloadPersistentDataKey>
@@ -32,14 +32,14 @@ public:
   PayloadStateManager(): ElijahStateFramework("Payload")
   {
     PersistentDataStorage<PayloadPersistentDataKey> persistent_data_storage = get_persistent_data_storage();
-    persistent_data_storage.register_key(PayloadPersistentDataKey::BAROMETRIC_PRESSURE, "Barometric pressure",
+    persistent_data_storage.register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
                                          101325.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::ACCEL_CALIB_X, "Accelerometer calibration X", 0.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::ACCEL_CALIB_Y, "Accelerometer calibration Y", 0.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::ACCEL_CALIB_Z, "Accelerometer calibration Z", 0.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::GYRO_CALIB_X, "Gyroscope calibration X", 0.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::GYRO_CALIB_Y, "Gyroscope calibration Y", 0.0);
-    persistent_data_storage.register_key(PayloadPersistentDataKey::GYRO_CALIB_Z, "Gyroscope calibration Z", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::AccelCalibY, "Accelerometer calibration Y", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::AccelCalibZ, "Accelerometer calibration Z", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::GyroCalibX, "Gyroscope calibration X", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
+    persistent_data_storage.register_key(PayloadPersistentDataKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     persistent_data_storage.finish_registration();
 
     finish_registration();
@@ -49,7 +49,7 @@ protected:
   START_STATE_ENCODER(CollectionData)
      ENCODE_STATE(sequence, DataType::UInt64, "Sequence", "")
      ENCODE_STATE(time_inst, DataType::Time, "Time", "")
-     ENCODE_STATE(pressure, DataType::Double, "Pressure", "Pa")\
+     ENCODE_STATE(pressure, DataType::UInt32, "Pressure", "Pa")
      ENCODE_STATE(temperature, DataType::Double, "Temperature", "°C")
      ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
      ENCODE_STATE(accel_x, DataType::Double, "Acceleration X", "m/s^2")

@@ -13,3 +13,6 @@ def read_string(tty: serial.Serial) -> str:
         else:
             string += chr(char)
     return string
+
+def read_fixed_string(tty: serial.Serial, string_length: int) -> str:
+    return tty.read(string_length).decode("utf-8", errors='replace')

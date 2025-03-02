@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <hardware/i2c.h>
 
-#include "payload_state_manager.h"
-
 #define MPU_6050_ADDR 0x68
 #define MPU_6050_DEVICE_ID 0x68
 
@@ -53,12 +51,13 @@ public:
   static double get_gyro_scale(GyroFullScaleRange gyro_range);
   static double get_magnitude(double x, double y, double z);
 
-  bool check_chip_id();
+  [[nodiscard]] bool check_chip_id() const;
   bool configure(uint8_t dlpf_cfg, GyroFullScaleRange gyro_range, AccelFullScaleRange accel_range,
                  bool self_test_en, bool enable_ints);
   bool configure_default();
 
-  bool calibrate(uint calibration_cycles);
+  bool calibrate(uint calibration_cycles, double expected_xa, double expected_ya, double expected_za, double expected_xg, double
+                 expected_yg, double expected_zg);
   [[nodiscard]] const CalibrationData& get_calibration_data() const;
 
   bool get_raw_data(int16_t& raw_xa, int16_t& raw_ya, int16_t& raw_za, int16_t& raw_xg, int16_t& raw_yg,

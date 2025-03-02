@@ -2,16 +2,12 @@ cmake_minimum_required(VERSION 3.13)
 
 include(${CMAKE_CURRENT_LIST_DIR}/../../pico_sdk_import.cmake)
 
-project(bmp_280 VERSION 1.0.0 DESCRIPTION "BMP 280 sensor for Project Elijah" LANGUAGES C CXX)
+project(battery VERSION 1.0.0 DESCRIPTION "Battery voltage reader for Project Elijah" LANGUAGES C CXX)
 pico_sdk_init()
 
 add_library(${PROJECT_NAME} INTERFACE)
 
-if (NOT TARGET i2c_util)
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../i2c_util i2c_util-build)
-endif ()
-
-target_link_libraries(${PROJECT_NAME} INTERFACE pico_stdlib i2c_util hardware_spi)
+target_link_libraries(${PROJECT_NAME} INTERFACE pico_stdlib hardware_adc)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}.h)
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})

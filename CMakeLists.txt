@@ -36,6 +36,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/elijah_state_framework)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/bmp_280)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/mpu_6050)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/battery)
 
 function(create_elijah_target SRC_DIR_NAME)
     SET(EXEC_NAME elijah-${SRC_DIR_NAME})
@@ -110,6 +111,7 @@ function(create_elijah_target SRC_DIR_NAME)
             elijah_state_framework
             bmp_280
             mpu_6050
+            battery
     )
 
     pico_add_extra_outputs(${EXEC_NAME})
@@ -119,3 +121,4 @@ function(create_elijah_target SRC_DIR_NAME)
 endfunction()
 
 create_elijah_target(payload)
+create_elijah_target(override)

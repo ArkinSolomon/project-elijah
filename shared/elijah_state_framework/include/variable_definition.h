@@ -18,7 +18,7 @@ public:
   [[nodiscard]] size_t get_offset() const;
   [[nodiscard]] DataType get_data_type() const;
 
-  [[nodiscard]] std::unique_ptr<uint8_t> encode_var(size_t& encoded_size) const;
+  [[nodiscard]] std::unique_ptr<uint8_t[]> encode_var(size_t& encoded_size) const;
 
 private:
   uint8_t variable_id;

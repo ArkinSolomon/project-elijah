@@ -44,11 +44,11 @@ DataType VariableDefinition::get_data_type() const
   return data_type;
 }
 
-std::unique_ptr<uint8_t> VariableDefinition::encode_var(size_t& encoded_size) const
+std::unique_ptr<uint8_t[]> VariableDefinition::encode_var(size_t& encoded_size) const
 {
   encoded_size = sizeof(variable_id) + sizeof(data_offset) + sizeof(data_type)
     + display_name.size() + 1 + display_unit.size() + 1;
-  std::unique_ptr<uint8_t> encoded_command(new uint8_t[encoded_size]);
+  std::unique_ptr<uint8_t[]> encoded_command(new uint8_t[encoded_size]);
 
   memcpy(encoded_command.get(), &variable_id, sizeof(variable_id));
   memcpy(encoded_command.get() + sizeof(variable_id), &data_offset, sizeof(data_offset));

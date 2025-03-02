@@ -35,7 +35,6 @@ void core_1::core_1_main()
     set_fault(status_manager::fault_id::DEVICE_W25Q64FV, true);
   }
 
-
   // uint8_t test_data[32];
   // for (size_t i = 0; i < 32; i++)
   // {

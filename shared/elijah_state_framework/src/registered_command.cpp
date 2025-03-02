@@ -40,10 +40,10 @@ command_callback_t RegisteredCommand::get_callback() const
   return callback;
 }
 
-std::unique_ptr<uint8_t> RegisteredCommand::encode_command(size_t& encoded_size) const
+std::unique_ptr<uint8_t[]> RegisteredCommand::encode_command(size_t& encoded_size) const
 {
   encoded_size = sizeof(command_id) + sizeof(command_input) + command_name.size() + 1;
-  std::unique_ptr<uint8_t> encoded_command(new uint8_t[encoded_size]);
+  std::unique_ptr<uint8_t[]> encoded_command(new uint8_t[encoded_size]);
 
   encoded_command.get()[0] = command_id;
   encoded_command.get()[sizeof(command_id)] = static_cast<uint8_t>(command_input);

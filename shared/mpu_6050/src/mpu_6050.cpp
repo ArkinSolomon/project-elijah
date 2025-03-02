@@ -3,9 +3,6 @@
 #include <hardware/watchdog.h>
 #include <cmath>
 
-#include "main.h"
-#include "payload_state_manager.h"
-#include "status_manager.h"
 #include "i2c_util.h"
 
 MPU6050::MPU6050(i2c_inst_t* i2c_inst, const uint8_t i2c_addr, const GyroFullScaleRange default_gyro_range,
@@ -52,7 +49,7 @@ double MPU6050::get_magnitude(const double x, const double y, const double z)
   return sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
 }
 
-bool MPU6050::check_chip_id()
+bool MPU6050::check_chip_id() const
 {
   uint8_t read_id;
   const bool success = i2c_util::read_ubyte(i2c_inst, i2c_addr, REG_WHO_AM_I, read_id);
@@ -107,7 +104,9 @@ bool MPU6050::configure_default()
                    default_accel_range, false, false);
 }
 
-bool MPU6050::calibrate(const uint calibration_cycles)
+bool MPU6050::calibrate(const uint calibration_cycles, const double expected_xa, const double expected_ya,
+                        const double expected_za, const double expected_xg, const double expected_yg,
+                        const double expected_zg)
 {
   bool configure_success = configure(CONFIG_MPU_6050_DLPF_CFG, GyroFullScaleRange::Range250,
                                      AccelFullScaleRange::Range2g, false, false);
@@ -116,9 +115,6 @@ bool MPU6050::calibrate(const uint calibration_cycles)
   {
     return false;
   }
-
-  constexpr double expected_xa = 0, expected_ya = 0, expected_za = GRAVITY_CONSTANT;
-  constexpr double expected_xg = 0, expected_yg = 0, expected_zg = 0;
 
   double total_xa = 0, total_ya = 0, total_za = 0;
   double total_xg = 0, total_yg = 0, total_zg = 0;

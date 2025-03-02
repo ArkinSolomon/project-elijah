@@ -61,14 +61,13 @@ int main()
   // mpu6050.calibrate(50);
   // mpu6050.check_chip_id();
 
-  bool is_usb_connected = false;
   while (true)
   {
     payload_state_manager.check_for_commands();
     // bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
     // mpu6050.get_data(data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z);
     // payload_state_manager.data_collected(data);
-    // PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}, xa = {}, ya ={}, za = {}, xg ={}, yg ={} , zg = {}", data.pressure, data.temperature, data.altitude, data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z));
+    PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}, xa = {}, ya ={}, za = {}, xg ={}, yg = {}, zg = {}", data.pressure, data.temperature, data.altitude, data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z));
     // sleep_ms(10);
   }
 

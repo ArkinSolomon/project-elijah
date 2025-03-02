@@ -29,7 +29,7 @@ public:
   [[nodiscard]] CommandInputType get_input_type() const;
   [[nodiscard]] command_callback_t get_callback() const;
 
-  [[nodiscard]] std::unique_ptr<uint8_t> encode_command(size_t& encoded_size) const;
+  [[nodiscard]] std::unique_ptr<uint8_t[]> encode_command(size_t& encoded_size) const;
 
 private:
   uint8_t command_id;

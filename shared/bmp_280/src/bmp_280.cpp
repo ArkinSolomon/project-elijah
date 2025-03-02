@@ -4,12 +4,11 @@
 #include <ranges>
 #include <cmath>
 #include <hardware/flash.h>
+#include <hardware/gpio.h>
 
-#include "main.h"
-#include "pin_outs.h"
-#include "status_manager.h"
+#include "elijah_state_framework.h"
 #include "i2c_util.h"
-#include "payload_state_manager.h"
+#include "override_state_manager.h"
 
 BMP280::BMP280(i2c_inst_t* i2c, uint8_t addr) : is_i2c_interface(true), i2c_inst(i2c), i2c_addr(addr)
 {
@@ -33,8 +32,8 @@ bool BMP280::check_chip_id() const
 
 bool BMP280::soft_reset() const
 {
-  constexpr uint8_t data[2] = {REG_SOFT_RESET, BMP_280_RESET_VALUE};
-  return write_bytes_to_device(data, 2);
+  constexpr uint8_t reset_value = BMP_280_RESET_VALUE;
+  return write_bytes_to_device(REG_SOFT_RESET, &reset_value, 1);
 }
 
 bool BMP280::check_status(bool& is_measuring, bool& is_updating) const
@@ -59,8 +58,8 @@ bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, F
     static_cast<uint8_t>(mode);
   const uint8_t config_data = static_cast<uint8_t>(standby_time) << 5 | static_cast<uint8_t>(filter_setting) << 2;
 
-  const uint8_t write_data[3] = {REG_CTRL_MEAS, ctrl_meas, config_data};
-  const bool success = write_bytes_to_device( write_data, 3);
+  const uint8_t write_data[2] = {ctrl_meas, config_data};
+  const bool success = write_bytes_to_device(REG_CTRL_MEAS, write_data, 2);
   return success;
 }
 
@@ -89,6 +88,7 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   bool success = check_status(measuring, writing);
   if (!success)
   {
+    OverrideStateManager::log_message("Failed to check status");
     return false;
   }
 
@@ -107,7 +107,7 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   }
 
   uint8_t raw_data[6];
-  success =  read_bytes(REG_PRESS_MSB, raw_data, 6);
+  success = read_bytes(REG_PRESS_MSB, raw_data, 6);
   if (!success)
   {
     return false;
@@ -116,6 +116,8 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   // Do not touch or try to simplify... otherwise you'll have weird overflow things
   // ReSharper disable All
   const int32_t pressure_adc = raw_data[0] << 12 | raw_data[1] << 4 | raw_data[2] >> 4;
+  OverrideStateManager::log_message(std::format("PRESSURE: {}", pressure_adc));
+
   const int32_t temperature_adc = raw_data[3] << 12 | raw_data[4] << 4 | raw_data[5] >> 4;
   double var1 = (((double)temperature_adc) / 16384.0 - ((double)calibration_data.dig_T1) / 1024.0) * ((double)
     calibration_data.dig_T2);
@@ -150,11 +152,10 @@ bool BMP280::read_byte(const uint8_t reg_addr, uint8_t& value) const
   {
     return i2c_util::read_ubyte(i2c_inst, i2c_addr, reg_addr, value);
   }
-  else
-  {
-    //TODO spi
-    return false;
-  }
+
+  // SPI
+  read_spi_bytes(reg_addr, &value, 1);
+  return true;
 }
 
 bool BMP280::read_short(const uint8_t reg_addr, int16_t& value) const
@@ -163,11 +164,12 @@ bool BMP280::read_short(const uint8_t reg_addr, int16_t& value) const
   {
     return i2c_util::read_short_little_endian(i2c_inst, i2c_addr, reg_addr, value);
   }
-  else
-  {
-    //TODO spi
-    return false;
-  }
+
+  // SPI
+  uint8_t read_data[2];
+  read_spi_bytes(reg_addr, read_data, 2);
+  value = *reinterpret_cast<int16_t*>(read_data);
+  return true;
 }
 
 bool BMP280::read_ushort(const uint8_t reg_addr, uint16_t& value) const
@@ -176,11 +178,12 @@ bool BMP280::read_ushort(const uint8_t reg_addr, uint16_t& value) const
   {
     return i2c_util::read_ushort_little_endian(i2c_inst, i2c_addr, reg_addr, value);
   }
-  else
-  {
-    //TODO spi
-    return false;
-  }
+
+  // SPI
+  uint8_t read_data[2];
+  read_spi_bytes(reg_addr, read_data, 2);
+  value = *reinterpret_cast<uint16_t*>(read_data);
+  return true;
 }
 
 bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len) const
@@ -189,23 +192,52 @@ bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len)
   {
     return i2c_util::read_bytes(i2c_inst, i2c_addr, reg_addr, data, len);
   }
-  else
-  {
-    //TODO spi
-    return false;
-  }
+
+  // SPI
+  read_spi_bytes(reg_addr, data, len);
+  return true;
 }
 
-bool BMP280::write_bytes_to_device(const uint8_t* data, const size_t len) const
+bool BMP280::write_bytes_to_device(uint8_t start_reg_addr, const uint8_t* data, const size_t len) const
 {
   if (is_i2c_interface)
   {
-    const  size_t bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, data, len, false, delayed_by_ms(get_absolute_time(), 5 * len));
+    i2c_write_blocking_until(i2c_inst, i2c_addr, &start_reg_addr, 1, false,
+                             delayed_by_ms(get_absolute_time(), 5));
+    const size_t bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, data, len, false,
+                                                          delayed_by_ms(get_absolute_time(), 5 * len));
     return bytes_written == len;
   }
-  else
+
+  // SPI
+  const size_t write_len = len * 2;
+  uint8_t write_data[write_len];
+
+  for (size_t idx = 0, i = 0; i < len; idx += 2, i++)
   {
-    //TODO spi
-    return false;
+    write_data[idx] = static_cast<uint8_t>(start_reg_addr + static_cast<uint8_t>(i));
+    write_data[idx] |= 0x7F;
+    write_data[idx + 1] = data[i];
   }
+
+  gpio_put(csn_pin, false);
+  spi_write_blocking(spi_inst, write_data, write_len);
+  gpio_put(csn_pin, true);
+  return true;
+}
+
+void BMP280::read_spi_bytes(const uint8_t start_reg_addr, uint8_t* data, const size_t len) const
+{
+  assert(!is_i2c_interface);
+
+  gpio_put(csn_pin, false);
+  busy_wait_us(1);
+
+  const auto read_addr = static_cast<uint8_t>(start_reg_addr | 0x80);
+  spi_write_blocking(spi_inst, &read_addr, 1);
+  spi_read_blocking(spi_inst, 0x00, data, len);
+  OverrideStateManager::log_message(std::format("read = 0x{:02X}", read_addr));
+
+  busy_wait_us(1);
+  gpio_put(csn_pin, true);
 }

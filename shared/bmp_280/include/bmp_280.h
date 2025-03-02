@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <hardware/i2c.h>
 #include <hardware/spi.h>
 
@@ -126,5 +125,6 @@ private:
   bool read_short(uint8_t reg_addr, int16_t& value) const;
   bool read_ushort(uint8_t reg_addr, uint16_t& value) const;
   bool read_bytes(uint8_t reg_addr, uint8_t* data, size_t len) const;
-  bool write_bytes_to_device(const uint8_t* data, size_t len) const;
+  bool write_bytes_to_device(uint8_t start_reg_addr, const uint8_t* data, size_t len) const;
+  void read_spi_bytes(uint8_t start_reg_addr, uint8_t* data, size_t len) const;
 };

@@ -5,8 +5,10 @@
 #include <utility>
 #include <vector>
 #include <hardware/flash.h>
+#include <pico/flash.h>
 #include <hardware/regs/addressmap.h>
 #include <cmath>
+#include <hardware/gpio.h>
 
 #include "shared_mutex.h"
 #include "data_type.h"
@@ -37,7 +39,7 @@
     { \
       active_data_loc = malloc(get_total_size()); \
     } \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->offset); \
+    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
     *data_start = value; \
     shared_mutex_exit_exclusive(&persistent_storage_smtx); \
     restore_interrupts_from_disabled(saved_ints); \
@@ -50,7 +52,7 @@
     shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
     assert(data_entries.contains(key)); \
     const PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->offset); \
+    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
     const TYPE_NAME value = *data_start; \
     shared_mutex_exit_shared(&persistent_storage_smtx); \
     restore_interrupts_from_disabled(saved_ints); \
@@ -111,6 +113,7 @@ public:
   [[nodiscard]] size_t get_total_size() const;
 
   void commit_data();
+  void commit_data(bool use_callback);
   void on_commit(commit_callback_t&& commit_callback);
 
 private:
@@ -123,6 +126,7 @@ private:
   size_t string_size = 0;
 
   bool done_registering_keys = false;
+
   uint32_t tag = 0;
 
   void* active_data_loc = nullptr;
@@ -165,14 +169,14 @@ std::string PersistentDataStorage<PersistentKeyType>::get_string(PersistentKeyTy
   void* str_data_loc = static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + static_size;
 
   size_t str_byte_offset = 0;
-  for (uint i = 0; i < entry->offset; i++)
+  for (uint i = 0; i < entry->get_offset(); i++)
   {
     const auto curr_c_str = reinterpret_cast<char*>(static_cast<uint8_t*>(str_data_loc) + str_byte_offset);
     str_byte_offset += strlen(curr_c_str + 1);
   }
 
   const auto str_start = reinterpret_cast<char*>(static_cast<uint8_t*>(str_data_loc) + str_byte_offset);
-  const std::string str(str_start);
+  std::string str(str_start);
 
   shared_mutex_exit_shared(&persistent_storage_smtx);
   restore_interrupts_from_disabled(saved_ints);
@@ -242,10 +246,10 @@ void PersistentDataStorage<PersistentKeyType>::register_key(PersistentKeyType ke
 
   void* default_data = malloc(default_value.size());
   memcpy(default_data, default_value.c_str(), default_value.size());
-  data_entries[key] = new PersistentDataEntry(key, display_name, default_value, string_registrations.size(),
-                                              default_data,
-                                              default_value.size());
-  string_registrations.push_back(key);
+  auto new_entry = new PersistentDataEntry<PersistentKeyType>(key, std::move(display_name), DataType::String, string_registrations.size(),
+                                              default_data, default_value.size());
+  data_entries[key] = new_entry;
+  string_registrations.push_back(new_entry);
   string_size += default_value.size() + 1;
 }
 
@@ -301,6 +305,7 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
   }
 
   string_registrations.clear();
+  commit_data(false);
 }
 
 template <EnumType PersistentKeyType>
@@ -312,10 +317,16 @@ size_t PersistentDataStorage<PersistentKeyType>::get_total_size() const
 template <EnumType PersistentKeyType>
 void PersistentDataStorage<PersistentKeyType>::commit_data()
 {
+  commit_data(true);
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::commit_data(bool use_callback)
+{
   const uint32_t saved_ints = save_and_disable_interrupts();
   shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
 
-  // Just assume it worked tbh
+  // TODO error handling?
   flash_safe_execute([](void* storage_ptr)
   {
     auto storage = static_cast<PersistentDataStorage*>(storage_ptr);
@@ -326,14 +337,14 @@ void PersistentDataStorage<PersistentKeyType>::commit_data()
     const auto pages = static_cast<size_t>(ceil(total_size / 256.0));
 
     flash_range_erase(flash_offset, pages * 256);
-    flash_range_program(flash_offset, storage->active_data_loc, total_size);
+    flash_range_program(flash_offset, static_cast<uint8_t*>(storage->active_data_loc), total_size);
     free(storage->active_data_loc);
-    storage->active_data_loc = storage->flash_data_loc;
+    storage->active_data_loc = const_cast<void*>(storage->flash_data_loc);
   }, this, 250);
 
   shared_mutex_exit_exclusive(&persistent_storage_smtx);
 
-  if (commit_callback)
+  if (commit_callback && use_callback)
   {
     shared_mutex_enter_blocking_shared(&persistent_storage_smtx);
     commit_callback(flash_data_loc, get_total_size());
