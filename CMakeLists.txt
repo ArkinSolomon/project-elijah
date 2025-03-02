@@ -20,6 +20,13 @@ if (EXISTS ${picoVscode})
 endif ()
 # ====================================================================================
 
+find_program(PICOTOOL_INSTALL_LOC "picotool")
+if (NOT PICOTOOL_INSTALL_LOC)
+    message(FATAL_ERROR "picotool installation not found, is it in your path?")
+else()
+    message("Using picotool installation at ${PICOTOOL_INSTALL_LOC}")
+endif()
+
 set(PICO_BOARD pico CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
@@ -85,7 +92,7 @@ target_link_libraries(${PROJECT_NAME}
 
 pico_add_extra_outputs(${PROJECT_NAME})
 
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${picotool_DIR} "/picotool load \"$1\" -fx")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${PICOTOOL_INSTALL_LOC} " load \"$1\" -fx")
 file(COPY ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 
