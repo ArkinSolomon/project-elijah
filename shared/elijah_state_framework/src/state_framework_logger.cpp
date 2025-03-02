@@ -124,9 +124,18 @@ bool StateFrameworkLogger::write_full_buff()
   fr = f_write(&fil, &next_log_pos, sizeof(next_log_pos), &bytes_written);
   f_close(&fil);
   f_unmount("");
-  recursive_mutex_exit(&write_buff_rmtx);
 
-  return fr == FR_OK;
+  if (fr != FR_OK)
+  {
+    recursive_mutex_exit(&write_buff_rmtx);
+    return false;
+  }
+
+  write_buff.reset();
+  write_size = 0;
+
+  recursive_mutex_exit(&write_buff_rmtx);
+  return true;
 }
 
 void StateFrameworkLogger::move_to_write_buff()
