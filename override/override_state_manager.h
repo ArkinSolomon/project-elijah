@@ -25,7 +25,7 @@ enum class OverridePersistentStateKey : uint8_t
   GyroCalibZ = 8
 };
 
-class OverrideStateManager : public ElijahStateFramework<OverrideState, OverridePersistentStateKey>
+class OverrideStateManager final : public ElijahStateFramework<OverrideState, OverridePersistentStateKey>
 {
 public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey)

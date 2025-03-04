@@ -31,7 +31,7 @@ class PayloadStateManager final : public ElijahStateFramework<CollectionData, Pa
 public:
   PayloadStateManager(): ElijahStateFramework("Payload")
   {
-    PersistentDataStorage<PayloadPersistentDataKey> persistent_data_storage = get_persistent_data_storage();
+    PersistentDataStorage<PayloadPersistentDataKey>* persistent_data_storage = get_persistent_data_storage();
     persistent_data_storage.register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
                                          101325.0);
     persistent_data_storage.register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X", 0.0);
