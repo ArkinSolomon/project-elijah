@@ -57,7 +57,7 @@ public:
       get_persistent_data_storage()->commit_data();
     });
 
-    finish_registration();
+    finish_construction();
   }
 
 protected:

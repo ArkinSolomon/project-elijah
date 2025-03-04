@@ -5,15 +5,12 @@
 
 #include "override_state_manager.h"
 
-
 class OverrideStateManager;
 
 StateFrameworkLogger::StateFrameworkLogger(std::string file_name) : file_name(std::move(file_name))
 {
   mutex_init(&log_buff_mtx);
   recursive_mutex_init(&write_buff_rmtx);
-
-
 }
 
 bool StateFrameworkLogger::init_driver_on_core()
@@ -59,7 +56,6 @@ bool StateFrameworkLogger::write_full_buff()
   if (write_size == 0)
   {
     recursive_mutex_exit(&write_buff_rmtx);
-    OverrideStateManager::log_message("write_size is 0");
     return true;
   }
 
@@ -69,7 +65,7 @@ bool StateFrameworkLogger::write_full_buff()
   if (fr != FR_OK)
   {
     recursive_mutex_exit(&write_buff_rmtx);
-    OverrideStateManager::log_message("can't mount");
+    OverrideStateManager::log_serial_only("failed to mount");
     return false;
   }
 
@@ -77,7 +73,7 @@ bool StateFrameworkLogger::write_full_buff()
   if (fr != FR_OK)
   {
     f_unmount("");
-    OverrideStateManager::log_message("can't open");
+    OverrideStateManager::log_serial_only("failed to open");
     recursive_mutex_exit(&write_buff_rmtx);
     return false;
   }
@@ -86,6 +82,7 @@ bool StateFrameworkLogger::write_full_buff()
   if (f_size(&fil) == 0)
   {
     constexpr decltype(next_log_pos) log_pos = 0;
+    OverrideStateManager::log_serial_only("gonna write log pos");
     fr = f_write(&fil, &log_pos, sizeof(next_log_pos), &bytes_written);
   }
   else
@@ -93,11 +90,12 @@ bool StateFrameworkLogger::write_full_buff()
     fr = f_lseek(&fil, next_log_pos);
   }
 
+  OverrideStateManager::log_serial_only("failed to seek?");
+
   if (fr != FR_OK)
   {
     f_close(&fil);
     f_unmount("");
-    OverrideStateManager::log_message("can't seek");
     recursive_mutex_exit(&write_buff_rmtx);
     return false;
   }
@@ -151,7 +149,6 @@ void StateFrameworkLogger::move_to_write_buff()
 
 void StateFrameworkLogger::load_old_data()
 {
-
   FATFS fs;
   FIL fil;
   FRESULT fr = f_mount(&fs, "0:", 1);
@@ -161,7 +158,7 @@ void StateFrameworkLogger::load_old_data()
   }
 
   fr = f_stat(file_name.c_str(), nullptr);
-  was_file_created = fr ==  FR_NO_FILE;
+  was_file_created = fr == FR_NO_FILE;
   if (was_file_created)
   {
     return;

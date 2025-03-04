@@ -11,7 +11,6 @@ from framework.state_framework import StateFramework
 FRAMEWORK_TAG = 0xBC7AA65201C73901
 MAX_PACKETS_PER_UPDATE = 1024
 
-
 class Device:
     last_known_port: str
     tty: ReadableSerial | None = None
@@ -68,7 +67,9 @@ class Device:
             return
 
         try:
-            self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
+            packets = self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
+            if packets > 0:
+                print(self.state_framework.state)
         except SerialException as e:
             print(e)
             self.disconnect()

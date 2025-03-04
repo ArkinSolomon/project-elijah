@@ -24,7 +24,6 @@ Battery::Battery(uint8_t pin, uint sample_count, double bat_scale) : sample_coun
     assert(false);
   }
 
-  adc_gpio_init(pin);
   adc_read_results.reserve(sample_count);
 }
 

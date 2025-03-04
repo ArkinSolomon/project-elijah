@@ -7,6 +7,7 @@
 #include <string>
 #include <format>
 #include <variant>
+#include <hardware/gpio.h>
 #include <pico/critical_section.h>
 #include <pico/rand.h>
 #include <pico/stdio_usb.h>
@@ -59,10 +60,11 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
 
 enum class LogLevel : uint8_t
 {
-  Debug = 0,
-  Default = 1,
-  Warning = 2,
-  Error = 3
+  Debug = 1,
+  Default = 2,
+  Warning = 3,
+  Error = 4,
+  SerialOnly = 5
 };
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -74,13 +76,14 @@ public:
 
   PersistentDataStorage<PersistentKeyType>* get_persistent_data_storage() const;
 
-
   [[nodiscard]] const std::string& get_application_name() const;
 
-  static void log_message(const std::string& message, LogLevel log_level = LogLevel::Default);
   [[nodiscard]] StateFrameworkLogger* get_logger() const;
   void lock_logger();
   void release_logger();
+
+  static void log_serial_only(const std::string& message);
+  void log_message(const std::string& message, LogLevel log_level = LogLevel::Default);
 
   void check_for_commands();
 
@@ -97,7 +100,8 @@ protected:
                               DataType data_type);
 
   void set_encoded_state_size(size_t encoded_data_size);
-  void finish_registration();
+  void finish_construction();
+
   void encode_state(void* encode_dest, const StateDataType& state);
   virtual void encode_state(void* encode_dest, const StateDataType& encode_data, uint64_t seq, bool register_data) = 0;
 
@@ -124,6 +128,7 @@ private:
     ApplicationName = 1,
     Commands = 2,
     VariableDefinitions = 3,
+    PersistentStorageEntries = 4,
     MetadataEnd = 255
   };
 
@@ -147,12 +152,16 @@ private:
   shared_mutex_t logger_smtx;
 
   static void initialize_communication();
-  static void write_to_serial(const uint8_t* packet_data, size_t packet_len);
+  static void write_to_serial(const uint8_t* write_data, size_t write_len);
   static void write_to_serial(const uint8_t* packet_data, size_t packet_len, bool flush);
+
+  static std::unique_ptr<uint8_t[]> encode_log_message(const std::string& message, LogLevel log_level,
+                                                       size_t& encoded_len);
 
   void register_command(const std::string& command, CommandInputType command_input, command_callback_t callback);
 
-  void send_framework_metadata(bool log);
+  void send_framework_metadata(bool write_to_file);
+  void send_persistent_state(const void* data, size_t data_len);
 };
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -161,18 +170,11 @@ ElijahStateFramework<StateDataType, PersistentKeyType>::ElijahStateFramework(
   application_name(std::move(application_name)), launch_key(launch_key)
 {
   initialize_communication();
-
   shared_mutex_init(&logger_smtx);
 
   persistent_data_storage->on_commit([this](const void* data, const size_t data_len)
   {
-    critical_section_enter_blocking(&usb_cs);
-    const auto packet_id = static_cast<uint8_t>(OutputPacket::PersistentStateUpdate);
-
-    write_to_serial(&packet_id, 1, false);
-    write_to_serial(static_cast<const uint8_t*>(data), data_len);
-
-    critical_section_exit(&usb_cs);
+    send_persistent_state(data, data_len);
   });
 
   register_command("_", [this]
@@ -188,6 +190,11 @@ ElijahStateFramework<StateDataType, PersistentKeyType>::ElijahStateFramework(
     delete logger;
     logger = new StateFrameworkLogger(launch_name); // NOLINT(*-unnecessary-value-param)
     shared_mutex_exit_exclusive(&logger_smtx);
+  });
+
+  register_command("Reset persistent storage", [this]
+  {
+    persistent_data_storage->load_default_data();
   });
 
   std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
@@ -333,31 +340,20 @@ template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::log_message(const std::string& message,
                                                                          LogLevel log_level)
 {
-  if (!stdio_usb_connected())
+  size_t encoded_len;
+  const std::unique_ptr<uint8_t[]> encoded_message = encode_log_message(message, log_level, encoded_len);
+
+  if (stdio_usb_connected())
   {
-    return;
+    critical_section_enter_blocking(&usb_cs);
+    write_to_serial(encoded_message.get(), encoded_len);
+    critical_section_exit(&usb_cs);
   }
 
-  std::string send_message = message;
-
-  if (message.size() > std::numeric_limits<uint16_t>::max())
+  if (log_level != LogLevel::Debug && logger)
   {
-    send_message = "Message too large... ";
-    send_message += message.substr(0, 1000 - send_message.size());
+    logger->log_data(encoded_message.get(), encoded_len);
   }
-
-  const size_t total_packet_size = 1 /* packet id */ + 1 /* log level */ + 2 /* message length */ + send_message.
-    size();
-  uint8_t packet_data[total_packet_size] = {
-    static_cast<uint8_t>(OutputPacket::LogMessage), static_cast<uint8_t>(log_level)
-  };
-
-  *reinterpret_cast<uint16_t*>(packet_data + 2) = static_cast<uint16_t>(send_message.size());
-  memcpy(packet_data + (2 * sizeof(uint8_t) + sizeof(uint16_t)), send_message.c_str(), send_message.size());
-
-  critical_section_enter_blocking(&usb_cs);
-  write_to_serial(packet_data, total_packet_size);
-  critical_section_exit(&usb_cs);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -376,6 +372,22 @@ template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::release_logger()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
+}
+
+template <typename StateDataType, EnumType PersistentKeyType>
+void ElijahStateFramework<StateDataType, PersistentKeyType>::log_serial_only(const std::string& message)
+{
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
+  size_t encoded_len;
+  std::unique_ptr<uint8_t[]> encoded_message = encode_log_message(message, LogLevel::SerialOnly, encoded_len);
+
+  critical_section_enter_blocking(&usb_cs);
+  write_to_serial(encoded_message.get(), encoded_len);
+  critical_section_exit(&usb_cs);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -428,7 +440,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::set_encoded_state_s
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
-void ElijahStateFramework<StateDataType, PersistentKeyType>::finish_registration()
+void ElijahStateFramework<StateDataType, PersistentKeyType>::finish_construction()
 {
   logger = new StateFrameworkLogger(persistent_data_storage->get_string(launch_key));
 
@@ -440,6 +452,10 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::finish_registration
     log_message("New launch");
     send_framework_metadata(true);
   }
+
+  persistent_data_storage->lock_active_data();
+  send_persistent_state(persistent_data_storage->get_active_data_loc(), persistent_data_storage->get_total_byte_size());
+  persistent_data_storage->release_active_data();
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -450,10 +466,10 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::initialize_communic
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
-void ElijahStateFramework<StateDataType, PersistentKeyType>::write_to_serial(const uint8_t* packet_data,
-                                                                             size_t packet_len)
+void ElijahStateFramework<StateDataType, PersistentKeyType>::write_to_serial(
+  const uint8_t* write_data, const size_t write_len)
 {
-  write_to_serial(packet_data, packet_len, true);
+  write_to_serial(write_data, write_len, true);
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
@@ -468,6 +484,32 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::write_to_serial(con
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
+std::unique_ptr<uint8_t[]> ElijahStateFramework<StateDataType, PersistentKeyType>::encode_log_message(
+  const std::string& message, LogLevel log_level, size_t& encoded_len)
+{
+  std::string send_message = message;
+
+  // TODO, do not hardcode, should be less than write buff len for logger
+  if (message.size() > 1000)
+  {
+    send_message = "Message too large... ";
+    send_message += message.substr(0, 1000 - send_message.size());
+  }
+
+  encoded_len = sizeof(uint8_t) /* packet id */ + sizeof(uint8_t) /* log level */ + sizeof(uint16_t)
+    /* message length */ + send_message.size();
+
+  std::unique_ptr<uint8_t[]> encoded_message(new uint8_t[encoded_len]{
+    static_cast<uint8_t>(OutputPacket::LogMessage), static_cast<uint8_t>(log_level)
+  });
+
+  *reinterpret_cast<uint16_t*>(encoded_message.get() + 2) = static_cast<uint16_t>(send_message.size());
+  memcpy(encoded_message.get() + (2 * sizeof(uint8_t) + sizeof(uint16_t)), send_message.c_str(), send_message.size());
+
+  return encoded_message;
+}
+
+template <typename StateDataType, EnumType PersistentKeyType>
 void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(const std::string& command,
                                                                               const CommandInputType command_input,
                                                                               command_callback_t callback)
@@ -477,18 +519,18 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::register_command(co
 }
 
 template <typename StateDataType, EnumType PersistentKeyType>
-void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_metadata(const bool log)
+void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_metadata(const bool write_to_file)
 {
-  if (!log && !stdio_usb_connected())
+  if (!write_to_file && !stdio_usb_connected())
   {
     return;
   }
 
   critical_section_enter_blocking(&usb_cs);
-  if (log && logger)
+  if (write_to_file && logger)
   {
     lock_logger();
-    auto packet_id = static_cast<uint8_t>(OutputPacket::Metadata);
+    const auto packet_id = static_cast<uint8_t>(OutputPacket::Metadata);
     logger->log_data(&packet_id, sizeof(packet_id));
   }
 
@@ -501,7 +543,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_meta
   memcpy(initial_data + sizeof(FRAMEWORK_TAG) + sizeof(segment_id), application_name.c_str(),
          application_name.size() + 1);
   write_to_serial(initial_data, initial_size, false);
-  if (log && logger)
+  if (write_to_file && logger)
   {
     logger->log_data(initial_data + sizeof(FRAMEWORK_TAG), sizeof(uint8_t) + application_name.size() + 1);
   }
@@ -527,7 +569,7 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_meta
     segment_id = static_cast<uint8_t>(MetadataSegment::VariableDefinitions);
     const uint8_t segment_header[3] = {segment_id, var_count, static_cast<uint8_t>(sizeof(size_t))};
     write_to_serial(segment_header, 3, false);
-    if (log && logger)
+    if (write_to_file && logger)
     {
       logger->log_data(segment_header, 3);
     }
@@ -537,20 +579,64 @@ void ElijahStateFramework<StateDataType, PersistentKeyType>::send_framework_meta
       size_t encoded_size;
       std::unique_ptr<uint8_t[]> encoded = var_def.encode_var(encoded_size);
       write_to_serial(encoded.get(), encoded_size, false);
-      if (log && logger)
+      if (write_to_file && logger)
       {
         logger->log_data(encoded.get(), encoded_size);
       }
     }
   }
 
+  if (persistent_data_storage->get_entry_count() > 0)
+  {
+    segment_id = static_cast<uint8_t>(MetadataSegment::PersistentStorageEntries);
+    const uint8_t segment_header[3] = {
+      segment_id, static_cast<uint8_t>(persistent_data_storage->get_entry_count()), static_cast<uint8_t>(sizeof(size_t))
+    };
+    write_to_serial(segment_header, 3, false);
+    if (write_to_file && logger)
+    {
+      logger->log_data(segment_header, 3);
+    }
+
+    size_t encoded_size;
+    const std::unique_ptr<uint8_t[]> encoded_data = persistent_data_storage->encode_all_entries(encoded_size);
+
+    write_to_serial(encoded_data.get(), encoded_size, false);
+    if (write_to_file && logger)
+    {
+      logger->log_data(encoded_data.get(), encoded_size);
+    }
+  }
+
   segment_id = static_cast<uint8_t>(MetadataSegment::MetadataEnd);
   write_to_serial(&segment_id, 1);
-  if (log && logger)
+  if (write_to_file && logger)
   {
     logger->log_data(&segment_id, 1);
     release_logger();
   }
 
   critical_section_exit(&usb_cs);
+}
+
+template <typename StateDataType, EnumType PersistentKeyType>
+void ElijahStateFramework<StateDataType, PersistentKeyType>::send_persistent_state(
+  const void* data, const size_t data_len)
+{
+  critical_section_enter_blocking(&usb_cs);
+  const auto packet_id = static_cast<uint8_t>(OutputPacket::PersistentStateUpdate);
+
+  write_to_serial(&packet_id, 1, false);
+  write_to_serial(static_cast<const uint8_t*>(data), data_len);
+
+  critical_section_exit(&usb_cs);
+
+  if (logger)
+  {
+    lock_logger();
+    logger->log_data(&packet_id, 1);
+    logger->log_data(static_cast<const uint8_t*>(data), data_len);
+    logger->flush_log();
+    release_logger();
+  }
 }

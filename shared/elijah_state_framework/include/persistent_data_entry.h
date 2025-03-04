@@ -24,9 +24,9 @@ public:
 
   [[nodiscard]] void* get_default_value_ptr() const;
   [[nodiscard]] size_t get_default_value_size() const;
-  void delete_default_value();
 
-  [[nodiscard]] std::unique_ptr<uint8_t> encode_data_entry(size_t& encoded_size) const;
+  [[nodiscard]] size_t get_encoded_size() const;
+  void encode_data_entry(uint8_t* dest) const;
 
 private:
   PersistentKeyType key;
@@ -104,28 +104,17 @@ size_t PersistentDataEntry<PersistentKeyType>::get_default_value_size() const
 }
 
 template <EnumType PersistentKeyType>
-void PersistentDataEntry<PersistentKeyType>::delete_default_value()
+size_t PersistentDataEntry<PersistentKeyType>::get_encoded_size() const
 {
-  if (default_value == nullptr)
-  {
-    return;
-  }
-
-  free(default_value);
-  default_value = nullptr;
-  default_value_size = 0;
+  return 2 * sizeof(uint8_t) /* key, data_type */ + sizeof(offset) + display_value.size() + 1;
 }
 
 template <EnumType PersistentKeyType>
-std::unique_ptr<uint8_t> PersistentDataEntry<PersistentKeyType>::encode_data_entry(size_t& encoded_size) const
+void PersistentDataEntry<PersistentKeyType>::encode_data_entry(uint8_t* dest) const
 {
-  encoded_size = sizeof(uint8_t) /* data_type */ + sizeof(offset) + display_value.size() + 1;
-  std::unique_ptr<uint8_t> encoded_entry(new uint8_t[encoded_size]);
+  dest[0] = static_cast<uint8_t>(key);
+  dest[sizeof(uint8_t)] = static_cast<uint8_t>(data_type);
 
-  encoded_entry.get()[0] = static_cast<uint8_t>(data_type);
-  *reinterpret_cast<decltype(offset)*>(encoded_entry.get()[sizeof(uint8_t)]) = offset;
-
-  memcpy(encoded_entry.get() + sizeof(uint8_t) + sizeof(offset), display_value.c_str(), display_value.size() + 1);
-
-  return encoded_entry;
+  memcpy(dest + 2 * sizeof(uint8_t), &offset, sizeof(offset));
+  memcpy(dest + 2 * sizeof(uint8_t) + sizeof(offset), display_value.c_str(), display_value.size() + 1);
 }

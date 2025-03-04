@@ -10,7 +10,7 @@ class ReadableSerial(Readable):
         self.tty = tty
 
     def is_live_device(self) -> bool:
-        return False
+        return True
 
     def bytes_avail(self) -> int:
         return self.tty.in_waiting

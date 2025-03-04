@@ -8,14 +8,13 @@
 #include <pico/flash.h>
 #include <hardware/regs/addressmap.h>
 #include <cmath>
-#include <hardware/gpio.h>
 
 #include "shared_mutex.h"
 #include "data_type.h"
 #include "enum_type.h"
 #include "persistent_data_entry.h"
 
-#define PERSISTENT_DATA_START_SECTOR_NUM 500
+#define PERSISTENT_DATA_START_SECTOR_NUM 511
 
 #define CREATE_REGISTRATION_FOR_TYPE(TYPE_NAME, DATA_TYPE) \
   void register_key(PersistentKeyType key, const std::string& display_name, const TYPE_NAME default_value) \
@@ -31,13 +30,13 @@
 #define CREATE_SETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   void set_##HUMAN_NAME(PersistentKeyType key, const TYPE_NAME value) \
   { \
-    const uint32_t saved_ints = save_and_disable_interrupts(); \
     shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx); \
+    const uint32_t saved_ints = save_and_disable_interrupts(); \
     assert(data_entries.contains(key)); \
     const PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
     if (active_data_loc == flash_data_loc) \
     { \
-      active_data_loc = malloc(get_total_size()); \
+      active_data_loc = malloc(get_total_byte_size()); \
     } \
     const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
     *data_start = value; \
@@ -48,8 +47,8 @@
 #define CREATE_GETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   TYPE_NAME get_##HUMAN_NAME(PersistentKeyType key) \
   { \
-    const uint32_t saved_ints = save_and_disable_interrupts(); \
     shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
+    const uint32_t saved_ints = save_and_disable_interrupts(); \
     assert(data_entries.contains(key)); \
     const PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
     const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
@@ -109,11 +108,18 @@ public:
   CREATE_GETTER_FOR_TYPE(tm, time)
 
   void finish_registration();
+  [[nodiscard]] std::unique_ptr<uint8_t[]> encode_all_entries(size_t& encoded_size) const;
+  [[nodiscard]] size_t get_tag() const;
+  [[nodiscard ]] size_t get_entry_count() const;
 
-  [[nodiscard]] size_t get_total_size() const;
+  void lock_active_data();
+  void release_active_data();
+  [[nodiscard]] void* get_active_data_loc() const;
+  [[nodiscard]] size_t get_total_byte_size() const;
 
   void commit_data();
-  void commit_data(bool use_callback);
+  void commit_data(bool use_callback, bool lock_mtx);
+  void load_default_data();
   void on_commit(commit_callback_t&& commit_callback);
 
 private:
@@ -151,17 +157,18 @@ PersistentDataStorage<PersistentKeyType>::~PersistentDataStorage()
   {
     free(active_data_loc);
   }
-  for (auto& entry : data_entries)
+
+  for (const PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
   {
-    delete entry.second;
+    delete entry;
   }
 }
 
 template <EnumType PersistentKeyType>
 std::string PersistentDataStorage<PersistentKeyType>::get_string(PersistentKeyType key)
 {
-  const uint32_t saved_ints = save_and_disable_interrupts();
   shared_mutex_enter_blocking_shared(&persistent_storage_smtx);
+  const uint32_t saved_ints = save_and_disable_interrupts();
 
   assert(data_entries.contains(key));
   const PersistentDataEntry<PersistentKeyType>* entry = data_entries[key];
@@ -180,7 +187,6 @@ std::string PersistentDataStorage<PersistentKeyType>::get_string(PersistentKeyTy
 
   shared_mutex_exit_shared(&persistent_storage_smtx);
   restore_interrupts_from_disabled(saved_ints);
-
   return str;
 }
 
@@ -196,7 +202,7 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
   const void* str_data_loc = static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + static_size;
 
   size_t str_byte_offset = 0;
-  for (uint i = 0; i < entry->offset; i++)
+  for (uint i = 0; i < entry->get_offset(); i++)
   {
     const auto curr_c_str = reinterpret_cast<const char*>(static_cast<const uint8_t*>(str_data_loc) + str_byte_offset);
     str_byte_offset += strlen(curr_c_str + 1);
@@ -211,7 +217,7 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
   string_size -= old_str_bytes;
   string_size += value.length() + 1;
 
-  void* new_data_loc = malloc(get_total_size());
+  void* new_data_loc = malloc(get_total_byte_size());
 
   if (prev_data_size > 0)
   {
@@ -233,6 +239,7 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
   {
     free(active_data_loc);
   }
+  active_data_loc = new_data_loc;
 
   shared_mutex_exit_exclusive(&persistent_storage_smtx);
   restore_interrupts_from_disabled(saved_ints);
@@ -246,8 +253,9 @@ void PersistentDataStorage<PersistentKeyType>::register_key(PersistentKeyType ke
 
   void* default_data = malloc(default_value.size());
   memcpy(default_data, default_value.c_str(), default_value.size());
-  auto new_entry = new PersistentDataEntry<PersistentKeyType>(key, std::move(display_name), DataType::String, string_registrations.size(),
-                                              default_data, default_value.size());
+  auto new_entry = new PersistentDataEntry<PersistentKeyType>(key, std::move(display_name), DataType::String,
+                                                              string_registrations.size(),
+                                                              default_data, default_value.size());
   data_entries[key] = new_entry;
   string_registrations.push_back(new_entry);
   string_size += default_value.size() + 1;
@@ -256,32 +264,31 @@ void PersistentDataStorage<PersistentKeyType>::register_key(PersistentKeyType ke
 template <EnumType PersistentKeyType>
 void PersistentDataStorage<PersistentKeyType>::finish_registration()
 {
+  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
   done_registering_keys = true;
-  tag = static_size * 1000 + data_entries.size() + string_registrations.size() * 1000;
+  tag = static_size * 8409 + data_entries.size() + string_registrations.size() * 48;
+  for (PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
+  {
+    for (auto& n : entry->get_display_value())
+    {
+      tag += (n << 1) + string_registrations.size() * 2;
+    }
+  }
 
   const uint32_t saved_tag = *static_cast<const uint32_t*>(flash_data_loc);
   if (tag == saved_tag)
   {
     active_data_loc = const_cast<void*>(flash_data_loc);
-
-    for (auto& map_entry : data_entries)
-    {
-      auto data_entry = map_entry.second;
-      data_entry->delete_default_value();
-    }
-
-    string_registrations.clear();
+    shared_mutex_exit_exclusive(&persistent_storage_smtx);
     return;
   }
 
-  active_data_loc = malloc(get_total_size());
+  active_data_loc = malloc(get_total_byte_size());
   memcpy(active_data_loc, &tag, sizeof(tag));
 
-  auto static_data_loc = static_cast<uint8_t*>(active_data_loc) + sizeof(tag);
-
-  for (auto& map_entry : data_entries)
+  auto static_data_loc = sizeof(tag) + static_cast<uint8_t*>(active_data_loc);
+  for (PersistentDataEntry<PersistentKeyType>* data_entry : std::views::values(data_entries))
   {
-    auto data_entry = map_entry.second;
     if (data_entry->get_data_type() == DataType::String)
     {
       continue;
@@ -289,7 +296,6 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
 
     memcpy(static_data_loc + data_entry->get_offset(), data_entry->get_default_value_ptr(),
            data_entry->get_default_value_size());
-    data_entry->delete_default_value();
   }
 
   auto string_data_loc = reinterpret_cast<char*>(static_data_loc + static_size);
@@ -300,16 +306,64 @@ void PersistentDataStorage<PersistentKeyType>::finish_registration()
            string_entry->get_default_value_size());
     *(string_data_loc + string_offset + string_entry->get_default_value_size()) = '\0';
     string_offset += string_entry->get_default_value_size() + 1;
-
-    string_entry->delete_default_value();
   }
 
-  string_registrations.clear();
-  commit_data(false);
+  commit_data(false, false);
 }
 
 template <EnumType PersistentKeyType>
-size_t PersistentDataStorage<PersistentKeyType>::get_total_size() const
+std::unique_ptr<uint8_t[]> PersistentDataStorage<PersistentKeyType>::encode_all_entries(size_t& encoded_size) const
+{
+  encoded_size = 0;
+  for (PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
+  {
+    encoded_size += entry->get_encoded_size();
+  }
+
+  std::unique_ptr<uint8_t[]> encoded_data(new uint8_t[encoded_size]);
+  size_t running_size = 0;
+
+  for (PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
+  {
+    entry->encode_data_entry(encoded_data.get() + running_size);
+    running_size += entry->get_encoded_size();
+  }
+
+  return encoded_data;
+}
+
+template <EnumType PersistentKeyType>
+size_t PersistentDataStorage<PersistentKeyType>::get_tag() const
+{
+  return tag;
+}
+
+template <EnumType PersistentKeyType>
+size_t PersistentDataStorage<PersistentKeyType>::get_entry_count() const
+{
+  return data_entries.size();
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::lock_active_data()
+{
+  shared_mutex_enter_blocking_shared(&persistent_storage_smtx);
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::release_active_data()
+{
+  shared_mutex_exit_shared(&persistent_storage_smtx);
+}
+
+template <EnumType PersistentKeyType>
+void* PersistentDataStorage<PersistentKeyType>::get_active_data_loc() const
+{
+  return active_data_loc;
+}
+
+template <EnumType PersistentKeyType>
+size_t PersistentDataStorage<PersistentKeyType>::get_total_byte_size() const
 {
   return sizeof(tag) + static_size + string_size;
 }
@@ -317,14 +371,17 @@ size_t PersistentDataStorage<PersistentKeyType>::get_total_size() const
 template <EnumType PersistentKeyType>
 void PersistentDataStorage<PersistentKeyType>::commit_data()
 {
-  commit_data(true);
+  commit_data(true, true);
 }
 
 template <EnumType PersistentKeyType>
-void PersistentDataStorage<PersistentKeyType>::commit_data(bool use_callback)
+void PersistentDataStorage<PersistentKeyType>::commit_data(const bool use_callback, const bool lock_mtx)
 {
   const uint32_t saved_ints = save_and_disable_interrupts();
-  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  if (lock_mtx)
+  {
+    shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  }
 
   // TODO error handling?
   flash_safe_execute([](void* storage_ptr)
@@ -333,7 +390,7 @@ void PersistentDataStorage<PersistentKeyType>::commit_data(bool use_callback)
 
     constexpr uint32_t flash_offset = PERSISTENT_DATA_START_SECTOR_NUM * 4096;
 
-    const size_t total_size = storage->get_total_size();
+    const size_t total_size = storage->get_total_byte_size();
     const auto pages = static_cast<size_t>(ceil(total_size / 256.0));
 
     flash_range_erase(flash_offset, pages * 256);
@@ -342,16 +399,75 @@ void PersistentDataStorage<PersistentKeyType>::commit_data(bool use_callback)
     storage->active_data_loc = const_cast<void*>(storage->flash_data_loc);
   }, this, 250);
 
-  shared_mutex_exit_exclusive(&persistent_storage_smtx);
-
   if (commit_callback && use_callback)
   {
-    shared_mutex_enter_blocking_shared(&persistent_storage_smtx);
-    commit_callback(flash_data_loc, get_total_size());
-    shared_mutex_exit_shared(&persistent_storage_smtx);
+    // we CAN NOT read/write to the data here
+    commit_callback(flash_data_loc, get_total_byte_size());
   }
 
+  shared_mutex_exit_exclusive(&persistent_storage_smtx);
+
   restore_interrupts_from_disabled(saved_ints);
+}
+
+template <EnumType PersistentKeyType>
+void PersistentDataStorage<PersistentKeyType>::load_default_data()
+{
+  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  for (PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
+  {
+    switch (entry->get_data_type())
+    {
+    case DataType::String:
+      {
+        char def_c_str[entry->get_default_value_size() + 1];
+        memcpy(def_c_str, entry->get_default_value_ptr(), entry->get_default_value_size());
+        def_c_str[entry->get_default_value_size()] = '\0';
+
+        std::string def_str(def_c_str);
+
+        set_string(entry->get_key(), def_str);
+        break;
+      }
+    case DataType::Int8:
+      set_int8(entry->get_key(), *reinterpret_cast<int8_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Uint8:
+      set_uint8(entry->get_key(), *reinterpret_cast<uint8_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Int16:
+      set_int16(entry->get_key(), *reinterpret_cast<int16_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::UInt16:
+      set_uint16(entry->get_key(), *reinterpret_cast<uint16_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Int32:
+      set_int32(entry->get_key(), *reinterpret_cast<int32_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::UInt32:
+      set_uint32(entry->get_key(), *reinterpret_cast<uint32_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Int64:
+      set_int64(entry->get_key(), *reinterpret_cast<int64_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::UInt64:
+      set_uint64(entry->get_key(), *reinterpret_cast<uint64_t*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Float:
+      set_float(entry->get_key(), *reinterpret_cast<float*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Double:
+      set_double(entry->get_key(), *reinterpret_cast<double*>(entry->get_default_value_ptr()));
+      break;
+    case DataType::Time:
+      // todo: implement time
+      assert(false);
+      break;
+    }
+  }
+
+  // Mutex unlocked after commit
+  commit_data(true, false);
 }
 
 template <EnumType PersistentKeyType>

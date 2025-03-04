@@ -42,7 +42,7 @@ public:
     persistent_data_storage.register_key(PayloadPersistentDataKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     persistent_data_storage.finish_registration();
 
-    finish_registration();
+    finish_construction();
   }
 
 protected:

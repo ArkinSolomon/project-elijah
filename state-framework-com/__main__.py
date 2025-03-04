@@ -6,10 +6,10 @@ devices: [Device] = []
 
 user_has_quit = False
 
-def discover_devices():
+def discover_devices() -> None:
     serial_ports = ['/dev/' + device for device in os.listdir('/dev') if 'tty.usbmodem' in device]
 
-    removal_devices: [Device] = []
+    removal_devices: list[Device] = []
     for device in devices:
         if device.last_known_port not in serial_ports:
             if device.uses_state_framework and device.is_connected:

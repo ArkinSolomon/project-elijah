@@ -1,5 +1,7 @@
 #pragma once
 
+// Don't place includes here as they will be included in sd_hw_config.c
+
 #define LED_2_PIN 2
 #define LED_3_PIN 3
 #define ONBOARD_LED_PIN 25
@@ -22,3 +24,5 @@
 #define SPI1_CSN_PIN 13
 
 #define BAT_VOLTAGE_PIN 28
+
+void pin_init();

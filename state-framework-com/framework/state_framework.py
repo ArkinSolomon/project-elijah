@@ -10,25 +10,24 @@ from framework.registered_command import RegisteredCommand, CommandInputType
 from framework.variable_definition import VariableDefinition
 from serial_helper import read_string, read_fixed_string
 
-
 class OutputPacket(Enum):
     LOG_MESSAGE = 1
     STATE_UPDATE = 2
     PERSISTENT_STATE_UPDATE = 3
 
-
-class MetadataSegments(Enum):
+class MetadataSegment(Enum):
     APPLICATION_NAME = 1
     COMMANDS = 2
     VARIABLE_DEFINITIONS = 3
+    PERSISTENT_STORAGE_ENTRIES = 4
     METADATA_END = 255
 
-
 class LogLevel(Enum):
-    DEBUG = 0
-    INFO = 1
-    WARNING = 2
-    ERROR = 3
+    DEBUG = 1
+    INFO = 2
+    WARNING = 3
+    ERROR = 4
+    SERIAL_ONLY = 5
 
 
 class StateFramework:
@@ -42,7 +41,9 @@ class StateFramework:
 
     @staticmethod
     def generate_framework_configuration(readable: Readable):
-        metadata = StateFramework()
+        state_framework = StateFramework()
+        received_segments: list[MetadataSegment] = []
+
         while True:
             if readable.bytes_avail() == 0:
                 if readable.is_live_device():
@@ -50,19 +51,37 @@ class StateFramework:
                 else:
                     print('Could not read framework metadata')
                     break
+
             segment_id, = struct.unpack('<B', readable.read(1))
 
-            match segment_id:
-                case MetadataSegments.APPLICATION_NAME.value:
-                    metadata._handle_segment_application_name(readable)
-                case MetadataSegments.COMMANDS.value:
-                    metadata._handle_segment_commands(readable)
-                case MetadataSegments.VARIABLE_DEFINITIONS.value:
-                    metadata._handle_segment_variable_definitions(readable)
-                case MetadataSegments.METADATA_END.value:
-                    return metadata
+            try:
+                metadata_segment = MetadataSegment(segment_id)
+            except ValueError:
+                continue
+
+            if metadata_segment in received_segments:
+                if readable.is_live_device():
+                    print(f'Received duplicate segment {hex(segment_id)}, ignoring')
+                    continue
+                else:
+                    print(f'Received duplicate segment {hex(segment_id)}, can not continue')
+                    break
+
+            received_segments.append(metadata_segment)
+
+            match metadata_segment:
+                case MetadataSegment.APPLICATION_NAME:
+                    state_framework._handle_segment_application_name(readable)
+                case MetadataSegment.COMMANDS:
+                    state_framework._handle_segment_commands(readable)
+                case MetadataSegment.VARIABLE_DEFINITIONS:
+                    state_framework._handle_segment_variable_definitions(readable)
+                case MetadataSegment.PERSISTENT_STORAGE_ENTRIES:
+                    continue
+                case MetadataSegment.METADATA_END:
+                    return state_framework
                 case _:
-                    print(f'Unknown segment id: {segment_id} ({hex(segment_id)})')
+                    print(f'Unimplemented metadata segment: {segment_id} ({hex(segment_id)})')
                     if not readable.is_live_device():
                         break
 
@@ -77,6 +96,8 @@ class StateFramework:
                 prefix = 'WARNING: '
             case LogLevel.ERROR:
                 prefix = 'ERROR: '
+            case LogLevel.SERIAL_ONLY:
+                prefix = 'SERIAL: '
             case _:
                 prefix = 'UNKNOWN: '
         print(f'{prefix}{message}')
@@ -100,7 +121,6 @@ class StateFramework:
                         self.log(log_level, log_message)
                     case OutputPacket.STATE_UPDATE:
                         self.state_updated(readable)
-                        print(self.state)
                     case _:
                         print(f'Unknown output packet: {output_packet} ({packet_id})')
             except SerialException as e:
@@ -128,7 +148,6 @@ class StateFramework:
             command_name = read_string(readable)
             registered_command = RegisteredCommand(command_id, command_name, CommandInputType(command_input))
             self.commands.append(registered_command)
-            print(registered_command)
 
     def _handle_segment_variable_definitions(self, readable: Readable):
         num_vars, offset_size = struct.unpack('<2B', readable.read(2))

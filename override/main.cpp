@@ -16,6 +16,8 @@ int main()
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
 
+  pin_init();
+
   core1::launch_core1();
 
   uint8_t core_data;
@@ -32,26 +34,22 @@ int main()
 
   while (true)
   {
-    auto s = bmp280->change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
-                         BMP280::FilterCoefficientSetting::FilterOff, BMP280::OssSettingPressure::PressureOss2,
-                         BMP280::OssSettingTemperature::TemperatureOss1);
-
+    bmp280->read_calibration_data();
     override_state_manager->check_for_commands();
-    const bool mpus = mpu6050->get_data(state.accel_x, state.accel_y, state.accel_z, state.gyro_x, state.gyro_y, state.gyro_z);
-    const bool bmps = bmp280->read_press_temp_alt(state.pressure, state.temperature, state.altitude);
+    mpu6050->get_data(state.accel_x, state.accel_y, state.accel_z, state.gyro_x, state.gyro_y,
+                      state.gyro_z);
+    bmp280->read_press_temp_alt(state.pressure, state.temperature, state.altitude);
 
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage);
 
-    OverrideStateManager::log_message(std::format("[{}] p: {} t: {} alt: {} a: {} {} {}", s,state.pressure, state.temperature, state.altitude, state.accel_x, state.accel_y, state.accel_z));
     override_state_manager->state_changed(state);
 
-    gpio_put(LED_3_PIN, true);
-    override_state_manager->lock_logger();
-    override_state_manager->get_logger()->write_full_buff();
-    override_state_manager->release_logger();
     gpio_put(LED_3_PIN, false);
+    override_state_manager->lock_logger();
+    gpio_put(LED_3_PIN, override_state_manager->get_logger()->write_full_buff());
+    override_state_manager->release_logger();
 
-    sleep_ms(100);
+    sleep_ms(50);
   }
 }

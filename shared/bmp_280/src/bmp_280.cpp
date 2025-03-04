@@ -1,14 +1,11 @@
 #include "bmp_280.h"
 
-#include <format>
-#include <ranges>
 #include <cmath>
-#include <hardware/flash.h>
+#include <format>
 #include <hardware/gpio.h>
 
 #include "elijah_state_framework.h"
 #include "i2c_util.h"
-#include "override_state_manager.h"
 
 BMP280::BMP280(i2c_inst_t* i2c, uint8_t addr) : is_i2c_interface(true), i2c_inst(i2c), i2c_addr(addr)
 {
@@ -88,7 +85,6 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   bool success = check_status(measuring, writing);
   if (!success)
   {
-    OverrideStateManager::log_message("Failed to check status");
     return false;
   }
 
@@ -116,8 +112,6 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   // Do not touch or try to simplify... otherwise you'll have weird overflow things
   // ReSharper disable All
   const int32_t pressure_adc = raw_data[0] << 12 | raw_data[1] << 4 | raw_data[2] >> 4;
-  OverrideStateManager::log_message(std::format("PRESSURE: {}", pressure_adc));
-
   const int32_t temperature_adc = raw_data[3] << 12 | raw_data[4] << 4 | raw_data[5] >> 4;
   double var1 = (((double)temperature_adc) / 16384.0 - ((double)calibration_data.dig_T1) / 1024.0) * ((double)
     calibration_data.dig_T2);
@@ -216,12 +210,15 @@ bool BMP280::write_bytes_to_device(uint8_t start_reg_addr, const uint8_t* data, 
   for (size_t idx = 0, i = 0; i < len; idx += 2, i++)
   {
     write_data[idx] = static_cast<uint8_t>(start_reg_addr + static_cast<uint8_t>(i));
-    write_data[idx] |= 0x7F;
+    write_data[idx] &= 0x7F;
     write_data[idx + 1] = data[i];
   }
 
   gpio_put(csn_pin, false);
+  busy_wait_us(1);
+
   spi_write_blocking(spi_inst, write_data, write_len);
+
   gpio_put(csn_pin, true);
   return true;
 }
@@ -236,8 +233,6 @@ void BMP280::read_spi_bytes(const uint8_t start_reg_addr, uint8_t* data, const s
   const auto read_addr = static_cast<uint8_t>(start_reg_addr | 0x80);
   spi_write_blocking(spi_inst, &read_addr, 1);
   spi_read_blocking(spi_inst, 0x00, data, len);
-  OverrideStateManager::log_message(std::format("read = 0x{:02X}", read_addr));
 
-  busy_wait_us(1);
   gpio_put(csn_pin, true);
 }
