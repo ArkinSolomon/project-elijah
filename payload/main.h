@@ -19,6 +19,6 @@
 inline uint aprs_sm;
 inline PIO aprs_pio;
 
-void pin_init();
+void pin_init_OLD();
 void flight_loop(CollectionData& collection_data, absolute_time_t last_loop_start_time );
 void landed_loop(CollectionData& collection_data, absolute_time_t last_loop_start_time );

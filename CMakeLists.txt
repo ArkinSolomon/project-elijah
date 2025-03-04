@@ -80,17 +80,13 @@ function(create_elijah_target SRC_DIR_NAME)
         target_compile_definitions(${EXEC_NAME} PRIVATE W25Q64FV_FLASH_SIM)
     endif (FLASH_SIM_ENABLE)
 
-    if(SAVE_TEMPS)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -save-temps")
-    endif(SAVE_TEMPS)
-
     target_compile_definitions(${EXEC_NAME}
             PUBLIC
             $<$<CONFIG:Debug>:DEBUG>
             $<$<CONFIG:Release>:RELEASE>
     )
 
-    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=1024 SYS_CLK_KHZ=200000)
+    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=1024 SYS_CLK_KHZ=200000 PICO_STACK_SIZE=4096)
 
     target_link_libraries(${EXEC_NAME}
 #            aprs_pico
