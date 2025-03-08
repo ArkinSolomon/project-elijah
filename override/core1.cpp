@@ -4,7 +4,6 @@
 #include <pico/multicore.h>
 
 #include "override_state_manager.h"
-#include "pin_outs.h"
 #include "sensors.h"
 #include "state_framework_logger.h"
 

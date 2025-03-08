@@ -17,7 +17,7 @@ public:
 
   void log_data(const uint8_t* data, size_t len);
   void flush_log();
-  bool write_full_buff();
+  bool flush_write_buff();
 
 private:
   mutex_t log_buff_mtx;

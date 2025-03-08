@@ -10,6 +10,7 @@
 #include "override_state_manager.h"
 #include "pin_outs.h"
 #include "sensors.h"
+#include "../payload/status_manager.h"
 
 int main()
 {
@@ -18,20 +19,22 @@ int main()
 
   pin_init();
 
+  StateFrameworkLogger::init_driver_on_core();
+
   core1::launch_core1();
 
   uint8_t core_data;
   queue_remove_blocking(&core1::core1_ready_queue, &core_data);
   override_state_manager = new OverrideStateManager();
+
   core_data = 0xBB;
   queue_add_blocking(&core1::core0_ready_queue, &core_data);
-
-  StateFrameworkLogger::init_driver_on_core();
 
   sensors_init();
 
   OverrideState state{};
 
+  uint d = 0;
   while (true)
   {
     bmp280->read_calibration_data();
@@ -45,9 +48,22 @@ int main()
 
     override_state_manager->state_changed(state);
 
-    gpio_put(LED_3_PIN, false);
+    d++;
+    if (d % 100 == 0)
+    {
+      gpio_put(LED_3_PIN, true);
+      override_state_manager->set_fault(FaultKey::BMP280, true, std::format("Test!! {}", d));
+    }
+
+    gpio_put(LED_2_PIN, override_state_manager->is_faulted(FaultKey::BMP280));
+    override_state_manager->log_message(std::format("slp = {}, bytes= {}",
+                                                    override_state_manager->get_persistent_data_storage()->get_double(
+                                                    OverridePersistentStateKey::SeaLevelPressure), override_state_manager->get_persistent_data_storage()->get_total_byte_size()), LogLevel::Debug);
+
+    // gpio_put(LED_3_PIN, false);
     override_state_manager->lock_logger();
-    gpio_put(LED_3_PIN, override_state_manager->get_logger()->write_full_buff());
+    override_state_manager->get_logger()->flush_write_buff();
+    // gpio_put(LED_3_PIN, override_state_manager->get_logger()->write_full_buff());
     override_state_manager->release_logger();
 
     sleep_ms(50);

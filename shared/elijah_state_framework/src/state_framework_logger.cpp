@@ -43,13 +43,14 @@ void StateFrameworkLogger::flush_log()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
   mutex_enter_blocking(&log_buff_mtx);
-  write_full_buff();
+  flush_write_buff();
   move_to_write_buff();
+  flush_write_buff();
   mutex_exit(&log_buff_mtx);
   recursive_mutex_exit(&write_buff_rmtx);
 }
 
-bool StateFrameworkLogger::write_full_buff()
+bool StateFrameworkLogger::flush_write_buff()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
 

@@ -1,6 +1,9 @@
 #pragma once
 
+#include <hardware/gpio.h>
+
 #include "elijah_state_framework.h"
+#include "pin_outs.h"
 #include "sensors.h"
 
 struct OverrideState
@@ -25,10 +28,17 @@ enum class OverridePersistentStateKey : uint8_t
   GyroCalibZ = 8
 };
 
-class OverrideStateManager final : public ElijahStateFramework<OverrideState, OverridePersistentStateKey>
+enum class FaultKey : uint8_t
+{
+  BMP280 = 1,
+  MPU6050 = 2,
+  MicroSD = 3
+};
+
+class OverrideStateManager final : public ElijahStateFramework<OverrideState, OverridePersistentStateKey, FaultKey>
 {
 public:
-  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey)
+  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, 10)
   {
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
                                                 101325.0);
@@ -42,6 +52,10 @@ public:
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     get_persistent_data_storage()->finish_registration();
+
+    register_fault(FaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
+    register_fault(FaultKey::MPU6050, "MPU 6050", CommunicationChannel::SPI_0);
+    register_fault(FaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
 
     register_command("Calibrate", [this]
     {

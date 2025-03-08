@@ -5,22 +5,31 @@ from typing import Any
 from serial.serialutil import SerialException
 
 from framework.data_type import DataType, get_data_type_size, get_data_type_struct_str
+from framework.fault_definition import FaultDefinition
+from framework.persistent_data_entry import PersistentDataEntry
 from framework.readable.readable import Readable
 from framework.registered_command import RegisteredCommand, CommandInputType
 from framework.variable_definition import VariableDefinition
 from serial_helper import read_string, read_fixed_string
 
+
 class OutputPacket(Enum):
     LOG_MESSAGE = 1
     STATE_UPDATE = 2
     PERSISTENT_STATE_UPDATE = 3
+    METADATA = 4,
+    DEVICE_RESTART_MARKER = 5,
+    FAULTS_CHANGED = 6
+
 
 class MetadataSegment(Enum):
     APPLICATION_NAME = 1
     COMMANDS = 2
     VARIABLE_DEFINITIONS = 3
     PERSISTENT_STORAGE_ENTRIES = 4
+    FAULT_INFORMATION = 5
     METADATA_END = 255
+
 
 class LogLevel(Enum):
     DEBUG = 1
@@ -34,6 +43,8 @@ class StateFramework:
     application_name: str
 
     commands: list[RegisteredCommand] = []
+    persistent_entries: list[PersistentDataEntry] = []
+    fault_definitions: list[FaultDefinition] = []
 
     total_data_len = 0
     variable_definitions: list[VariableDefinition] = []
@@ -77,7 +88,9 @@ class StateFramework:
                 case MetadataSegment.VARIABLE_DEFINITIONS:
                     state_framework._handle_segment_variable_definitions(readable)
                 case MetadataSegment.PERSISTENT_STORAGE_ENTRIES:
-                    continue
+                    state_framework._handle_segment_persistent_storage(readable)
+                case MetadataSegment.FAULT_INFORMATION:
+                    state_framework._handle_segment_fault_information(readable)
                 case MetadataSegment.METADATA_END:
                     return state_framework
                 case _:
@@ -121,8 +134,14 @@ class StateFramework:
                         self.log(log_level, log_message)
                     case OutputPacket.STATE_UPDATE:
                         self.state_updated(readable)
+                    case OutputPacket.PERSISTENT_STATE_UPDATE:
+                        self._update_persistent_data(readable)
+                    case OutputPacket.DEVICE_RESTART_MARKER:
+                        print('Device restarted!!')
+                    case OutputPacket.FAULTS_CHANGED:
+                        self._update_faults(readable)
                     case _:
-                        print(f'Unknown output packet: {output_packet} ({packet_id})')
+                        print(f'Unknown output packet: {output_packet} ({hex(packet_id)})')
             except SerialException as e:
                 raise e
             except Exception as e:
@@ -171,3 +190,49 @@ class StateFramework:
 
             # TODO defaults for different types
             self.state[var_id] = 0
+
+    def _handle_segment_persistent_storage(self, readable: Readable):
+        str_entries: list[PersistentDataEntry] = []
+        non_str_entries: list[PersistentDataEntry] = []
+
+        entry_count, offset_size = struct.unpack('<2B', readable.read(2))
+        for _ in range(entry_count):
+            new_entry = PersistentDataEntry.read_entry(readable, offset_size)
+            if new_entry.data_type == DataType.STRING:
+                str_entries.append(new_entry)
+            else:
+                non_str_entries.append(new_entry)
+
+        str_entries.sort(key=lambda pde: pde.offset)
+        non_str_entries.sort(key=lambda pde: pde.offset)
+        self.persistent_data_entries = non_str_entries + str_entries
+
+        self._update_persistent_data(readable)
+
+    def _handle_segment_fault_information(self, readable: Readable):
+        def_count, all_faults = struct.unpack('<BI', readable.read(5))
+        for _ in range(def_count):
+            self.fault_definitions.append(FaultDefinition.read_definition(readable, all_faults))
+
+    def _update_persistent_data(self, readable: Readable):
+        tag, = struct.unpack('<I', readable.read(4))
+        for entry in self.persistent_data_entries:
+            if entry.data_type == DataType.STRING:
+                entry.current_value = read_string(readable)
+            else:
+                data = readable.read(get_data_type_size(entry.data_type))
+                entry.current_value, = struct.unpack(get_data_type_struct_str(entry.data_type), data)
+
+        for entry in self.persistent_data_entries:
+            print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
+
+
+    def _update_faults(self, readable: Readable):
+        changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))
+        change_message = read_string(readable)
+
+        for fault in self.fault_definitions:
+            fault.is_faulted = ((all_faults >> fault.fault_bit) & 0x01) > 0
+            if fault.fault_bit == changed_fault_bit:
+                print(
+                    f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')

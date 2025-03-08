@@ -37,8 +37,9 @@
     if (active_data_loc == flash_data_loc) \
     { \
       active_data_loc = malloc(get_total_byte_size()); \
+      memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
     } \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
+    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
     *data_start = value; \
     shared_mutex_exit_exclusive(&persistent_storage_smtx); \
     restore_interrupts_from_disabled(saved_ints); \
@@ -47,11 +48,11 @@
 #define CREATE_GETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   TYPE_NAME get_##HUMAN_NAME(PersistentKeyType key) \
   { \
+    assert(data_entries.contains(key)); \
     shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
     const uint32_t saved_ints = save_and_disable_interrupts(); \
-    assert(data_entries.contains(key)); \
     const PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + entry->get_offset()); \
+    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
     const TYPE_NAME value = *data_start; \
     shared_mutex_exit_shared(&persistent_storage_smtx); \
     restore_interrupts_from_disabled(saved_ints); \
@@ -109,7 +110,7 @@ public:
 
   void finish_registration();
   [[nodiscard]] std::unique_ptr<uint8_t[]> encode_all_entries(size_t& encoded_size) const;
-  [[nodiscard]] size_t get_tag() const;
+  [[nodiscard]] uint32_t get_tag() const;
   [[nodiscard ]] size_t get_entry_count() const;
 
   void lock_active_data();
@@ -148,6 +149,8 @@ template <EnumType PersistentKeyType>
 PersistentDataStorage<PersistentKeyType>::PersistentDataStorage()
 {
   shared_mutex_init(&persistent_storage_smtx);
+
+  active_data_loc = const_cast<void*>(flash_data_loc);
 }
 
 template <EnumType PersistentKeyType>
@@ -217,6 +220,7 @@ void PersistentDataStorage<PersistentKeyType>::set_string(PersistentKeyType key,
   string_size -= old_str_bytes;
   string_size += value.length() + 1;
 
+  // this probably could've been a realloc but whatever
   void* new_data_loc = malloc(get_total_byte_size());
 
   if (prev_data_size > 0)
@@ -333,7 +337,7 @@ std::unique_ptr<uint8_t[]> PersistentDataStorage<PersistentKeyType>::encode_all_
 }
 
 template <EnumType PersistentKeyType>
-size_t PersistentDataStorage<PersistentKeyType>::get_tag() const
+uint32_t PersistentDataStorage<PersistentKeyType>::get_tag() const
 {
   return tag;
 }

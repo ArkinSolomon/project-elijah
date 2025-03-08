@@ -60,6 +60,7 @@ class Device:
         except Exception as e:
             print(e)
             self.disconnect()
+            raise e
 
     def update(self):
         if not self.is_connected or not self.uses_state_framework:
