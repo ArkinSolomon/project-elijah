@@ -45,7 +45,7 @@ namespace data_type_helpers
     case DataType::Double:
       return sizeof(double);
     case DataType::Time:
-      return sizeof(tm);
+      return 8;
     case DataType::String:
     default:
       return 0;

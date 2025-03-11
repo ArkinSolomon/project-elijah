@@ -3,8 +3,10 @@
 #include <hardware/gpio.h>
 
 #include "elijah_state_framework.h"
-#include "pin_outs.h"
+#include "override_flight_phase_controller.h"
 #include "sensors.h"
+
+enum class StandardFlightPhase : uint8_t;
 
 struct OverrideState
 {
@@ -35,7 +37,7 @@ enum class FaultKey : uint8_t
   MicroSD = 3
 };
 
-class OverrideStateManager final : public ElijahStateFramework<OverrideState, OverridePersistentStateKey, FaultKey>
+class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<OverrideState, OverridePersistentStateKey, FaultKey, StandardFlightPhase, OverrideFlightPhaseController>
 {
 public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, 10)

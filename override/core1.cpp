@@ -22,7 +22,7 @@ void core1::core1_main()
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
 
-  StateFrameworkLogger::init_driver_on_core();
+  elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
 
   uint8_t core_ready = 0xAA;
   queue_add_blocking(&core1_ready_queue, &core_ready);

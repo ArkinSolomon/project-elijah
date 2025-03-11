@@ -7,7 +7,7 @@ option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_LED_ENABLE "Enable onboard status LED" OFF)
 option(FLASH_SIM_ENABLE "Use flash simulator on microSd" OFF)
 
-set(PICO_EXTRAS_FETCH_FROM_GIT ON)
+#set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 
 find_program(PICOTOOL_INSTALL_LOC "picotool")
 if (NOT PICOTOOL_INSTALL_LOC)
@@ -17,7 +17,7 @@ else()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
-include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
+#include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
 
 project(project-elijah C CXX ASM)
 
@@ -37,6 +37,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/elijah_state_framework)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/bmp_280)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/mpu_6050)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/battery)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/standard_flight_phase_controller)
 
 function(create_elijah_target SRC_DIR_NAME)
     SET(EXEC_NAME elijah-${SRC_DIR_NAME})
@@ -95,7 +96,7 @@ function(create_elijah_target SRC_DIR_NAME)
             hardware_pio
             hardware_adc
             hardware_pwm
-            pico_audio_pwm
+#            pico_audio_pwm
             pico_multicore
             pico_rand
             pico_mem_ops_default
@@ -108,6 +109,7 @@ function(create_elijah_target SRC_DIR_NAME)
             bmp_280
             mpu_6050
             battery
+            standard_flight_phase_controller
     )
 
     pico_add_extra_outputs(${EXEC_NAME})

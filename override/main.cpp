@@ -19,7 +19,7 @@ int main()
 
   pin_init();
 
-  StateFrameworkLogger::init_driver_on_core();
+  elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
 
   core1::launch_core1();
 
@@ -34,7 +34,7 @@ int main()
 
   OverrideState state{};
 
-  uint d = 0;
+  uint d = 3;
   while (true)
   {
     bmp280->read_calibration_data();
@@ -49,16 +49,13 @@ int main()
     override_state_manager->state_changed(state);
 
     d++;
-    if (d % 100 == 0)
+    if (d % 1000 == 0)
     {
       gpio_put(LED_3_PIN, true);
       override_state_manager->set_fault(FaultKey::BMP280, true, std::format("Test!! {}", d));
     }
 
     gpio_put(LED_2_PIN, override_state_manager->is_faulted(FaultKey::BMP280));
-    override_state_manager->log_message(std::format("slp = {}, bytes= {}",
-                                                    override_state_manager->get_persistent_data_storage()->get_double(
-                                                    OverridePersistentStateKey::SeaLevelPressure), override_state_manager->get_persistent_data_storage()->get_total_byte_size()), LogLevel::Debug);
 
     // gpio_put(LED_3_PIN, false);
     override_state_manager->lock_logger();

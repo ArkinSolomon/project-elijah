@@ -3,27 +3,24 @@
 #include <utility>
 #include <sd_card.h>
 
-#include "override_state_manager.h"
-
-class OverrideStateManager;
-
-StateFrameworkLogger::StateFrameworkLogger(std::string file_name) : file_name(std::move(file_name))
+elijah_state_framework::StateFrameworkLogger::StateFrameworkLogger(std::string file_name) : file_name(
+  std::move(file_name))
 {
   mutex_init(&log_buff_mtx);
   recursive_mutex_init(&write_buff_rmtx);
 }
 
-bool StateFrameworkLogger::init_driver_on_core()
+bool elijah_state_framework::StateFrameworkLogger::init_driver_on_core()
 {
   return sd_init_driver();
 }
 
-bool StateFrameworkLogger::is_new_file()
+bool elijah_state_framework::StateFrameworkLogger::is_new_file()
 {
   return !was_file_created;
 }
 
-void StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
+void elijah_state_framework::StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
 {
   assert(len <= LOG_BUFF_SIZE);
 
@@ -39,7 +36,7 @@ void StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
   mutex_exit(&log_buff_mtx);
 }
 
-void StateFrameworkLogger::flush_log()
+void elijah_state_framework::StateFrameworkLogger::flush_log()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
   mutex_enter_blocking(&log_buff_mtx);
@@ -50,7 +47,7 @@ void StateFrameworkLogger::flush_log()
   recursive_mutex_exit(&write_buff_rmtx);
 }
 
-bool StateFrameworkLogger::flush_write_buff()
+bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
 
@@ -66,7 +63,6 @@ bool StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK)
   {
     recursive_mutex_exit(&write_buff_rmtx);
-    OverrideStateManager::log_serial_only("failed to mount");
     return false;
   }
 
@@ -74,7 +70,6 @@ bool StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK)
   {
     f_unmount("");
-    OverrideStateManager::log_serial_only("failed to open");
     recursive_mutex_exit(&write_buff_rmtx);
     return false;
   }
@@ -83,15 +78,12 @@ bool StateFrameworkLogger::flush_write_buff()
   if (f_size(&fil) == 0)
   {
     constexpr decltype(next_log_pos) log_pos = 0;
-    OverrideStateManager::log_serial_only("gonna write log pos");
     fr = f_write(&fil, &log_pos, sizeof(next_log_pos), &bytes_written);
   }
   else
   {
     fr = f_lseek(&fil, next_log_pos);
   }
-
-  OverrideStateManager::log_serial_only("failed to seek?");
 
   if (fr != FR_OK)
   {
@@ -137,7 +129,7 @@ bool StateFrameworkLogger::flush_write_buff()
   return true;
 }
 
-void StateFrameworkLogger::move_to_write_buff()
+void elijah_state_framework::StateFrameworkLogger::move_to_write_buff()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
   write_buff = std::move(log_buff);
@@ -148,7 +140,7 @@ void StateFrameworkLogger::move_to_write_buff()
   log_size = 0;
 }
 
-void StateFrameworkLogger::load_old_data()
+void elijah_state_framework::StateFrameworkLogger::load_old_data()
 {
   FATFS fs;
   FIL fil;

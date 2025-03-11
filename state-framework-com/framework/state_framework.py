@@ -20,6 +20,7 @@ class OutputPacket(Enum):
     METADATA = 4,
     DEVICE_RESTART_MARKER = 5,
     FAULTS_CHANGED = 6
+    PHASE_CHANGED = 7
 
 
 class MetadataSegment(Enum):
@@ -28,6 +29,7 @@ class MetadataSegment(Enum):
     VARIABLE_DEFINITIONS = 3
     PERSISTENT_STORAGE_ENTRIES = 4
     FAULT_INFORMATION = 5
+    INITIAL_PHASE = 6
     METADATA_END = 255
 
 
@@ -45,6 +47,9 @@ class StateFramework:
     commands: list[RegisteredCommand] = []
     persistent_entries: list[PersistentDataEntry] = []
     fault_definitions: list[FaultDefinition] = []
+
+    current_phase_id: int = -1
+    current_phase: str
 
     total_data_len = 0
     variable_definitions: list[VariableDefinition] = []
@@ -91,6 +96,8 @@ class StateFramework:
                     state_framework._handle_segment_persistent_storage(readable)
                 case MetadataSegment.FAULT_INFORMATION:
                     state_framework._handle_segment_fault_information(readable)
+                case MetadataSegment.INITIAL_PHASE:
+                    state_framework._update_phase(readable)
                 case MetadataSegment.METADATA_END:
                     return state_framework
                 case _:
@@ -140,6 +147,8 @@ class StateFramework:
                         print('Device restarted!!')
                     case OutputPacket.FAULTS_CHANGED:
                         self._update_faults(readable)
+                    case OutputPacket.PHASE_CHANGED:
+                        self._update_phase(readable)
                     case _:
                         print(f'Unknown output packet: {output_packet} ({hex(packet_id)})')
             except SerialException as e:
@@ -236,3 +245,9 @@ class StateFramework:
             if fault.fault_bit == changed_fault_bit:
                 print(
                     f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')
+
+    def _update_phase(self, readable: Readable):
+        old_phase_id = self.current_phase_id
+        self.current_phase_id, = struct.unpack('<B', readable.read(1))
+        self.current_phase = read_string(readable)
+        print(f'Phase{'' if old_phase_id < 0 else ' changed'}: {self.current_phase} ({self.current_phase_id})')
