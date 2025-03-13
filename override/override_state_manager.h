@@ -27,7 +27,10 @@ enum class OverridePersistentStateKey : uint8_t
   AccelCalibZ = 5,
   GyroCalibX = 6,
   GyroCalibY = 7,
-  GyroCalibZ = 8
+  GyroCalibZ = 8,
+  GroundPressure = 9,
+  GroundTemperature = 10,
+  GroundAltitude = 11
 };
 
 enum class FaultKey : uint8_t
@@ -37,7 +40,8 @@ enum class FaultKey : uint8_t
   MicroSD = 3
 };
 
-class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<OverrideState, OverridePersistentStateKey, FaultKey, StandardFlightPhase, OverrideFlightPhaseController>
+class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<
+    OverrideState, OverridePersistentStateKey, FaultKey, StandardFlightPhase, OverrideFlightPhaseController>
 {
 public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, 10)
@@ -53,6 +57,11 @@ public:
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
+    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground altitude",
+                                                static_cast<int32_t>(0));
+    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
+                                                0.0);
+    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_data_storage()->finish_registration();
 
     register_fault(FaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
@@ -62,14 +71,17 @@ public:
     register_command("Calibrate", [this]
     {
       mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
-#define MPU_OVERRIDE_PERSISTENT_STATE_SAVE(KEY, PROP) get_persistent_data_storage()->set_double(OverridePersistentStateKey::KEY, mpu6050->get_calibration_data().PROP)
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(AccelCalibX, diff_xa);
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(AccelCalibY, diff_ya);
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(AccelCalibZ, diff_za);
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(GyroCalibX, diff_yg);
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(GyroCalibY, diff_yg);
-      MPU_OVERRIDE_PERSISTENT_STATE_SAVE(GyroCalibZ, diff_zg);
-#undef MPU_OVERRIDE_PERSISTENT_STATE_SAVE
+
+      const double sea_level_pressure = get_persistent_data_storage()->get_double(
+        OverridePersistentStateKey::SeaLevelPressure);
+      int32_t pressure;
+      double temperature, altitude;
+      bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
+
+      get_persistent_data_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
+      get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
+      get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundAltitude, altitude);
+
       get_persistent_data_storage()->commit_data();
     });
 

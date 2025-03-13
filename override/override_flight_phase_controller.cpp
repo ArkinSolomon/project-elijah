@@ -2,7 +2,7 @@
 
 #include "override_state_manager.h"
 
-void OverrideFlightPhaseController::extract_state_data(OverrideState state, double& accel_x, double& accel_y, double& accel_z,
+void OverrideFlightPhaseController::extract_state_data(const OverrideState state, double& accel_x, double& accel_y, double& accel_z,
                                                        double& altitude) const
 {
   accel_x = state.accel_x;

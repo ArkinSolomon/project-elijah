@@ -58,6 +58,7 @@ public:
 
   bool calibrate(uint calibration_cycles, double expected_xa, double expected_ya, double expected_za, double expected_xg, double
                  expected_yg, double expected_zg);
+  void load_calibration_data(double diff_xa, double diff_ya, double diff_za, double diff_xg, double diff_yg, double diff_zg);
   [[nodiscard]] const CalibrationData& get_calibration_data() const;
 
   bool get_raw_data(int16_t& raw_xa, int16_t& raw_ya, int16_t& raw_za, int16_t& raw_xg, int16_t& raw_yg,

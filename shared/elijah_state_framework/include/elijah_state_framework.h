@@ -64,25 +64,23 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
     } \
   }
 
-#define FRAMEWORK_TEMPLATE \
+#define FRAMEWORK_TEMPLATE_DECL \
 template <typename TStateData, \
   elijah_state_framework::internal::EnumType EPersistentStorageKey, \
   elijah_state_framework::internal::EnumType EFaultKey, \
   elijah_state_framework::internal::EnumType EFlightPhase, \
   std::derived_from<elijah_state_framework::FlightPhaseController<TStateData, EFlightPhase>> TFlightPhaseController \
 >
-#define FRAMEWORK_CLASS_NAME \
-elijah_state_framework::ElijahStateFramework< \
+#define FRAMEWORK_TEMPLATE_TYPES \
   TStateData, \
   EPersistentStorageKey, \
   EFaultKey, \
   EFlightPhase, \
-  TFlightPhaseController\
->
+  TFlightPhaseController
 
 namespace elijah_state_framework
 {
-  FRAMEWORK_TEMPLATE
+  FRAMEWORK_TEMPLATE_DECL
   class ElijahStateFramework
   {
   public:
@@ -93,9 +91,7 @@ namespace elijah_state_framework
 
     [[nodiscard]] const std::string& get_application_name() const;
 
-    [[nodiscard]] StateFrameworkLogger* get_logger() const;
-    void lock_logger();
-    void release_logger();
+    void check_for_log_write();
 
     void log_message(const std::string& message,
                      LogLevel log_level = LogLevel::Default) const;
@@ -105,17 +101,18 @@ namespace elijah_state_framework
     void lock_state_history();
     void release_state_history();
     [[nodiscard]] const std::deque<TStateData>& get_state_history() const;
+    [[nodiscard]] EFlightPhase get_current_flight_phase();
 
     void set_fault(EFaultKey fault_key, bool fault_state);
     void set_fault(EFaultKey fault_key, bool fault_state, const std::string& message);
     [[nodiscard]] bool is_faulted(EFaultKey fault_key);
 
   protected:
-    void register_command(const std::string& command, std::function<void(double)>&& callback);
-    void register_command(const std::string& command, std::function<void()>&& callback);
+    void register_command(const std::string& command, std::function<void()> callback);
+    void register_command(const std::string& command, std::function<void(double)> callback);
     void register_command(const std::string& command, bool is_alphanumeric,
-                          std::function<void(std::string)>&& callback);
-    void register_command(const std::string& command, std::function<void(tm)>&& callback);
+                          std::function<void(std::string)> callback);
+    void register_command(const std::string& command, std::function<void(tm)> callback);
 
     void register_data_variable(const std::string& display_name, const std::string& display_unit, size_t offset,
                                 DataType data_type);
@@ -166,6 +163,7 @@ namespace elijah_state_framework
 
     TFlightPhaseController* flight_phase_controller;
     EFlightPhase current_phase;
+    mutex_t current_phase_mtx;
 
     void register_command(const std::string& command, CommandInputType command_input, command_callback_t callback);
 
@@ -174,8 +172,8 @@ namespace elijah_state_framework
   };
 }
 
-FRAMEWORK_TEMPLATE
-FRAMEWORK_CLASS_NAME::ElijahStateFramework(
+FRAMEWORK_TEMPLATE_DECL
+elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahStateFramework(
   std::string application_name, EPersistentStorageKey launch_key, const size_t state_history_size) :
   application_name(std::move(application_name)), launch_key(launch_key), state_history_size(state_history_size)
 {
@@ -186,6 +184,7 @@ FRAMEWORK_CLASS_NAME::ElijahStateFramework(
 
   flight_phase_controller = new TFlightPhaseController();
   current_phase = flight_phase_controller->initial_flight_phase();
+  mutex_init(&current_phase_mtx);
 
   persistent_data_storage->on_commit([this](const void* data, const size_t data_len)
   {
@@ -209,6 +208,7 @@ FRAMEWORK_CLASS_NAME::ElijahStateFramework(
 
   register_command("Reset persistent storage", [this]
   {
+    // TODO: this doesn't work
     persistent_data_storage->load_default_data();
   });
 
@@ -216,8 +216,8 @@ FRAMEWORK_CLASS_NAME::ElijahStateFramework(
   persistent_data_storage->register_key(launch_key, "_launch_key", rand_launch_name);
 }
 
-FRAMEWORK_TEMPLATE
-FRAMEWORK_CLASS_NAME::~ElijahStateFramework()
+FRAMEWORK_TEMPLATE_DECL
+elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::~ElijahStateFramework()
 {
   delete persistent_data_storage;
 
@@ -230,15 +230,16 @@ FRAMEWORK_CLASS_NAME::~ElijahStateFramework()
   delete flight_phase_controller;
 }
 
-FRAMEWORK_TEMPLATE
-elijah_state_framework::PersistentDataStorage<EPersistentStorageKey>* FRAMEWORK_CLASS_NAME::
+FRAMEWORK_TEMPLATE_DECL
+elijah_state_framework::PersistentDataStorage<EPersistentStorageKey>* elijah_state_framework::ElijahStateFramework<
+  FRAMEWORK_TEMPLATE_TYPES>::
 get_persistent_data_storage() const
 {
   return persistent_data_storage;
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::check_for_commands()
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_commands()
 {
   if (!stdio_usb_connected())
   {
@@ -334,8 +335,8 @@ void FRAMEWORK_CLASS_NAME::check_for_commands()
              }, command->get_callback());
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::state_changed(const TStateData& new_state)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::state_changed(const TStateData& new_state)
 {
   const size_t total_encoded_packet_size = encoded_state_size + 1;
   uint8_t encoded_output_packet[total_encoded_packet_size] = {
@@ -353,13 +354,16 @@ void FRAMEWORK_CLASS_NAME::state_changed(const TStateData& new_state)
 
   shared_mutex_enter_blocking_shared(&state_history_smtx);
   EFlightPhase new_phase = flight_phase_controller->update_phase(current_phase, state_history);
+  shared_mutex_exit_shared(&state_history_smtx);
 
   bool phase_changed = false;
   size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* new state */;
   uint8_t* phase_change_packet = nullptr;
   if (new_phase != current_phase)
   {
+    mutex_enter_blocking(&current_phase_mtx);
     current_phase = new_phase;
+    mutex_exit(&current_phase_mtx);
     phase_changed = true;
 
     const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
@@ -370,7 +374,6 @@ void FRAMEWORK_CLASS_NAME::state_changed(const TStateData& new_state)
     phase_change_packet[1] = static_cast<uint8_t>(current_phase);
     memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
   }
-  shared_mutex_exit_shared(&state_history_smtx);
 
   if (stdio_usb_connected())
   {
@@ -383,46 +386,56 @@ void FRAMEWORK_CLASS_NAME::state_changed(const TStateData& new_state)
     critical_section_exit(&internal::usb_cs);
   }
 
-  lock_logger();
+  shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger)
   {
     logger->log_data(encoded_output_packet, total_encoded_packet_size);
     logger->log_data(phase_change_packet, phase_change_packet_size);
   }
-  release_logger();
+  shared_mutex_exit_shared(&logger_smtx);
 
   delete [] phase_change_packet;
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::lock_state_history()
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::lock_state_history()
 {
   shared_mutex_enter_blocking_shared(&state_history_smtx);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::release_state_history()
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::release_state_history()
 {
   shared_mutex_exit_shared(&state_history_smtx);
 }
 
-FRAMEWORK_TEMPLATE
-const std::deque<TStateData>& FRAMEWORK_CLASS_NAME::
+FRAMEWORK_TEMPLATE_DECL
+const std::deque<TStateData>& elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::
 get_state_history() const
 {
   return state_history;
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::set_fault(
+FRAMEWORK_TEMPLATE_DECL
+EFlightPhase elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_current_flight_phase()
+{
+  mutex_enter_blocking(&current_phase_mtx);
+  EFlightPhase p = current_phase;
+  mutex_exit(&current_phase_mtx);
+  return p;
+}
+
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_fault(
   EFaultKey fault_key,
   const bool fault_state)
 {
   set_fault(fault_key, fault_state, "");
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::set_fault(EFaultKey fault_key, bool fault_state, const std::string& message)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_fault(
+  EFaultKey fault_key, bool fault_state, const std::string& message)
 {
   uint8_t fault_bit;
   bool did_fault_change;
@@ -446,12 +459,12 @@ void FRAMEWORK_CLASS_NAME::set_fault(EFaultKey fault_key, bool fault_state, cons
   internal::write_to_serial(encoded_data, encoded_size);
   critical_section_exit(&internal::usb_cs);
 
-  lock_logger();
+  shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger)
   {
     logger->log_data(encoded_data, encoded_size);
   }
-  release_logger();
+  shared_mutex_exit_shared(&logger_smtx);
 
   if (faults > 0)
   {
@@ -459,15 +472,15 @@ void FRAMEWORK_CLASS_NAME::set_fault(EFaultKey fault_key, bool fault_state, cons
   }
 }
 
-FRAMEWORK_TEMPLATE
-bool FRAMEWORK_CLASS_NAME::is_faulted(
+FRAMEWORK_TEMPLATE_DECL
+bool elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::is_faulted(
   EFaultKey fault_key)
 {
   return fault_manager->is_faulted(fault_key);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::encode_state(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::encode_state(
   void* encode_dest,
   const TStateData& state)
 {
@@ -475,7 +488,7 @@ void FRAMEWORK_CLASS_NAME::encode_state(
   state_seq++;
 }
 
-FRAMEWORK_TEMPLATE
+FRAMEWORK_TEMPLATE_DECL
 const std::string& elijah_state_framework::ElijahStateFramework<TStateData, EPersistentStorageKey, EFaultKey,
                                                                 EFlightPhase,
                                                                 TFlightPhaseController>::get_application_name() const
@@ -483,8 +496,8 @@ const std::string& elijah_state_framework::ElijahStateFramework<TStateData, EPer
   return application_name;
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::log_message(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::log_message(
   const std::string& message,
   const LogLevel log_level) const
 {
@@ -505,60 +518,47 @@ void FRAMEWORK_CLASS_NAME::log_message(
   }
 }
 
-FRAMEWORK_TEMPLATE
-elijah_state_framework::StateFrameworkLogger* FRAMEWORK_CLASS_NAME::get_logger() const
-{
-  return logger;
-}
-
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::lock_logger()
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_log_write()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
+  logger->flush_write_buff();
+  shared_mutex_exit_shared(&logger_smtx);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::release_logger()
-{
-  shared_mutex_enter_blocking_shared(&logger_smtx);
-}
-
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_command(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
   const std::string& command,
-  std::function<void()>&& callback)
+  std::function<void()> callback)
 {
-  register_command(command, CommandInputType::None, callback);
+  register_command(command, CommandInputType::None, std::move(callback));
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_command(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
   const std::string& command,
-  std::function<void(double)>&& callback)
+  std::function<void(double)> callback)
 {
-  register_command(command, CommandInputType::Double, callback);
+  register_command(command, CommandInputType::Double, std::move(callback));
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_command(
-  const std::string& command,
-  const bool is_alphanumeric,
-  std::function<void(std::string)>&&
-  callback)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
+  const std::string& command, const bool is_alphanumeric, std::function<void(std::string)> callback)
 {
-  register_command(command, is_alphanumeric ? CommandInputType::AlphaNumeric : CommandInputType::String, callback);
+  register_command(command, is_alphanumeric ? CommandInputType::AlphaNumeric : CommandInputType::String,
+                   std::move(callback));
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_command(
-  const std::string& command,
-  std::function<void(tm)>&& callback)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
+  const std::string& command, std::function<void(tm)> callback)
 {
-  register_command(command, CommandInputType::Time, callback);
+  register_command(command, CommandInputType::Time, std::move(callback));
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_data_variable(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_data_variable(
   const std::string& display_name, const std::string& display_unit, const size_t offset, const DataType data_type)
 {
   const uint8_t variable_id = variable_id_counter;
@@ -568,8 +568,8 @@ void FRAMEWORK_CLASS_NAME::register_data_variable(
                                                          display_unit, offset, data_type);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_fault(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_fault(
   EFaultKey key,
   std::string fault_name,
   CommunicationChannel communication_channel)
@@ -577,16 +577,16 @@ void FRAMEWORK_CLASS_NAME::register_fault(
   fault_manager->register_fault(key, fault_name, communication_channel);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::set_encoded_state_size(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_encoded_state_size(
   const size_t encoded_data_size)
 {
   is_size_calculated = true;
   encoded_state_size = encoded_data_size;
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::finish_construction()
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::finish_construction()
 {
   logger = new StateFrameworkLogger(persistent_data_storage->get_string(launch_key));
 
@@ -609,18 +609,16 @@ void FRAMEWORK_CLASS_NAME::finish_construction()
   persistent_data_storage->release_active_data();
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::register_command(
-  const std::string& command,
-  const CommandInputType command_input,
-  command_callback_t callback)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
+  const std::string& command, const CommandInputType command_input, command_callback_t callback)
 {
   const uint8_t new_id = command_id_counter++;
   registered_commands[new_id] = RegisteredCommand(new_id, command, command_input, std::move(callback));
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::send_framework_metadata(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::send_framework_metadata(
   const bool write_to_file)
 {
   if (!write_to_file && !stdio_usb_connected())
@@ -631,7 +629,7 @@ void FRAMEWORK_CLASS_NAME::send_framework_metadata(
   critical_section_enter_blocking(&internal::usb_cs);
   if (write_to_file && logger)
   {
-    lock_logger();
+    shared_mutex_enter_blocking_shared(&logger_smtx);
     const auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
     logger->log_data(&packet_id, sizeof(packet_id));
   }
@@ -760,18 +758,18 @@ void FRAMEWORK_CLASS_NAME::send_framework_metadata(
   if (write_to_file && logger)
   {
     logger->log_data(&segment_id, 1);
-    release_logger();
+    shared_mutex_exit_shared(&logger_smtx);
   }
 
   critical_section_exit(&internal::usb_cs);
 }
 
-FRAMEWORK_TEMPLATE
-void FRAMEWORK_CLASS_NAME::send_persistent_state(
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::send_persistent_state(
   const void* data, const size_t data_len)
 {
   critical_section_enter_blocking(&internal::usb_cs);
-  const auto packet_id = static_cast<uint8_t>(internal::OutputPacket::PersistentStateUpdate);
+  constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::PersistentStateUpdate);
 
   // Data length will be parsed by pre-existing persistent data segments
   internal::write_to_serial(&packet_id, 1, false);
@@ -781,10 +779,10 @@ void FRAMEWORK_CLASS_NAME::send_persistent_state(
 
   if (logger)
   {
-    lock_logger();
+    shared_mutex_enter_blocking_shared(&logger_smtx);
     logger->log_data(&packet_id, 1);
     logger->log_data(static_cast<const uint8_t*>(data), data_len);
     logger->flush_log();
-    release_logger();
+    shared_mutex_exit_shared(&logger_smtx);
   }
 }

@@ -8,6 +8,7 @@
 #include <pico/flash.h>
 #include <hardware/regs/addressmap.h>
 #include <cmath>
+#include <hardware/gpio.h>
 
 #include "shared_mutex.h"
 #include "data_type.h"
@@ -15,7 +16,7 @@
 #include "persistent_data_entry.h"
 #include "usb_comm.h"
 
-#define PERSISTENT_DATA_START_SECTOR_NUM 511
+#define PERSISTENT_DATA_START_SECTOR_NUM 505
 
 #define CREATE_REGISTRATION_FOR_TYPE(TYPE_NAME, DATA_TYPE) \
   void register_key(PersistentKeyType key, const std::string& display_name, const TYPE_NAME default_value) \
@@ -109,12 +110,13 @@ namespace elijah_state_framework
     CREATE_GETTER_FOR_TYPE(uint64_t, uint64)
     CREATE_GETTER_FOR_TYPE(float, float)
     CREATE_GETTER_FOR_TYPE(double, double)
+
     tm get_time(PersistentKeyType key);
 
     void finish_registration();
     [[nodiscard]] std::unique_ptr<uint8_t[]> encode_all_entries(size_t& encoded_size) const;
     [[nodiscard]] uint32_t get_tag() const;
-    [[nodiscard ]] size_t get_entry_count() const;
+    [[nodiscard]] size_t get_entry_count() const;
 
     void lock_active_data();
     void release_active_data();
@@ -272,7 +274,8 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::register_
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
-void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_time(PersistentKeyType key, const tm& time_inst)
+void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_time(
+  PersistentKeyType key, const tm& time_inst)
 {
   shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
   const uint32_t saved_ints = save_and_disable_interrupts();
@@ -510,7 +513,7 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::load_defa
       break;
     case DataType::Time:
       {
-        tm decoded_time_inst = decode_time(entry->get_default_value_ptr());
+        tm decoded_time_inst = internal::decode_time(static_cast<uint8_t*>(entry->get_default_value_ptr()));
         set_time(entry->get_key(), decoded_time_inst);
         break;
       }

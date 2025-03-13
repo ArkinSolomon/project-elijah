@@ -5,6 +5,10 @@
 #define LED_2_PIN 2
 #define LED_3_PIN 3
 #define ONBOARD_LED_PIN 25
+#define SPEAKER_GND_PIN 26
+#define SPEAKER_PIN 27
+
+#define PTT_DISABLE 6
 
 #define I2C0_SDA_PIN 4
 #define I2C0_SCL_PIN 5

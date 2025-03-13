@@ -63,7 +63,6 @@ public:
     int16_t dig_T2 = -1, dig_T3 = -1;
     uint16_t dig_P1 = 0;
     int16_t dig_P2 = -1, dig_P3 = -1, dig_P4 = -1, dig_P5 = -1, dig_P6 = -1, dig_P7 = -1, dig_P8 = -1, dig_P9 = -1;
-    double baro_pressure = 101325; // Pascals
   };
 
   BMP280(i2c_inst_t* i2c, uint8_t addr);
@@ -79,8 +78,7 @@ public:
                        OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss);
 
   bool read_calibration_data();
-  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude) const;
-  // void data_collection_loop(CollectionData& collection_data);
+  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude, double sea_level_pressure) const;
 
 private:
   // 2-byte registers

@@ -11,7 +11,11 @@ if (NOT TARGET i2c_util)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../i2c_util i2c_util-build)
 endif ()
 
-target_link_libraries(${PROJECT_NAME} INTERFACE pico_stdlib i2c_util)
+if (NOT TARGET elijah_state_framework)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../elijah_state_framework elijah_state_framework-build)
+endif ()
+
+target_link_libraries(${PROJECT_NAME} INTERFACE pico_stdlib i2c_util elijah_state_framework)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}.h)
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})

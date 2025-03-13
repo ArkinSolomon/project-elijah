@@ -2,6 +2,7 @@
 
 #include <hardware/watchdog.h>
 #include <cmath>
+#include <hardware/gpio.h>
 
 #include "i2c_util.h"
 
@@ -161,6 +162,18 @@ bool MPU6050::calibrate(const uint calibration_cycles, const double expected_xa,
   }
 
   return true;
+}
+
+void MPU6050::load_calibration_data(const double diff_xa, const double diff_ya, const double diff_za, const double diff_xg, const double diff_yg,
+  const double diff_zg)
+{
+  calibration_data.diff_xa = diff_xa;
+  calibration_data.diff_ya = diff_ya;
+  calibration_data.diff_za = diff_za;
+
+  calibration_data.diff_xg = diff_xg;
+  calibration_data.diff_yg = diff_yg;
+  calibration_data.diff_zg = diff_zg;
 }
 
 const MPU6050::CalibrationData& MPU6050::get_calibration_data() const

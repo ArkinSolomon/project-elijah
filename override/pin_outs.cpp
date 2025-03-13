@@ -13,6 +13,16 @@ void pin_init()
   gpio_init(ONBOARD_LED_PIN);
   gpio_set_dir(ONBOARD_LED_PIN, GPIO_OUT);
 
+  gpio_init(SPEAKER_GND_PIN);
+  gpio_set_dir(SPEAKER_GND_PIN, GPIO_OUT);
+  gpio_put(SPEAKER_GND_PIN, false);
+
+  gpio_init(SPEAKER_PIN);
+  gpio_set_dir(SPEAKER_PIN, GPIO_OUT);
+
+  gpio_init(PTT_DISABLE);
+  gpio_set_dir(PTT_DISABLE, GPIO_OUT);
+
   gpio_init(BMP_CS_PIN);
   gpio_set_dir(BMP_CS_PIN, GPIO_OUT);
 

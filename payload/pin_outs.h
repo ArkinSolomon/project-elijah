@@ -30,14 +30,6 @@
 
 #define BAT_VOLTAGE_PIN 28 // Pin 34
 
-#if BAT_VOLTAGE_PIN == 26
-#define BAT_ADC_INPUT 0
-#elif BAT_VOLTAGE_PIN == 27
-#define BAT_ADC_INPUT 1
-#elif BAT_VOLTAGE_PIN == 28
-#define BAT_ADC_INPUT 2
-#endif
-
 #define RADIO_CLK_PIN 2
 #define RADIO_SEL_PIN 3
 #define RADIO_PTT_PIN 6

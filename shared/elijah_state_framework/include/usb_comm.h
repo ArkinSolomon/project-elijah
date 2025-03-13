@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include <memory>
 #include <pico/critical_section.h>
@@ -18,11 +19,11 @@ namespace elijah_state_framework
     void write_to_serial(const uint8_t* write_data, size_t write_len);
     void write_to_serial(const uint8_t* packet_data, size_t packet_len, bool flush);
 
-    static std::unique_ptr<uint8_t[]> encode_log_message(const std::string& message,
+    std::unique_ptr<uint8_t[]> encode_log_message(const std::string& message,
                                                          LogLevel log_level,
                                                          size_t& encoded_len);
 
-    static void encode_time(uint8_t* dest, const tm& time_inst);
-    static tm decode_time(const uint8_t* encoded_time_inst);
+    void encode_time(uint8_t* dest, const tm& time_inst);
+    tm decode_time(const uint8_t* encoded_time_inst);
   }
 }

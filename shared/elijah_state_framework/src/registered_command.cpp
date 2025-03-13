@@ -35,7 +35,7 @@ CommandInputType RegisteredCommand::get_input_type() const
   return command_input;
 }
 
-command_callback_t RegisteredCommand::get_callback() const
+const command_callback_t& RegisteredCommand::get_callback() const
 {
   return callback;
 }

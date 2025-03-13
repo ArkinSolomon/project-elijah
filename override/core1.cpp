@@ -28,13 +28,26 @@ void core1::core1_main()
   queue_add_blocking(&core1_ready_queue, &core_ready);
   queue_remove_blocking(&core0_ready_queue, &core_ready);
 
+  bool is_first_detection = false;
+  absolute_time_t land_time = 0;
   while (true)
   {
-    // gpio_put(LED_3_PIN, true);
-    // override_state_manager->lock_logger();
-    // override_state_manager->get_logger()->write_full_buff();
-    // override_state_manager->release_logger();
-    // gpio_put(LED_3_PIN, false);
+    if (override_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED)
+    {
+      if (!is_first_detection)
+      {
+        land_time = get_absolute_time();
+        is_first_detection = true;
+      }
+      else
+      {
+        if (delayed_by_ms(land_time, 5 * 60 * 1000) < get_absolute_time())
+        {
+          gpio_put(PTT_DISABLE, true);
+          override_state_manager->log_message("DISABLING PTT");
+        }
+      }
+    }
 
     sleep_ms(50);
   }
