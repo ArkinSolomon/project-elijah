@@ -1,8 +1,5 @@
 #pragma once
 
-#include "hardware/pio.h"
-#include "hardware/spi.h"
-
 #define I2C_BUS0 i2c0
 #define I2C_BUS1 i2c1
 
@@ -30,6 +27,8 @@
 
 #define BAT_VOLTAGE_PIN 28 // Pin 34
 
-#define RADIO_CLK_PIN 2
-#define RADIO_SEL_PIN 3
-#define RADIO_PTT_PIN 6
+#define RADIO_PIN2 2
+#define RADIO_PTT_PIN 3
+#define RADIO_GND_PIN 6
+
+void pin_init();

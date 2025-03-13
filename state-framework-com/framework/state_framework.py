@@ -13,6 +13,8 @@ from framework.variable_definition import VariableDefinition
 from serial_helper import read_string, read_fixed_string
 
 
+from datetime import datetime
+
 class OutputPacket(Enum):
     LOG_MESSAGE = 1
     STATE_UPDATE = 2

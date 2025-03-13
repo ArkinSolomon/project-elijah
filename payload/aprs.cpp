@@ -2,7 +2,9 @@
 
 #include <cmath>
 #include <cstring>
+#include <hardware/gpio.h>
 #include <hardware/pwm.h>
+#include <hardware/structs/io_bank0.h>
 #include <pico/time.h>
 
 #include "pin_outs.h"

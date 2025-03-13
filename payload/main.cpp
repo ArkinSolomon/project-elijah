@@ -1,74 +1,59 @@
-#include "main.h"
 
 #include <format>
 #include <sd_card.h>
 
-#include <hardware/adc.h>
-#include <hardware/clocks.h>
-#include <hardware/i2c.h>
-#include <hardware/pwm.h>
-#include <hardware/watchdog.h>
-#include <pico/aon_timer.h>
 #include <pico/flash.h>
 #include <pico/multicore.h>
 #include <pico/time.h>
+#include <pico/util/queue.h>
 
 #include "aprs.h"
-#include "bmp_280.h"
-#include "mpu_6050.h"
-#include "byte_util.h"
-#include "core_1.h"
+#include "core1.h"
 #include "pin_outs.h"
 #include "payload_state_manager.h"
 #include "elijah_state_framework.h"
-#include "status_manager.h"
-#include "sensors/battery/battery.h"
 #include "sensors/onboard_clock/onboard_clock.h"
-#include "i2c_util.h"
 
 #define APRS_FLAG 0x7E
 
 int main()
 {
-  // pin_init();
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
 
-  gpio_init(CORE_0_LED_PIN);
-  gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);
-  gpio_init(CORE_1_LED_PIN);
-  gpio_set_dir(CORE_1_LED_PIN, GPIO_OUT);
-  gpio_init(STATUS_LED_PIN);
-  gpio_set_dir(STATUS_LED_PIN, GPIO_OUT);
+  pin_init();
 
-  PayloadStateManager::log_message("Initializing...");
+  elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
 
-  // i2c_util::i2c_bus_init(i2c0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
-  // i2c_util::i2c_bus_init(i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
+  core1::launch_core1();
 
-  CollectionData data{};
+  uint8_t core_data;
+  queue_remove_blocking(&core1::core1_ready_queue, &core_data);
+  payload_state_manager = new PayloadStateManager();
 
-  // BMP280 bmp280(i2c0, BMP_280_ADDR);
-  // MPU6050 mpu6050(i2c1, 0x68, MPU6050::GyroFullScaleRange::Range250, MPU6050::AccelFullScaleRange::Range4g);
-  // bmp280.read_calibration_data();
-  // bmp280.change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
-  //                        BMP280::FilterCoefficientSetting::Filter4x, BMP280::OssSettingPressure::PressureOss2,
-  //                        BMP280::OssSettingTemperature::TemperatureOss2);
-  //
-  // bmp280.get_calibration_data();
-  // mpu6050.get_calibration_data();
-  //
-  // mpu6050.calibrate(50);
-  // mpu6050.check_chip_id();
+  core_data = 0xBB;
+  queue_add_blocking(&core1::core0_ready_queue, &core_data);
+
+  sensors_init();
+
+  PayloadState state{};
 
   while (true)
   {
-    payload_state_manager.check_for_commands();
-    // bmp280.read_press_temp_alt(data.pressure, data.temperature, data.altitude);
-    // mpu6050.get_data(data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z);
-    // payload_state_manager.data_collected(data);
-    PayloadStateManager::log_message(std::format("Pressure: {} Temperature: {:.03f} Alt: {:.03f}, xa = {}, ya ={}, za = {}, xg ={}, yg = {}, zg = {}", data.pressure, data.temperature, data.altitude, data.accel_x, data.accel_y, data.accel_z, data.gyro_x, data.gyro_y, data.gyro_z));
-    // sleep_ms(10);
+    payload_state_manager->check_for_commands();
+
+    bmp280->update(state);
+    mpu6050->update(state);
+    onboard_clock::clock_loop(state);
+
+    state.bat_voltage = battery->get_voltage();
+    state.bat_percent = battery->calc_charge_percent(state.bat_voltage);
+
+    payload_state_manager->state_changed(state);
+
+    payload_state_manager->check_for_log_write();
+
+    sleep_ms(50);
   }
 
   // status_manager::status_manager_init();
@@ -159,49 +144,4 @@ int main()
   // }
   //
   // watchdog_disable();
-}
-
-void pin_init_OLD()
-{
-  i2c_util::i2c_bus_init(I2C_BUS0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
-  i2c_util::i2c_bus_init(I2C_BUS1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
-
-  gpio_init(CORE_0_LED_PIN);
-  gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);
-  gpio_init(CORE_1_LED_PIN);
-  gpio_set_dir(CORE_1_LED_PIN, GPIO_OUT);
-
-  // See sd_hw_config.c for microSD card SPI setup
-
-  // SPI at 33MHz for W25Q64FV
-  gpio_set_function(SPI1_SCK_PIN, GPIO_FUNC_SPI);
-  gpio_set_function(SPI1_TX_PIN, GPIO_FUNC_SPI);
-  gpio_set_function(SPI1_RX_PIN, GPIO_FUNC_SPI);
-
-  gpio_init(SPI1_CSN_PIN);
-  gpio_set_dir(SPI1_CSN_PIN, GPIO_OUT);
-  gpio_put(SPI1_CSN_PIN, true);
-
-  spi_set_slave(spi1, false);
-  spi_init(spi1, 33 * 1000 * 1000);
-
-  // Battery ADC
-  adc_init();
-  adc_gpio_init(BAT_VOLTAGE_PIN);
-  adc_select_input(BAT_ADC_INPUT);
-
-  aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_SEL_PIN, PWM_CHAN_B);
-  // gpio_init(RADIO_SEL_PIN);
-  // gpio_set_dir(RADIO_SEL_PIN, GPIO_OUT);
-}
-
-void flight_loop(CollectionData& collection_data, absolute_time_t last_loop_start_time)
-{
-  onboard_clock::clock_loop(collection_data);
-  // mpu_6050::data_loop(collection_data);
-  battery::collect_bat_information(collection_data);
-
-  // const absolute_time_t time_since_last_collection = absolute_time_diff_us(last_loop_start_time, get_absolute_time());
-  // payload_data_manager::DataInstance data_inst(collection_data, time_since_last_collection);
-  payload_state_manager.state_changed(collection_data);
 }

@@ -6,6 +6,7 @@ from serial.serialutil import SerialException
 
 from framework.readable.readable import Readable
 from framework.readable.readable_serial import ReadableSerial
+from framework.registered_command import CommandInputType
 from framework.state_framework import StateFramework
 
 FRAMEWORK_TAG = 0xBC7AA65201C73901
@@ -56,7 +57,7 @@ class Device:
                 self.state_framework = StateFramework.generate_framework_configuration(self.tty)
                 self.uses_state_framework = True
                 print(f'Parsed framework configuration for {self.state_framework.application_name}')
-
+                
         except Exception as e:
             print(e)
             self.disconnect()

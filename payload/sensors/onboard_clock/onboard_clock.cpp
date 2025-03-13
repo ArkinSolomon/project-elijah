@@ -4,10 +4,9 @@
 #include <pico/aon_timer.h>
 
 #include "payload_state_manager.h"
-#include "status_manager.h"
 #include "sensors/ds_1307/ds_1307.h"
 
-void onboard_clock::clock_loop(CollectionData& collection_data)
+void onboard_clock::clock_loop(PayloadState& collection_data)
 {
   static uint8_t loops_since_ds_1307_check = 0;
 
@@ -17,18 +16,16 @@ void onboard_clock::clock_loop(CollectionData& collection_data)
     {
       if (aon_timer_start_calendar(&collection_data.time_inst))
       {
-        set_fault(status_manager::ONBOARD_CLOCK, false);
+        payload_state_manager->set_fault(FaultKey::OnboardClock, false);
       }
       else
       {
-        PayloadStateManager::log_message("Fault: onboard clock not running");
-        set_fault(status_manager::ONBOARD_CLOCK, true);
+        payload_state_manager->set_fault(FaultKey::OnboardClock, false, "Onboard clock not running");
       }
     }
     else
     {
-      PayloadStateManager::log_message("Fault: onboard clock requires DS 1307 to be set in order to initialize");
-      set_fault(status_manager::ONBOARD_CLOCK, true);
+      payload_state_manager->set_fault(FaultKey::OnboardClock, true, "Clock requires DS 1307 to init");
     }
     return;
   }
@@ -41,8 +38,7 @@ void onboard_clock::clock_loop(CollectionData& collection_data)
 
   if (!got_time)
   {
-    PayloadStateManager::log_message("Fault: Failed to get time from onboard clock");
-    set_fault(status_manager::ONBOARD_CLOCK, true);
+    payload_state_manager->set_fault(FaultKey::OnboardClock, true, "Failed to get time from onboard clock");
     return;
   }
 
@@ -58,5 +54,5 @@ void onboard_clock::clock_loop(CollectionData& collection_data)
     loops_since_ds_1307_check++;
   }
 
-  set_fault(status_manager::ONBOARD_CLOCK, false);
+  payload_state_manager->set_fault(FaultKey::OnboardClock, false);
 }

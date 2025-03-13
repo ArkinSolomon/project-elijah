@@ -2,7 +2,6 @@
 
 #include "i2c_util.h"
 #include <hardware/adc.h>
-#include <hardware/spi.h>
 
 void pin_init()
 {

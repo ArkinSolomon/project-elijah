@@ -5,7 +5,7 @@
 
 #define DS_1307_ADDR 0b1101000
 
-struct CollectionData;
+struct PayloadState;
 
 namespace ds_1307
 {
@@ -29,7 +29,7 @@ namespace ds_1307
   bool set_clock(const tm& time_inst);
   bool functional_check(const tm& reset_inst);
 
-  void handle_time_set_packet(const uint8_t* packet_data);
+  void init_clock_with_inst(const tm& time_inst);
   bool read_clock(tm &time_inst);
   bool check_and_read_clock(tm& time_inst);
 

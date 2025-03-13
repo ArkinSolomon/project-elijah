@@ -4,7 +4,7 @@
 #include <vector>
 #include <pico/types.h>
 
-struct CollectionData;
+struct PayloadState;
 
 class Battery
 {

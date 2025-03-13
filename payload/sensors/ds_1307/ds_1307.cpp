@@ -9,7 +9,6 @@
 #include "hardware/i2c.h"
 #include "elijah_state_framework.h"
 #include "payload_state_manager.h"
-#include "status_manager.h"
 
 /**
  * Check if the clock is detected,
@@ -65,8 +64,7 @@ bool ds_1307::functional_check(const tm& reset_inst)
   bool clock_set = false;
   if (!check_clock(clock_set))
   {
-    set_fault(status_manager::DEVICE_DS_1307, true);
-    PayloadStateManager::log_message("Fault: DS 1307 not detected during functional check");
+    payload_state_manager->set_fault(FaultKey::DS1307, true, "Not detected during functional check");
     return false;
   }
 
@@ -75,15 +73,15 @@ bool ds_1307::functional_check(const tm& reset_inst)
   {
     if (set_clock(reset_inst))
     {
-      set_fault(status_manager::DEVICE_DS_1307, false);
+      payload_state_manager->set_fault(FaultKey::DS1307, false);
       return true;
     }
 
-    set_fault(status_manager::DEVICE_DS_1307, true);
-    PayloadStateManager::log_message("Fault: DS 1307 was detected, but unable to set during functional reset");
+    payload_state_manager->set_fault(FaultKey::DS1307, true, "Detected, but unable to set during functional reset");
+    return false;
   }
 
-  set_fault(status_manager::DEVICE_DS_1307, false);
+  payload_state_manager->set_fault(FaultKey::DS1307, false);
   return true;
 }
 
@@ -118,20 +116,8 @@ bool ds_1307::read_clock(tm& time_inst)
   return true;
 }
 
-void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
+void ds_1307::init_clock_with_inst(const tm& time_inst)
 {
-  const uint8_t seconds = packet_data[0]
-                , minutes = packet_data[1]
-                , hours = packet_data[2]
-                , day = packet_data[3]
-                , date = packet_data[4]
-                , month = packet_data[5];
-  const int year = packet_data[6] << 8 | packet_data[7];
-
-  const tm time_inst{
-    seconds, minutes, hours, date, month, year - 1900, day
-  };
-
   if (aon_timer_is_running())
   {
     aon_timer_set_time_calendar(&time_inst);
@@ -144,14 +130,11 @@ void ds_1307::handle_time_set_packet(const uint8_t* packet_data)
   const bool clock_did_set = set_clock(time_inst);
   if (!clock_did_set)
   {
-    PayloadStateManager::log_message("Fault: DS 1307, failed to set clock");
-    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-    // send_packet(usb_communication::TIME_SET_FAIL);
+    payload_state_manager->set_fault(FaultKey::DS1307, true, "Failed to set clock");
   }
   else
   {
-    set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
-    // send_packet(usb_communication::TIME_SET_SUCCESS);
+    payload_state_manager->set_fault(FaultKey::DS1307, false);
   }
 }
 
@@ -196,13 +179,14 @@ void ds_1307::reg_dump()
                                               read_data);
     if (!success)
     {
-      PayloadStateManager::log_message(std::format("Reg dump failed reading 0x{:02x}", addr));
+      payload_state_manager->log_message(std::format("Reg dump failed reading 0x{:02x}", addr),
+                                         elijah_state_framework::LogLevel::Warning);
     }
 
     output += std::format(" 0x{:02x}", read_data);
   }
 
-  PayloadStateManager::log_message(output);
+  payload_state_manager->log_message(output);
 }
 
 /**
@@ -216,11 +200,11 @@ void ds_1307::erase_data()
   const bool success = bytes_written == 0x3F;
   if (!success)
   {
-    PayloadStateManager::log_message("DS 1307 failed to erase");
+    payload_state_manager->log_message("DS 1307 failed to erase");
     return;
   }
 
-  PayloadStateManager::log_message("DS 1307 erased");
+  payload_state_manager->log_message("DS 1307 erased");
 }
 
 bool ds_1307::check_and_read_clock(tm& time_inst)
@@ -229,26 +213,24 @@ bool ds_1307::check_and_read_clock(tm& time_inst)
   bool clock_detected = check_clock(clock_set);;
   if (!clock_detected)
   {
-    PayloadStateManager::log_message("Fault: DS 1307, device not detected (no acknowledgement)");
-    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
+    payload_state_manager->set_fault(FaultKey::DS1307, true, "device not detected (no acknowledgement)");
     return false;
   }
 
   if (!clock_set)
   {
-    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-    PayloadStateManager::log_message("Fault: DS 1307, clock not set");
+    payload_state_manager->set_fault(FaultKey::DS1307, true, "Clock not set");
     return false;
   }
 
   clock_detected = read_clock(time_inst);
   if (!clock_detected)
   {
-    set_fault(status_manager::fault_id::DEVICE_DS_1307, true);
-    PayloadStateManager::log_message("Fault: DS 1307, clock not detected (acknowledged but failed to read time)");
+    payload_state_manager->set_fault(FaultKey::DS1307, true,
+                                     "Clock not detected (acknowledged but failed to read time)");
     return false;
   }
 
-  set_fault(status_manager::fault_id::DEVICE_DS_1307, false);
+  payload_state_manager->set_fault(FaultKey::DS1307, false);
   return true;
 }
