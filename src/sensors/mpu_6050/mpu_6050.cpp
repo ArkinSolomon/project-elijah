@@ -201,7 +201,7 @@ void mpu_6050::calibrate()
     return;
   }
 
-  constexpr double expected_xa = 0, expected_ya = 0, expected_za = -GRAVITY_CONSTANT;
+  constexpr double expected_xa = 0, expected_ya = -GRAVITY_CONSTANT, expected_za = 0;
   constexpr double expected_xg = 0, expected_yg = 0, expected_zg = 0;
 
   double total_xa = 0, total_ya = 0, total_za = 0;
