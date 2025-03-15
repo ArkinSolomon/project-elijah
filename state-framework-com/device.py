@@ -1,16 +1,17 @@
 import struct
+import time
 from typing import List
 
 import serial
 from serial.serialutil import SerialException
 
-from framework.readable.readable import Readable
+from framework.data_type import DataType
 from framework.readable.readable_serial import ReadableSerial
-from framework.registered_command import CommandInputType
 from framework.state_framework import StateFramework
 
 FRAMEWORK_TAG = 0xBC7AA65201C73901
 MAX_PACKETS_PER_UPDATE = 1024
+
 
 class Device:
     last_known_port: str
@@ -57,7 +58,7 @@ class Device:
                 self.state_framework = StateFramework.generate_framework_configuration(self.tty)
                 self.uses_state_framework = True
                 print(f'Parsed framework configuration for {self.state_framework.application_name}')
-                
+
         except Exception as e:
             print(e)
             self.disconnect()
@@ -74,8 +75,17 @@ class Device:
                 for var_def in self.state_framework.variable_definitions:
                     if var_def.is_hidden:
                         continue
-
-                    print(f'{var_def.display_name} = {self.state_framework.state[var_def.variable_id]} {var_def.display_unit}', end=', ')
+                    elif var_def.data_type == DataType.TIME:
+                        if self.state_framework.state[var_def.variable_id] is not None:
+                            time_str = time.strftime('%Y-%m-%d %H:%M:%S', self.state_framework.state[var_def.variable_id])
+                            print(
+                                f'{var_def.display_name} = {time_str}', end=', ')
+                        else:
+                            print(f'{var_def.display_name} = Unknown', end = ', ')
+                    else:
+                        print(
+                            f'{var_def.display_name} = {self.state_framework.state[var_def.variable_id]} {var_def.display_unit}',
+                            end=', ')
                 print('')
         except SerialException as e:
             print(e)

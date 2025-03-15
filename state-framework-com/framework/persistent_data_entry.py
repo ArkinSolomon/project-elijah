@@ -3,7 +3,7 @@ from typing import Any
 
 from framework.data_type import DataType
 from framework.readable.readable import Readable
-from serial_helper import read_string
+from framework.serial_helper import read_string
 
 
 class PersistentDataEntry:

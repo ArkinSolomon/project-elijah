@@ -29,7 +29,7 @@ def get_data_type_size(data_type: DataType) -> int:
         case DataType.INT64 | DataType.UINT64 | DataType.DOUBLE:
             return 8
         case DataType.TIME:
-            return 36
+            return 8
 
 
 def get_data_type_struct_str(data_type: DataType) -> str:

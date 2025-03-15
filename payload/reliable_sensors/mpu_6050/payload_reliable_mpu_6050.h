@@ -7,10 +7,10 @@
 enum class PayloadPersistentDataKey : uint8_t;
 struct PayloadState;
 class PayloadStateManager;
-enum class OverrideFaultKey : uint8_t;
+enum class PayloadFaultKey : uint8_t;
 
 class PayloadReliableMPU6050 final : public ReliableMPU6050<
-    PayloadState, PayloadPersistentDataKey, OverrideFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
+    PayloadState, PayloadPersistentDataKey, PayloadFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
   explicit PayloadReliableMPU6050(PayloadStateManager* payload_state_manager);

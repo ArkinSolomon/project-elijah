@@ -16,16 +16,16 @@ void onboard_clock::clock_loop(PayloadState& collection_data)
     {
       if (aon_timer_start_calendar(&collection_data.time_inst))
       {
-        payload_state_manager->set_fault(FaultKey::OnboardClock, false);
+        payload_state_manager->set_fault(PayloadFaultKey::OnboardClock, false);
       }
       else
       {
-        payload_state_manager->set_fault(FaultKey::OnboardClock, false, "Onboard clock not running");
+        payload_state_manager->set_fault(PayloadFaultKey::OnboardClock, false, "Onboard clock not running");
       }
     }
     else
     {
-      payload_state_manager->set_fault(FaultKey::OnboardClock, true, "Clock requires DS 1307 to init");
+      payload_state_manager->set_fault(PayloadFaultKey::OnboardClock, true, "Clock requires DS 1307 to init");
     }
     return;
   }
@@ -38,7 +38,7 @@ void onboard_clock::clock_loop(PayloadState& collection_data)
 
   if (!got_time)
   {
-    payload_state_manager->set_fault(FaultKey::OnboardClock, true, "Failed to get time from onboard clock");
+    payload_state_manager->set_fault(PayloadFaultKey::OnboardClock, true, "Failed to get time from onboard clock");
     return;
   }
 
@@ -54,5 +54,5 @@ void onboard_clock::clock_loop(PayloadState& collection_data)
     loops_since_ds_1307_check++;
   }
 
-  payload_state_manager->set_fault(FaultKey::OnboardClock, false);
+  payload_state_manager->set_fault(PayloadFaultKey::OnboardClock, false);
 }

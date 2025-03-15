@@ -1,7 +1,7 @@
 import struct
 from enum import Enum
 
-from serial_helper import read_string
+from framework.serial_helper import read_string
 from framework.readable.readable import Readable
 
 class CommunicationChannel(Enum):

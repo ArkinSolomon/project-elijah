@@ -1,5 +1,5 @@
 from framework.data_type import DataType
-
+from typing import Any
 
 class VariableDefinition:
     variable_id: int

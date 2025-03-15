@@ -2,18 +2,17 @@ import struct
 from enum import Enum
 from typing import Any
 
+from framework.serial_helper import read_string, read_fixed_string
 from serial.serialutil import SerialException
 
+import framework.time_helper as time_helper
 from framework.data_type import DataType, get_data_type_size, get_data_type_struct_str
 from framework.fault_definition import FaultDefinition
 from framework.persistent_data_entry import PersistentDataEntry
 from framework.readable.readable import Readable
 from framework.registered_command import RegisteredCommand, CommandInputType
 from framework.variable_definition import VariableDefinition
-from serial_helper import read_string, read_fixed_string
 
-
-from datetime import datetime
 
 class OutputPacket(Enum):
     LOG_MESSAGE = 1
@@ -163,10 +162,14 @@ class StateFramework:
     def state_updated(self, readable: Readable):
         data = readable.read(self.total_data_len)
         for var_def in self.variable_definitions:
-            var_size = get_data_type_size(var_def.data_type)
-            value = struct.unpack(get_data_type_struct_str(var_def.data_type),
-                                  data[var_def.data_offset:var_def.data_offset + var_size])[0]
-            self.state[var_def.variable_id] = value
+            if var_def.data_type != DataType.TIME:
+                var_size = get_data_type_size(var_def.data_type)
+                value = struct.unpack(get_data_type_struct_str(var_def.data_type),
+                                      data[var_def.data_offset:var_def.data_offset + var_size])[0]
+                self.state[var_def.variable_id] = value
+            else:
+                self.state[var_def.variable_id] = time_helper.decode_time(
+                    data[var_def.data_offset:var_def.data_offset + get_data_type_size(DataType.TIME)])
 
     def _handle_segment_application_name(self, readable: Readable):
         self.application_name = read_string(readable)
@@ -199,8 +202,10 @@ class StateFramework:
             self.total_data_len += get_data_type_size(data_type)
             self.variable_definitions.append(var_def)
 
-            # TODO defaults for different types
-            self.state[var_id] = 0
+            if data_type == DataType.TIME:
+                self.state[var_id] = None
+            else:
+                self.state[var_id] = 0
 
     def _handle_segment_persistent_storage(self, readable: Readable):
         str_entries: list[PersistentDataEntry] = []
@@ -236,7 +241,6 @@ class StateFramework:
 
         for entry in self.persistent_data_entries:
             print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
-
 
     def _update_faults(self, readable: Readable):
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))

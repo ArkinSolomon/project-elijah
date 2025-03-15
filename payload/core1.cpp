@@ -31,7 +31,7 @@ void core1::core1_main()
   {
     if (payload_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED)
     {
-      // TODO
+      // TODO: APRS
     }
 
     sleep_ms(50);

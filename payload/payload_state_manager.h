@@ -33,7 +33,7 @@ enum class PayloadPersistentDataKey : uint8_t
   GroundAltitude = 11
 };
 
-enum class OverrideFaultKey : uint8_t
+enum class PayloadFaultKey : uint8_t
 {
   BMP280 = 1,
   MPU6050 = 2,
@@ -43,10 +43,10 @@ enum class OverrideFaultKey : uint8_t
 };
 
 class PayloadStateManager final : public elijah_state_framework::ElijahStateFramework<
-    PayloadState, PayloadPersistentDataKey, OverrideFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
+    PayloadState, PayloadPersistentDataKey, PayloadFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
-  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, 10)
+  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD, 10)
   {
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
                                                 101325.0);
@@ -66,11 +66,11 @@ public:
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_data_storage()->finish_registration();
 
-    register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);
-    register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_1);
-    register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
-    register_fault(OverrideFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
-    register_fault(OverrideFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
+    register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);
+    register_fault(PayloadFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_1);
+    register_fault(PayloadFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
+    register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
+    register_fault(PayloadFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
     register_command("Calibrate", [this]
     {
@@ -99,9 +99,9 @@ public:
 
 protected:
   START_STATE_ENCODER(PayloadState)
-    ENCODE_STATE(time_inst, DataType::Time, "Time", "")
+    ENCODE_TIME_STATE(time_inst, "Time")
     ENCODE_STATE(pressure, DataType::Int32, "Pressure", "Pa")
-    ENCODE_STATE(temperature, DataType::Double, "Temperature", "°C")
+    ENCODE_STATE(temperature, DataType::Double, "Temperature", "degC")
     ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
     ENCODE_STATE(accel_x, DataType::Double, "Acceleration X", "m/s^2")
     ENCODE_STATE(accel_y, DataType::Double, "Acceleration Y", "m/s^2")
