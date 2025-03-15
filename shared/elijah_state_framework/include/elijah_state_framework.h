@@ -50,16 +50,23 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
   data_len += curr_data_size_len;
 #define ENCODE_STATE(MEMBER_NAME, DATA_TYPE, DISP_NAME, DISP_UNIT) \
   assert(!done_with_static); \
-  static_assert(!std::is_same<decltype(state.MEMBER_NAME), std::string>::value, "Property (" #MEMBER_NAME ") must be not be of type string"); \
+  static_assert(DataType::String != (DATA_TYPE) && !std::is_same<decltype(state.MEMBER_NAME), std::string>::value, "Property (" #MEMBER_NAME ") must be not be of type string"); \
+  static_assert(DataType::Time != (DATA_TYPE) && !std::is_same<decltype(state.MEMBER_NAME), tm>::value, "Property (" #MEMBER_NAME ") must not be a time type, use ENCODE_TIME_STATE(" #MEMBER_NAME ", " #DISP_NAME ") instead"); \
   curr_data_size_len = data_type_helpers::get_size_for_data_type(DATA_TYPE); \
   if (register_data) { \
     register_data_variable(DISP_NAME, DISP_UNIT, data_len, DATA_TYPE); \
   } else { \
-    if (DATA_TYPE == DataType::TIME) { \
-      internal::encode_time(static_cast<uint8_t*>(encode_dest) + data_len, state.MEMBER_NAME); \
-    } else { \
-      memcpy(static_cast<uint8_t*>(encode_dest) + data_len, &state.MEMBER_NAME, curr_data_size_len); \
-    } \
+    memcpy(static_cast<uint8_t*>(encode_dest) + data_len, &state.MEMBER_NAME, curr_data_size_len); \
+  } \
+  data_len += curr_data_size_len;
+#define ENCODE_TIME_STATE(MEMBER_NAME, DISP_NAME) \
+  assert(!done_with_static); \
+  static_assert(std::is_same<decltype(state.MEMBER_NAME), tm>::value, "Using ENCODE_TIME_STATE requires encoding a time variable"); \
+  curr_data_size_len = data_type_helpers::get_size_for_data_type(DataType::Time); \
+  if (register_data) { \
+    register_data_variable(DISP_NAME, "_time_unit", data_len, DataType::Time); \
+  } else { \
+    elijah_state_framework::internal::encode_time(static_cast<uint8_t*>(encode_dest) + data_len, state.MEMBER_NAME); \
   } \
   data_len += curr_data_size_len;
 #define END_STATE_ENCODER() \
@@ -84,6 +91,21 @@ template <typename TStateData, \
 
 namespace elijah_state_framework
 {
+  namespace internal::framework_encoders
+  {
+    template <typename T>
+    std::enable_if_t<!std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, std::tm>, void>
+    encode_value(uint8_t* dest, const T& value, const size_t size)
+    {
+      memcpy(dest, &value, size);
+    }
+
+    inline void encode_value(uint8_t* dest, const std::tm& value, size_t)
+    {
+      encode_time(dest, value);
+    }
+  }
+
   FRAMEWORK_TEMPLATE_DECL
   class ElijahStateFramework
   {

@@ -44,7 +44,8 @@ class OverrideStateManager final : public elijah_state_framework::ElijahStateFra
     OverrideState, OverridePersistentStateKey, OverrideFaultKey, StandardFlightPhase, OverrideFlightPhaseController>
 {
 public:
-  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, OverrideFaultKey::MicroSD, 10)
+  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
+                                                OverrideFaultKey::MicroSD, 10)
   {
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
                                                 101083.7);
@@ -90,7 +91,7 @@ public:
 
 protected:
   START_STATE_ENCODER(OverrideState)
-    ENCODE_STATE(pressure, DataType::UInt32, "Pressure", "Pa")
+    ENCODE_STATE(pressure, DataType::Int32, "Pressure", "Pa")
     ENCODE_STATE(temperature, DataType::Double, "Temperature", "degC")
     ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
     ENCODE_STATE(accel_x, DataType::Double, "Acceleration X", "m/s^2")

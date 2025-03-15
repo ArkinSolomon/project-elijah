@@ -4,7 +4,6 @@
 
 #include "core1.h"
 #include "override_state_manager.h"
-#include "pin_outs.h"
 #include "sensors.h"
 
 int main()
@@ -37,7 +36,7 @@ int main()
     mpu6050->update(state);
 
     state.bat_voltage = battery->get_voltage();
-    state.bat_percent = battery->calc_charge_percent(state.bat_voltage);
+    state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
 
     override_state_manager->state_changed(state);
     override_state_manager->check_for_log_write();

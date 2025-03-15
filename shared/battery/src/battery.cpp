@@ -1,9 +1,12 @@
 #include "battery.h"
 
 #include <cmath>
+#include <format>
 #include <vector>
 #include <bits/stl_algo.h>
 #include <hardware/adc.h>
+
+#include "usb_comm.h"
 
 Battery::Battery(uint8_t pin, uint sample_count, double bat_scale) : sample_count(sample_count), bat_scale(bat_scale)
 {
@@ -23,8 +26,6 @@ Battery::Battery(uint8_t pin, uint sample_count, double bat_scale) : sample_coun
   {
     assert(false);
   }
-
-  adc_read_results.reserve(sample_count);
 }
 
 double Battery::get_voltage()
@@ -36,7 +37,7 @@ double Battery::get_voltage()
 
   if (adc_read_results.size() == sample_count)
   {
-    adc_read_results.erase(adc_read_results.begin());
+    adc_read_results.pop_front();
   }
 
   const uint16_t result = adc_read();
@@ -54,4 +55,31 @@ double Battery::get_voltage()
   const double voltage_result = average_result / 16 * conversion_factor;
 
   return voltage_result * bat_scale; // we only read 32% of voltage
+}
+
+double Battery::voltage_map_interp(const double voltage, const std::map<double, double>& voltage_map)
+{
+  if (voltage <= voltage_map.begin()->first)
+  {
+    return 0;
+  }
+
+  if (voltage >= voltage_map.rbegin()->first)
+  {
+    return 1;
+  }
+
+  const auto upper = voltage_map.lower_bound(voltage);
+  if (upper->first == voltage || upper == voltage_map.begin())
+  {
+    return upper->second;
+  }
+
+  const auto lower = std::prev(upper);
+
+  const double v1 = lower->first, p1 = lower->second;
+  const double v2 = upper->first, p2 = upper->second;
+
+  const double percent = p1 + ((voltage - v1) / (v2 - v1)) * (p2 - p1);
+  return percent;
 }

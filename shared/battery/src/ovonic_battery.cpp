@@ -1,7 +1,10 @@
 #include "ovonic_battery.h"
 
-#include <complex>
-#include <bits/algorithmfwd.h>
+#include <cmath>
+#include <algorithm>
+#include <map>
+
+#include "usb_comm.h"
 
 
 OvonicBattery::OvonicBattery(const uint8_t pin, const uint sample_count) : Battery(pin, sample_count, 3.125)
@@ -10,7 +13,11 @@ OvonicBattery::OvonicBattery(const uint8_t pin, const uint sample_count) : Batte
 
 double OvonicBattery::calc_charge_percent(const double voltage) const
 {
-  const double percent = -0.8418 * std::pow(voltage, 5) + 31.963 * std::pow(voltage, 4) - 484.77
-    * std::pow(voltage, 3) + 3670.4 * std::pow(voltage, 2) * -13872 * voltage + 20932;
-  return std::clamp(percent, 0.0, 1.0);
+  static const std::map<double, double> voltage_map = {
+    {8.4, 0.1}, {8.1, 0.95}, {8.0, 0.89}, {7.9, 0.84}, {7.8, 0.78}, {7.7, 0.73}, {7.5, 0.68}, {7.4, 0.62}, {7.4, 0.57},
+    {7.3, 0.52}, {7.2, 0.46}, {7.2, 0.41}, {7.1, 0.35}, {7.1, 0.30}, {7.0, 0.25}, {7.0, 0.19}, {6.9, 0.14}, {6.8, 0.9},
+    {6.7, 0.3}, {6.7, 0.0}
+  };
+
+  return voltage_map_interp(voltage, voltage_map);
 }
