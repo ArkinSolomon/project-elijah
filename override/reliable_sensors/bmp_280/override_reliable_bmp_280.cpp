@@ -4,7 +4,7 @@
 #include "pin_outs.h"
 
 OverrideReliableBMP280::OverrideReliableBMP280(OverrideStateManager* override_state_manager): ReliableBMP280(
-  override_state_manager, FaultKey::BMP280, spi0, BMP_CS_PIN, OverridePersistentStateKey::SeaLevelPressure)
+  override_state_manager, OverrideFaultKey::BMP280, spi0, BMP_CS_PIN, OverridePersistentStateKey::SeaLevelPressure)
 {
 }
 

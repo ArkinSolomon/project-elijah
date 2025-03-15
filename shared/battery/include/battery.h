@@ -9,10 +9,11 @@ struct PayloadState;
 class Battery
 {
 public:
+  virtual ~Battery() = default;
   Battery(uint8_t pin, uint sample_count, double bat_scale);
 
   double get_voltage();
-  double calc_charge_percent(double voltage);
+  [[nodiscard]] virtual double calc_charge_percent(double voltage) const = 0;
 
 private:
   uint8_t adc_input;

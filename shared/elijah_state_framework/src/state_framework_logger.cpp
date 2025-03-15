@@ -3,11 +3,15 @@
 #include <utility>
 #include <sd_card.h>
 
+#include "usb_comm.h"
+
 elijah_state_framework::StateFrameworkLogger::StateFrameworkLogger(std::string file_name) : file_name(
   std::move(file_name))
 {
   mutex_init(&log_buff_mtx);
   recursive_mutex_init(&write_buff_rmtx);
+
+  load_old_data();
 }
 
 bool elijah_state_framework::StateFrameworkLogger::init_driver_on_core()
@@ -15,9 +19,9 @@ bool elijah_state_framework::StateFrameworkLogger::init_driver_on_core()
   return sd_init_driver();
 }
 
-bool elijah_state_framework::StateFrameworkLogger::is_new_file()
+bool elijah_state_framework::StateFrameworkLogger::is_new_file() const
 {
-  return !was_file_created;
+  return !was_file_existing;
 }
 
 void elijah_state_framework::StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
@@ -36,15 +40,17 @@ void elijah_state_framework::StateFrameworkLogger::log_data(const uint8_t* data,
   mutex_exit(&log_buff_mtx);
 }
 
-void elijah_state_framework::StateFrameworkLogger::flush_log()
+bool elijah_state_framework::StateFrameworkLogger::flush_log()
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
   mutex_enter_blocking(&log_buff_mtx);
-  flush_write_buff();
+  bool did_flush = flush_write_buff();
   move_to_write_buff();
-  flush_write_buff();
+  did_flush = did_flush && flush_write_buff();
   mutex_exit(&log_buff_mtx);
   recursive_mutex_exit(&write_buff_rmtx);
+
+  return did_flush;
 }
 
 bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
@@ -63,6 +69,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK)
   {
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Will not flush write buffer, failed to mount file system");
     return false;
   }
 
@@ -71,6 +78,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   {
     f_unmount("");
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Will not flush write buffer, failed to open file");
     return false;
   }
 
@@ -90,6 +98,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
     f_close(&fil);
     f_unmount("");
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Will not flush write buffer, failed to seek to or write next log position");
     return false;
   }
 
@@ -99,6 +108,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
     f_close(&fil);
     f_unmount("");
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Will not flush write buffer, failed to write data");
     return false;
   }
   next_log_pos += write_size;
@@ -109,6 +119,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
     f_close(&fil);
     f_unmount("");
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Failed to update log position, could not seek to beginning of file to write next log position");
     return false;
   }
 
@@ -119,6 +130,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK)
   {
     recursive_mutex_exit(&write_buff_rmtx);
+    log_serial_message("Failed to update log position, unable to write at beginning of file");
     return false;
   }
 
@@ -151,8 +163,8 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   }
 
   fr = f_stat(file_name.c_str(), nullptr);
-  was_file_created = fr == FR_NO_FILE;
-  if (was_file_created)
+  was_file_existing = fr != FR_NO_FILE;
+  if (was_file_existing)
   {
     return;
   }
@@ -175,6 +187,7 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   size_t bytes_read;
   decltype(next_log_pos) read_log_pos;
   fr = f_read(&fil, &read_log_pos, sizeof(next_log_pos), &bytes_read);
+
   f_close(&fil);
   f_unmount("");
 

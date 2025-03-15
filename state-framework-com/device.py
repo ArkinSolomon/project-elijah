@@ -71,7 +71,12 @@ class Device:
         try:
             packets = self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
             if packets > 0:
-                print(self.state_framework.state)
+                for var_def in self.state_framework.variable_definitions:
+                    if var_def.is_hidden:
+                        continue
+
+                    print(f'{var_def.display_name} = {self.state_framework.state[var_def.variable_id]} {var_def.display_unit}', end=', ')
+                print('')
         except SerialException as e:
             print(e)
             self.disconnect()

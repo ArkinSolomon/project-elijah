@@ -15,10 +15,10 @@ namespace elijah_state_framework
 
     static bool init_driver_on_core();
 
-    [[nodiscard]] bool is_new_file();
+    [[nodiscard]] bool is_new_file() const;
 
     void log_data(const uint8_t* data, size_t len);
-    void flush_log();
+    bool flush_log();
     bool flush_write_buff();
 
   private:
@@ -26,7 +26,7 @@ namespace elijah_state_framework
     recursive_mutex_t write_buff_rmtx;
 
     std::string file_name;
-    bool was_file_created = false;
+    bool was_file_existing = false;
     uint64_t next_log_pos = sizeof(uint64_t);
 
     std::unique_ptr<uint8_t[]> log_buff = std::unique_ptr<uint8_t[]>(new uint8_t[LOG_BUFF_SIZE]);

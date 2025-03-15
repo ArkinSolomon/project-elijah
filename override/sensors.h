@@ -1,6 +1,6 @@
 #pragma once
 
-#include "battery.h"
+#include "ovonic_battery.h"
 #include "reliable_sensors/bmp_280/override_reliable_bmp_280.h"
 #include "reliable_sensors/mpu_6050/override_reliable_mpu_6050.h"
 

@@ -7,11 +7,11 @@
 class PayloadStateManager;
 enum class PayloadPersistentDataKey : uint8_t;
 struct PayloadState;
-enum class FaultKey : uint8_t;
+enum class OverrideFaultKey : uint8_t;
 enum class OverridePersistentStateKey : uint8_t;
 
 class PayloadReliableBMP280 final : public ReliableBMP280<
-    PayloadState, PayloadPersistentDataKey, FaultKey, StandardFlightPhase, PayloadFlightPhaseController>
+    PayloadState, PayloadPersistentDataKey, OverrideFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
   explicit PayloadReliableBMP280(PayloadStateManager* payload_state_manager);

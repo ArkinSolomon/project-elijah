@@ -33,7 +33,7 @@ enum class PayloadPersistentDataKey : uint8_t
   GroundAltitude = 11
 };
 
-enum class FaultKey : uint8_t
+enum class OverrideFaultKey : uint8_t
 {
   BMP280 = 1,
   MPU6050 = 2,
@@ -43,7 +43,7 @@ enum class FaultKey : uint8_t
 };
 
 class PayloadStateManager final : public elijah_state_framework::ElijahStateFramework<
-    PayloadState, PayloadPersistentDataKey, FaultKey, StandardFlightPhase, PayloadFlightPhaseController>
+    PayloadState, PayloadPersistentDataKey, OverrideFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
   PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, 10)
@@ -66,11 +66,11 @@ public:
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_data_storage()->finish_registration();
 
-    register_fault(FaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);
-    register_fault(FaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_1);
-    register_fault(FaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
-    register_fault(FaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
-    register_fault(FaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
+    register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);
+    register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_1);
+    register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
+    register_fault(OverrideFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
+    register_fault(OverrideFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
     register_command("Calibrate", [this]
     {

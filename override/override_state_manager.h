@@ -33,21 +33,21 @@ enum class OverridePersistentStateKey : uint8_t
   GroundAltitude = 11
 };
 
-enum class FaultKey : uint8_t
+enum class OverrideFaultKey : uint8_t
 {
-  BMP280 = 1,
-  MPU6050 = 2,
-  MicroSD = 3
+  MicroSD = 1,
+  BMP280 = 2,
+  MPU6050 = 3,
 };
 
 class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<
-    OverrideState, OverridePersistentStateKey, FaultKey, StandardFlightPhase, OverrideFlightPhaseController>
+    OverrideState, OverridePersistentStateKey, OverrideFaultKey, StandardFlightPhase, OverrideFlightPhaseController>
 {
 public:
-  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, 10)
+  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey, OverrideFaultKey::MicroSD, 10)
   {
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
-                                                101325.0);
+                                                101083.7);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
@@ -57,16 +57,16 @@ public:
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground altitude",
+    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground pressure",
                                                 static_cast<int32_t>(0));
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
                                                 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_data_storage()->finish_registration();
 
-    register_fault(FaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
-    register_fault(FaultKey::MPU6050, "MPU 6050", CommunicationChannel::SPI_0);
-    register_fault(FaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
+    register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
+    register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
+    register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::SPI_0);
 
     register_command("Calibrate", [this]
     {
@@ -91,7 +91,7 @@ public:
 protected:
   START_STATE_ENCODER(OverrideState)
     ENCODE_STATE(pressure, DataType::UInt32, "Pressure", "Pa")
-    ENCODE_STATE(temperature, DataType::Double, "Temperature", "°C")
+    ENCODE_STATE(temperature, DataType::Double, "Temperature", "degC")
     ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
     ENCODE_STATE(accel_x, DataType::Double, "Acceleration X", "m/s^2")
     ENCODE_STATE(accel_y, DataType::Double, "Acceleration Y", "m/s^2")

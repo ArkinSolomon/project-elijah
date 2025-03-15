@@ -3,7 +3,7 @@
 #include "payload_state_manager.h"
 
 PayloadReliableMPU6050::PayloadReliableMPU6050(PayloadStateManager* payload_state_manager) : ReliableMPU6050(
-  payload_state_manager, FaultKey::MPU6050,i2c1, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range500,
+  payload_state_manager, OverrideFaultKey::MPU6050,i2c1, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range500,
   MPU6050::AccelFullScaleRange::Range8g, PayloadPersistentDataKey::AccelCalibX,
   PayloadPersistentDataKey::AccelCalibY, PayloadPersistentDataKey::AccelCalibZ,
   PayloadPersistentDataKey::GyroCalibX, PayloadPersistentDataKey::GyroCalibY,

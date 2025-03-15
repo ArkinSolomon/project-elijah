@@ -55,7 +55,11 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
   if (register_data) { \
     register_data_variable(DISP_NAME, DISP_UNIT, data_len, DATA_TYPE); \
   } else { \
-    memcpy(static_cast<uint8_t*>(encode_dest) + data_len, &state.MEMBER_NAME, curr_data_size_len); \
+    if (DATA_TYPE == DataType::TIME) { \
+      internal::encode_time(static_cast<uint8_t*>(encode_dest) + data_len, state.MEMBER_NAME); \
+    } else { \
+      memcpy(static_cast<uint8_t*>(encode_dest) + data_len, &state.MEMBER_NAME, curr_data_size_len); \
+    } \
   } \
   data_len += curr_data_size_len;
 #define END_STATE_ENCODER() \
@@ -84,7 +88,8 @@ namespace elijah_state_framework
   class ElijahStateFramework
   {
   public:
-    ElijahStateFramework(std::string application_name, EPersistentStorageKey launch_key, size_t state_history_size);
+    ElijahStateFramework(std::string application_name, EPersistentStorageKey launch_key, EFaultKey micro_sd_fault_key,
+                         size_t state_history_size);
     virtual ~ElijahStateFramework();
 
     PersistentDataStorage<EPersistentStorageKey>* get_persistent_data_storage() const;
@@ -158,6 +163,8 @@ namespace elijah_state_framework
 
     StateFrameworkLogger* logger = nullptr;
     shared_mutex_t logger_smtx;
+    EFaultKey micro_sd_fault_key;
+    bool did_write_metadata = false;
 
     FaultManager<EFaultKey>* fault_manager = new FaultManager<EFaultKey>(0x0000);
 
@@ -174,8 +181,10 @@ namespace elijah_state_framework
 
 FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahStateFramework(
-  std::string application_name, EPersistentStorageKey launch_key, const size_t state_history_size) :
-  application_name(std::move(application_name)), launch_key(launch_key), state_history_size(state_history_size)
+  std::string application_name, EPersistentStorageKey launch_key, EFaultKey micro_sd_fault_key,
+  const size_t state_history_size) :
+  application_name(std::move(application_name)), launch_key(launch_key), micro_sd_fault_key(micro_sd_fault_key),
+  state_history_size(state_history_size)
 {
   internal::init_usb_comm();
   critical_section_init(&internal::usb_cs);
@@ -200,8 +209,11 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   register_command("New launch", true, [this](std::string launch_name)
   {
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
+
     logger->flush_log();
     delete logger;
+    did_write_metadata = false;
+
     logger = new StateFrameworkLogger(launch_name); // NOLINT(*-unnecessary-value-param)
     shared_mutex_exit_exclusive(&logger_smtx);
   });
@@ -232,8 +244,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::~ElijahS
 
 FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::PersistentDataStorage<EPersistentStorageKey>* elijah_state_framework::ElijahStateFramework<
-  FRAMEWORK_TEMPLATE_TYPES>::
-get_persistent_data_storage() const
+  FRAMEWORK_TEMPLATE_TYPES>::get_persistent_data_storage() const
 {
   return persistent_data_storage;
 }
@@ -338,6 +349,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::state_changed(const TStateData& new_state)
 {
+  if (!did_write_metadata)
+  {
+    send_framework_metadata(true);
+  }
+
   const size_t total_encoded_packet_size = encoded_state_size + 1;
   uint8_t encoded_output_packet[total_encoded_packet_size] = {
     static_cast<uint8_t>(internal::OutputPacket::StateUpdate)
@@ -462,6 +478,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger)
   {
+    if (!did_write_metadata)
+    {
+      send_framework_metadata(true);
+    }
     logger->log_data(encoded_data, encoded_size);
   }
   shared_mutex_exit_shared(&logger_smtx);
@@ -522,8 +542,10 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_log_write()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
-  logger->flush_write_buff();
+  bool did_succeed = logger->flush_write_buff();
   shared_mutex_exit_shared(&logger_smtx);
+
+  set_fault(micro_sd_fault_key, !did_succeed);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -595,10 +617,12 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
 
   if (logger->is_new_file())
   {
+    did_write_metadata = false;
     send_framework_metadata(true);
   }
   else
   {
+    did_write_metadata = true;
     constexpr auto restart_marker = static_cast<uint8_t>(
       internal::OutputPacket::DeviceRestartMarker);
     logger->log_data(&restart_marker, sizeof(uint8_t));
@@ -758,6 +782,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   if (write_to_file && logger)
   {
     logger->log_data(&segment_id, 1);
+    did_write_metadata = logger->flush_log();
     shared_mutex_exit_shared(&logger_smtx);
   }
 

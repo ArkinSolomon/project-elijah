@@ -64,7 +64,7 @@ bool ds_1307::functional_check(const tm& reset_inst)
   bool clock_set = false;
   if (!check_clock(clock_set))
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, true, "Not detected during functional check");
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true, "Not detected during functional check");
     return false;
   }
 
@@ -73,15 +73,15 @@ bool ds_1307::functional_check(const tm& reset_inst)
   {
     if (set_clock(reset_inst))
     {
-      payload_state_manager->set_fault(FaultKey::DS1307, false);
+      payload_state_manager->set_fault(OverrideFaultKey::DS1307, false);
       return true;
     }
 
-    payload_state_manager->set_fault(FaultKey::DS1307, true, "Detected, but unable to set during functional reset");
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true, "Detected, but unable to set during functional reset");
     return false;
   }
 
-  payload_state_manager->set_fault(FaultKey::DS1307, false);
+  payload_state_manager->set_fault(OverrideFaultKey::DS1307, false);
   return true;
 }
 
@@ -130,11 +130,11 @@ void ds_1307::init_clock_with_inst(const tm& time_inst)
   const bool clock_did_set = set_clock(time_inst);
   if (!clock_did_set)
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, true, "Failed to set clock");
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true, "Failed to set clock");
   }
   else
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, false);
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, false);
   }
 }
 
@@ -213,24 +213,24 @@ bool ds_1307::check_and_read_clock(tm& time_inst)
   bool clock_detected = check_clock(clock_set);;
   if (!clock_detected)
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, true, "device not detected (no acknowledgement)");
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true, "device not detected (no acknowledgement)");
     return false;
   }
 
   if (!clock_set)
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, true, "Clock not set");
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true, "Clock not set");
     return false;
   }
 
   clock_detected = read_clock(time_inst);
   if (!clock_detected)
   {
-    payload_state_manager->set_fault(FaultKey::DS1307, true,
+    payload_state_manager->set_fault(OverrideFaultKey::DS1307, true,
                                      "Clock not detected (acknowledged but failed to read time)");
     return false;
   }
 
-  payload_state_manager->set_fault(FaultKey::DS1307, false);
+  payload_state_manager->set_fault(OverrideFaultKey::DS1307, false);
   return true;
 }

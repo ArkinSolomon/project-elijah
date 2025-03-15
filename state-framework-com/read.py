@@ -4,7 +4,7 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Desktop/launch-80c9d54730aac987'
+file = '/Users/arkinsolomon/Desktop/launch-89d73089feb07be5'
 # csv_path = '/Users/arkinsolomon/Downloads/launch-data-from-fullscale.csv'
 
 with open(file, 'rb') as f:

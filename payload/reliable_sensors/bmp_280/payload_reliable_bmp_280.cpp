@@ -4,7 +4,7 @@
 #include "pin_outs.h"
 
 PayloadReliableBMP280::PayloadReliableBMP280(PayloadStateManager* payload_state_manager): ReliableBMP280(
-  payload_state_manager, FaultKey::BMP280, i2c0, BMP_280_ADDR, PayloadPersistentDataKey::SeaLevelPressure)
+  payload_state_manager, OverrideFaultKey::BMP280, i2c0, BMP_280_ADDR, PayloadPersistentDataKey::SeaLevelPressure)
 {
 }
 

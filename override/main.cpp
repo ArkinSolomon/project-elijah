@@ -40,7 +40,7 @@ int main()
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage);
 
     override_state_manager->state_changed(state);
-
+    override_state_manager->check_for_log_write();
     sleep_ms(50);
   }
 }

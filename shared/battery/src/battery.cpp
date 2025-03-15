@@ -55,20 +55,3 @@ double Battery::get_voltage()
 
   return voltage_result * bat_scale; // we only read 32% of voltage
 }
-
-double Battery::calc_charge_percent(const double voltage)
-{
-  if (voltage < 7.22)
-  {
-    return 0;
-  }
-
-  if (voltage >= 8.4)
-  {
-    return 1;
-  }
-
-  const double fitted_percent = 2.4095 * pow(voltage, 4) - 75.641 * pow(voltage, 3) + 889.29 * pow(voltage, 2) - 4639.7
-    * voltage + 9062.4;
-  return std::clamp(fitted_percent, 0.0, 1.0);
-}
