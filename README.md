@@ -43,7 +43,7 @@ Add the `bin` directory from both outputs to your path (should be `C:\Program Fi
 
 ### 4. Zadig Installation
 
-Install (Zadig)[https://zadig.akeo.ie] by just downloading and installing it. When you run it, press install driver. You can close it after installation and forget it exists.
+Install [Zadig](https://zadig.akeo.ie) by just downloading and installing it. When you run it, press install driver. You can close it after installation and forget it exists.
 
 ### 5. CLion Setup
 Clone this repository, then update the submodules using:
