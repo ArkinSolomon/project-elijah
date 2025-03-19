@@ -38,6 +38,7 @@ int main()
 
   PayloadState state{};
 
+  gpio_put(LED_3_PIN, true);
   while (true)
   {
     payload_state_manager->check_for_commands();

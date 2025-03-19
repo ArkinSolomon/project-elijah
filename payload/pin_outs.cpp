@@ -11,10 +11,10 @@ void pin_init()
   i2c_util::i2c_bus_init(I2C_BUS0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
   i2c_util::i2c_bus_init(I2C_BUS1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
 
-  gpio_init(CORE_0_LED_PIN);
-  gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);
-  gpio_init(CORE_1_LED_PIN);
-  gpio_set_dir(CORE_1_LED_PIN, GPIO_OUT);
+  gpio_init(LED_2_PIN);
+  gpio_set_dir(LED_2_PIN, GPIO_OUT);
+  gpio_init(LED_3_PIN);
+  gpio_set_dir(LED_3_PIN, GPIO_OUT);
 
   // See sd_hw_config.c for microSD card SPI setup
 
@@ -36,5 +36,5 @@ void pin_init()
 
   gpio_init(RADIO_PTT_PIN);
   gpio_set_dir(RADIO_PTT_PIN, GPIO_OUT);
-  aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_PTT_PIN, PWM_CHAN_B);
+  //aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_PTT_PIN, PWM_CHAN_B);
 }
