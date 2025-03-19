@@ -1,5 +1,7 @@
 import os
+import platform
 
+import serial.tools.list_ports
 from device import Device
 
 devices: [Device] = []
@@ -7,7 +9,11 @@ devices: [Device] = []
 user_has_quit = False
 
 def discover_devices() -> None:
-    serial_ports = ['/dev/' + device for device in os.listdir('/dev') if 'tty.usbmodem' in device]
+    ports = serial.tools.list_ports.comports()
+    if platform.system() == "Windows":
+        serial_ports = [port[0] for port in ports]
+    else:
+        serial_ports = ['/dev/' + device for device in os.listdir('/dev') if 'tty.usbmodem' in device]
 
     removal_devices: list[Device] = []
     for device in devices:

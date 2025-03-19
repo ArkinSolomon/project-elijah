@@ -1,4 +1,4 @@
-from io import FileIO, BufferedReader
+from io import BufferedReader
 
 from framework.readable.readable import Readable
 

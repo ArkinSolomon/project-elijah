@@ -1,4 +1,9 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
+
+# Yeah this gets undefined later idk
+if (WIN32)
+    set(USING_WINDOWS 1)
+endif()
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 23)
@@ -114,8 +119,14 @@ function(create_elijah_target SRC_DIR_NAME)
 
     pico_add_extra_outputs(${EXEC_NAME})
 
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh "#!/bin/sh\n" ${PICOTOOL_INSTALL_LOC} " load \"$1\" -fx")
-    file(COPY ${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    if (USING_WINDOWS)
+        set(INSTALL_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/tmp/install.bat")
+        file(WRITE ${INSTALL_FILE_NAME} "\"" ${PICOTOOL_INSTALL_LOC}  "\" reboot -f -u\ntimeout /NOBREAK /T 5\n\"" ${PICOTOOL_INSTALL_LOC} "\" load \"%1\" -fx")
+    else()
+        set(INSTALL_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/tmp/install.bat")
+        file(WRITE ${INSTALL_FILE_NAME} "#!/bin/sh\n" ${CMAKE_CURRENT_BINARY_DIR}/${PICOTOOL_INSTALL_LOC} " load \"$1\" -x")
+    endif()
+    file(COPY ${INSTALL_FILE_NAME} DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endfunction()
 
 create_elijah_target(payload)

@@ -24,7 +24,6 @@
 #include "state_framework_logger.h"
 #include "variable_definition.h"
 
-#define STDIO_WRITE_SIZE 128
 constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
 
 #define START_STATE_ENCODER(STATE_DATA_TYPE) void encode_state(void* encode_dest, const STATE_DATA_TYPE& state, const uint64_t seq, bool register_data) override \
@@ -564,7 +563,7 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_log_write()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
-  bool did_succeed = logger->flush_write_buff();
+  const bool did_succeed = logger->flush_write_buff();
   shared_mutex_exit_shared(&logger_smtx);
 
   set_fault(micro_sd_fault_key, !did_succeed);
