@@ -8,8 +8,8 @@
 
 void pin_init()
 {
-  i2c_util::i2c_bus_init(I2C_BUS0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
-  i2c_util::i2c_bus_init(I2C_BUS1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
+  i2c_util::i2c_bus_init(i2c0, I2C0_SDA_PIN, I2C0_SCL_PIN, 400 * 1000);
+  i2c_util::i2c_bus_init(i2c1, I2C1_SDA_PIN, I2C1_SCL_PIN, 400 * 1000);
 
   gpio_init(CORE_0_LED_PIN);
   gpio_set_dir(CORE_0_LED_PIN, GPIO_OUT);

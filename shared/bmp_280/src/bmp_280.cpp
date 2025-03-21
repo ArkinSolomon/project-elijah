@@ -20,6 +20,11 @@ const BMP280::CalibrationData& BMP280::get_calibration_data() const
   return calibration_data;
 }
 
+bool BMP280::uses_i2c() const
+{
+  return is_i2c_interface;
+}
+
 bool BMP280::check_chip_id() const
 {
   uint8_t read_id;
@@ -185,6 +190,7 @@ bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len)
 {
   if (is_i2c_interface)
   {
+    elijah_state_framework::log_serial_message(std::format("addr: 0x{:02X} , reg: 0x{:02X}", i2c_addr, reg_addr));
     return i2c_util::read_bytes(i2c_inst, i2c_addr, reg_addr, data, len);
   }
 

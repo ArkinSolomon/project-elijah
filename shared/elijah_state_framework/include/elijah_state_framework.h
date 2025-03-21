@@ -769,7 +769,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   segment_id = static_cast<uint8_t>(internal::MetadataSegment::FaultInformation);
   const uint32_t all_faults = fault_manager->get_all_faults();
 
-  constexpr size_t header_len = 2 + sizeof(uint32_t);
+  constexpr size_t header_len = 2 * sizeof(uint8_t) + sizeof(uint32_t);
   uint8_t fault_segment_header[header_len] = {
     segment_id, static_cast<uint8_t>(fault_manager->get_fault_count())
   };
@@ -778,7 +778,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   internal::write_to_serial(fault_segment_header, header_len, false);
   if (write_to_file && logger)
   {
-    logger->log_data(fault_segment_header, 2);
+    logger->log_data(fault_segment_header, header_len);
   }
 
   encoded_data = fault_manager->encode_all_faults(encoded_size);

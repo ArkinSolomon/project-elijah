@@ -70,8 +70,8 @@ class Device:
             return
 
         try:
-            packets = self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
-            if packets > 0:
+            packets, state_changed = self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
+            if state_changed:
                 for var_def in self.state_framework.variable_definitions:
                     if var_def.is_hidden:
                         continue

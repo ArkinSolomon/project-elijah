@@ -123,8 +123,9 @@ class StateFramework:
                 prefix = 'UNKNOWN: '
         print(f'{prefix}{message}')
 
-    def update(self, readable: Readable, max_updates: int) -> int:
+    def update(self, readable: Readable, max_updates: int) -> (int, bool):
         packets_read = 0
+        state_changed = False
         while packets_read < max_updates:
             if readable.bytes_avail() == 0:
                 break
@@ -141,6 +142,7 @@ class StateFramework:
                         log_message = read_fixed_string(readable, message_length)
                         self.log(log_level, log_message)
                     case OutputPacket.STATE_UPDATE:
+                        state_changed = True
                         self.state_updated(readable)
                     case OutputPacket.PERSISTENT_STATE_UPDATE:
                         self._update_persistent_data(readable)
@@ -157,7 +159,7 @@ class StateFramework:
             except Exception as e:
                 continue
 
-        return packets_read
+        return packets_read, state_changed
 
     def state_updated(self, readable: Readable):
         data = readable.read(self.total_data_len)

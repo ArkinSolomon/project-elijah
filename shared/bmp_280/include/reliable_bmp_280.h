@@ -68,8 +68,8 @@ on_init(TStateData& state)
   }
 
   if (!bmp.change_settings(BMP280::DeviceMode::NormalMode, BMP280::StandbyTimeSetting::Standby500us,
-                           BMP280::FilterCoefficientSetting::Filter2x, BMP280::OssSettingPressure::PressureOss4,
-                           BMP280::OssSettingTemperature::TemperatureOss4))
+                           BMP280::FilterCoefficientSetting::Filter2x, BMP280::OssSettingPressure::PressureOss2,
+                           BMP280::OssSettingTemperature::TemperatureOss2))
   {
     return "Failed to change settings";
   }

@@ -1,4 +1,3 @@
-
 #include <format>
 #include <sd_card.h>
 
@@ -36,21 +35,27 @@ int main()
 
   sensors_init();
 
-  PayloadState state{};
+  PayloadState state{{}};
 
   while (true)
   {
     payload_state_manager->check_for_commands();
 
     bmp280->update(state);
+    int32_t p;
+    double t, a;
+    bmp280->get_bmp280().read_press_temp_alt(p, t, a, 101325);
     mpu6050->update(state);
     onboard_clock::clock_loop(state);
 
+    payload_state_manager->log_message(std::format("bmp280: {}, uses i2c: {}, p: {}, t: {}, a: {}",
+                                                   payload_state_manager->is_faulted(PayloadFaultKey::BMP280),
+                                                   bmp280->get_bmp280().uses_i2c(), p, t, a));
+
     state.bat_voltage = battery->get_voltage();
-    state.bat_percent = battery->calc_charge_percent(state.bat_voltage);
+    state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
 
     payload_state_manager->state_changed(state);
-
     payload_state_manager->check_for_log_write();
 
     sleep_ms(50);

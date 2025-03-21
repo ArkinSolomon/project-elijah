@@ -1,10 +1,5 @@
 #pragma once
 
-#define I2C_BUS0 i2c0
-#define I2C_BUS1 i2c1
-
-#define BMP_280_ADDR 0b1110110
-
 #define I2C0_SDA_PIN 8 // Pin 11
 #define I2C0_SCL_PIN 9 // Pin 12
 
