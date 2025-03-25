@@ -1,10 +1,11 @@
 #pragma once
 
-#define LOG_BUFF_SIZE 1024
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <pico/mutex.h>
+
+#define LOG_BUFF_SIZE 1024
 
 namespace elijah_state_framework
 {
