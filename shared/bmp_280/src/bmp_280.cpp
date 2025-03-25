@@ -7,6 +7,7 @@
 #include "elijah_state_framework.h"
 #include "i2c_util.h"
 
+// try i2c_inst -> i2c0
 BMP280::BMP280(i2c_inst_t* i2c, uint8_t addr) : is_i2c_interface(true), i2c_inst(i2c), i2c_addr(addr)
 {
 }
@@ -190,7 +191,7 @@ bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len)
 {
   if (is_i2c_interface)
   {
-    elijah_state_framework::log_serial_message(std::format("addr: 0x{:02X} , reg: 0x{:02X}", i2c_addr, reg_addr));
+    elijah_state_framework::log_serial_message(std::format("addr: 0x{:02X} , reg: 0x{:02X}, {}", i2c_addr, reg_addr, i2c_inst == i2c0));
     return i2c_util::read_bytes(i2c_inst, i2c_addr, reg_addr, data, len);
   }
 

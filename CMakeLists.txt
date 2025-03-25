@@ -120,3 +120,4 @@ endfunction()
 
 create_elijah_target(payload)
 create_elijah_target(override)
+create_elijah_target(airbrakes)

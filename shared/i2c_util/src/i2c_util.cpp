@@ -12,6 +12,8 @@ void i2c_util::i2c_bus_init(i2c_inst_t* i2c, const uint sda_pin, const uint scl_
 
   (i2c == i2c0 ? baud_rate_bus0 : baud_rate_bus1) = baud_rate;
 
+  gpio_init(sda_pin);
+  gpio_init(scl_pin);
   gpio_set_function(sda_pin, GPIO_FUNC_I2C);
   gpio_set_function(scl_pin, GPIO_FUNC_I2C);
   gpio_pull_up(sda_pin);
