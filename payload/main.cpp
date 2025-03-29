@@ -42,7 +42,7 @@ int main()
   {
     //payload_state_manager->check_for_commands();
 
-    aprs::transmitAllData(state);
+    aprs::transmitAllData(state, 4200, state.time_inst);
 
     bmp280->update(state);
     int32_t p;
