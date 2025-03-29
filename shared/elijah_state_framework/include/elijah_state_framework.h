@@ -135,10 +135,12 @@ namespace elijah_state_framework
 
   protected:
     void register_command(const std::string& command, std::function<void()> callback);
-    void register_command(const std::string& command, std::function<void(double)> callback);
-    void register_command(const std::string& command, bool is_alphanumeric,
+    void register_command(const std::string& command, const std::string& input_prompt,
+                          std::function<void(double)> callback);
+    void register_command(const std::string& command, const std::string& input_prompt, bool is_alphanumeric,
                           std::function<void(std::string)> callback);
-    void register_command(const std::string& command, std::function<void(tm)> callback);
+    void register_command(const std::string& command, const std::string& input_prompt,
+                          std::function<void(tm)> callback);
 
     void register_data_variable(const std::string& display_name, const std::string& display_unit, size_t offset,
                                 DataType data_type);
@@ -193,7 +195,8 @@ namespace elijah_state_framework
     EFlightPhase current_phase;
     mutex_t current_phase_mtx;
 
-    void register_command(const std::string& command, CommandInputType command_input, command_callback_t callback);
+    void register_command(const std::string& command, const std::string& input_prompt, CommandInputType command_input,
+                          command_callback_t callback);
 
     void send_framework_metadata(bool write_to_file);
     void send_persistent_state(const void* data, size_t data_len);
@@ -204,8 +207,8 @@ FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahStateFramework(
   std::string application_name, EPersistentStorageKey launch_key, EFaultKey micro_sd_fault_key,
   const size_t state_history_size) :
-  application_name(std::move(application_name)), launch_key(launch_key), micro_sd_fault_key(micro_sd_fault_key),
-  state_history_size(state_history_size)
+  application_name(std::move(application_name)), launch_key(launch_key), state_history_size(state_history_size),
+  micro_sd_fault_key(micro_sd_fault_key)
 {
   internal::init_usb_comm();
   critical_section_init(&internal::usb_cs);
@@ -227,7 +230,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   });
 
   // ReSharper disable once CppPassValueParameterByConstReference
-  register_command("New launch", true, [this](std::string launch_name)
+  register_command("New launch", "Launch name", true, [this](std::string launch_name)
   {
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
 
@@ -303,11 +306,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   {
   case CommandInputType::Double:
     {
-      double value;
-      bytes_read = stdio_get_until(reinterpret_cast<char*>(&value), sizeof(value),
+      bytes_read = stdio_get_until(reinterpret_cast<char*>(&double_arg), sizeof(double_arg),
                                    delayed_by_ms(get_absolute_time(), 10));
       critical_section_exit(&internal::usb_cs);
-      if (bytes_read != sizeof(value))
+      if (bytes_read != sizeof(double_arg))
       {
         return;
       }
@@ -571,33 +573,32 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
-  const std::string& command,
-  std::function<void()> callback)
+  const std::string& command, std::function<void()> callback)
 {
-  register_command(command, CommandInputType::None, std::move(callback));
+  register_command(command, "", CommandInputType::None, std::move(callback));
 }
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
-  const std::string& command,
-  std::function<void(double)> callback)
+  const std::string& command, const std::string& input_prompt, std::function<void(double)> callback)
 {
-  register_command(command, CommandInputType::Double, std::move(callback));
+  register_command(command, input_prompt, CommandInputType::Double, std::move(callback));
 }
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
-  const std::string& command, const bool is_alphanumeric, std::function<void(std::string)> callback)
+  const std::string& command, const std::string& input_prompt, const bool is_alphanumeric,
+  std::function<void(std::string)> callback)
 {
-  register_command(command, is_alphanumeric ? CommandInputType::AlphaNumeric : CommandInputType::String,
+  register_command(command, input_prompt, is_alphanumeric ? CommandInputType::AlphaNumeric : CommandInputType::String,
                    std::move(callback));
 }
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
-  const std::string& command, std::function<void(tm)> callback)
+  const std::string& command, const std::string& input_prompt, std::function<void(tm)> callback)
 {
-  register_command(command, CommandInputType::Time, std::move(callback));
+  register_command(command, input_prompt, CommandInputType::Time, std::move(callback));
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -656,10 +657,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::register_command(
-  const std::string& command, const CommandInputType command_input, command_callback_t callback)
+  const std::string& command, const std::string& input_prompt, const CommandInputType command_input,
+  command_callback_t callback)
 {
   const uint8_t new_id = command_id_counter++;
-  registered_commands[new_id] = RegisteredCommand(new_id, command, command_input, std::move(callback));
+  registered_commands[new_id] = RegisteredCommand(new_id, command, input_prompt, command_input, std::move(callback));
 }
 
 FRAMEWORK_TEMPLATE_DECL

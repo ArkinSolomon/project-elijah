@@ -74,6 +74,10 @@ int main()
 
     if (new_target_pos != state.target_encoder_pos && is_coast_phase)
     {
+      if (queue_is_full(&core1::core0_ready_queue))
+      {
+        queue_remove_blocking(&core1::core0_ready_queue, nullptr);
+      }
       queue_add_blocking(&core1::encoder_target_queue, &new_target_pos);
     }
 

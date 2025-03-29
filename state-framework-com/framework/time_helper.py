@@ -1,7 +1,8 @@
 import struct
 import time
 
-def encode_time(time_inst) -> bytes:
+
+def encode_time(time_inst: time.struct_time) -> bytes:
     full_year = time_inst.tm_year + 1900
     return bytes([
         time_inst.tm_sec,

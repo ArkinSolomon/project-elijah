@@ -1,16 +1,17 @@
 import struct
 from enum import Enum
-from typing import Any
+from typing import Any, Tuple
 
-from framework.serial_helper import read_string, read_fixed_string
 from serial.serialutil import SerialException
 
 import framework.time_helper as time_helper
 from framework.data_type import DataType, get_data_type_size, get_data_type_struct_str
 from framework.fault_definition import FaultDefinition
+from framework.log_message import LogLevel, LogMessage
 from framework.persistent_data_entry import PersistentDataEntry
 from framework.readable.readable import Readable
 from framework.registered_command import RegisteredCommand, CommandInputType
+from framework.serial_helper import read_string, read_fixed_string
 from framework.variable_definition import VariableDefinition
 
 
@@ -32,14 +33,6 @@ class MetadataSegment(Enum):
     FAULT_INFORMATION = 5
     INITIAL_PHASE = 6
     METADATA_END = 255
-
-
-class LogLevel(Enum):
-    DEBUG = 1
-    INFO = 2
-    WARNING = 3
-    ERROR = 4
-    SERIAL_ONLY = 5
 
 
 class StateFramework:
@@ -78,11 +71,9 @@ class StateFramework:
 
             if metadata_segment in received_segments:
                 if readable.is_live_device():
-                    print(f'Received duplicate segment {hex(segment_id)}, ignoring')
                     continue
                 else:
-                    print(f'Received duplicate segment {hex(segment_id)}, can not continue')
-                    break
+                    raise Exception(f'Received duplicate segment {hex(segment_id)}, can not continue')
 
             received_segments.append(metadata_segment)
 
@@ -106,26 +97,10 @@ class StateFramework:
                     if not readable.is_live_device():
                         break
 
-    @staticmethod
-    def log(log_level: LogLevel, message: str):
-        match log_level:
-            case LogLevel.INFO:
-                prefix = 'INFO: '
-            case LogLevel.DEBUG:
-                prefix = 'DEBUG: '
-            case LogLevel.WARNING:
-                prefix = 'WARNING: '
-            case LogLevel.ERROR:
-                prefix = 'ERROR: '
-            case LogLevel.SERIAL_ONLY:
-                prefix = 'SERIAL: '
-            case _:
-                prefix = 'UNKNOWN: '
-        print(f'{prefix}{message}')
-
-    def update(self, readable: Readable, max_updates: int) -> (int, bool):
+    def update(self, readable: Readable, max_updates: int) -> Tuple[int, bool, list[LogMessage]]:
         packets_read = 0
         state_changed = False
+        logs: list[LogMessage] = []
         while packets_read < max_updates:
             if readable.bytes_avail() == 0:
                 break
@@ -139,15 +114,17 @@ class StateFramework:
                     case OutputPacket.LOG_MESSAGE:
                         log_level_id, message_length = struct.unpack('<BH', readable.read(3))
                         log_level = LogLevel(log_level_id)
-                        log_message = read_fixed_string(readable, message_length)
-                        self.log(log_level, log_message)
+                        message = read_fixed_string(readable, message_length)
+                        log_message = LogMessage(log_level, message)
+                        logs.append(log_message)
                     case OutputPacket.STATE_UPDATE:
                         state_changed = True
                         self.state_updated(readable)
                     case OutputPacket.PERSISTENT_STATE_UPDATE:
                         self._update_persistent_data(readable)
                     case OutputPacket.DEVICE_RESTART_MARKER:
-                        print('Device restarted!!')
+                        # print('Device restarted!!')
+                        pass
                     case OutputPacket.FAULTS_CHANGED:
                         self._update_faults(readable)
                     case OutputPacket.PHASE_CHANGED:
@@ -159,7 +136,7 @@ class StateFramework:
             except Exception as e:
                 continue
 
-        return packets_read, state_changed
+        return packets_read, state_changed, logs
 
     def state_updated(self, readable: Readable):
         data = readable.read(self.total_data_len)
@@ -181,7 +158,9 @@ class StateFramework:
         for _ in range(num_commands):
             command_id, command_input = struct.unpack('<2B', readable.read(2))
             command_name = read_string(readable)
-            registered_command = RegisteredCommand(command_id, command_name, CommandInputType(command_input))
+            input_prompt = read_string(readable)
+            registered_command = RegisteredCommand(command_id, command_name, input_prompt,
+                                                   CommandInputType(command_input))
             self.commands.append(registered_command)
 
     def _handle_segment_variable_definitions(self, readable: Readable):
@@ -241,8 +220,8 @@ class StateFramework:
                 data = readable.read(get_data_type_size(entry.data_type))
                 entry.current_value, = struct.unpack(get_data_type_struct_str(entry.data_type), data)
 
-        for entry in self.persistent_data_entries:
-            print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
+        # for entry in self.persistent_data_entries:
+        #     print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
 
     def _update_faults(self, readable: Readable):
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))
@@ -250,12 +229,12 @@ class StateFramework:
 
         for fault in self.fault_definitions:
             fault.is_faulted = ((all_faults >> fault.fault_bit) & 0x01) > 0
-            if fault.fault_bit == changed_fault_bit:
-                print(
-                    f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')
+            # if fault.fault_bit == changed_fault_bit:
+            #     print(
+            #         f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')
 
     def _update_phase(self, readable: Readable):
         old_phase_id = self.current_phase_id
         self.current_phase_id, = struct.unpack('<B', readable.read(1))
         self.current_phase = read_string(readable)
-        print(f'Phase{'' if old_phase_id < 0 else ' changed'}: {self.current_phase} ({self.current_phase_id})')
+        # print(f'Phase{'' if old_phase_id < 0 else ' changed'}: {self.current_phase} ({self.current_phase_id})')

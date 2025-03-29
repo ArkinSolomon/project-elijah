@@ -1,12 +1,16 @@
 import os
 import platform
+import time
+
+from asciimatics.screen import Screen
+from display.screen_loop import screen_loop
 
 import serial.tools.list_ports
 from device import Device
+from display.screen_state import ScreenState
 
-devices: [Device] = []
-
-user_has_quit = False
+devices: list[Device] = []
+screen_state = ScreenState()
 
 def discover_devices() -> None:
     ports = serial.tools.list_ports.comports()
@@ -18,12 +22,9 @@ def discover_devices() -> None:
     removal_devices: list[Device] = []
     for device in devices:
         if device.last_known_port not in serial_ports:
-            if device.uses_state_framework and device.is_connected:
-                print('Device that uses state framework disconnected')
             device.disconnect()
             if not device.uses_state_framework:
                 removal_devices.append(device)
-                print(f'Unknown device disconnected: {device.last_known_port}')
 
     for device in removal_devices:
         devices.remove(device)
@@ -35,10 +36,35 @@ def discover_devices() -> None:
                     device.connect(port)
                 break
         else:
-            print('New device at port: ' + port)
             devices.append(Device(port, devices))
 
+    if 0 < len(devices) <= screen_state.selected_device_idx:
+        screen_state.selected_device_idx = len(devices) - 1
+
+user_has_quit = False
+def main(screen: Screen):
+    global user_has_quit
+
+    while True:
+        discover_devices()
+        for device in devices:
+            device.update()
+
+        if screen.has_resized():
+            return
+
+        screen.clear_buffer(Screen.COLOUR_WHITE, Screen.A_NORMAL, Screen.COLOUR_BLACK)
+
+        screen_state.screen_refresh_rate = int(1 / ((time.process_time_ns() - screen_state.last_render) / 1e9))
+        user_has_quit = screen_loop(screen, screen_state, devices)
+
+        if user_has_quit:
+            break
+
+        screen.refresh()
+        screen_state.last_render = time.process_time_ns()
+
 while True:
-    discover_devices()
-    for device in devices:
-        device.update()
+    Screen.wrapper(main)
+    if user_has_quit:
+        break

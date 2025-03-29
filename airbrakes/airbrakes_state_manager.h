@@ -95,13 +95,17 @@ public:
     {
       critical_section_enter_blocking(&core1::target_access_cs);
       core1::angle_override_active = !core1::angle_override_active;
+      if (!core1::angle_override_active)
+      {
+        core1::target_encoder_pos = 0;
+      }
       critical_section_exit(&core1::target_access_cs);
     });
 
-    register_command("Set angle", [this](double target_angle)
+    register_command("Set angle", "Target angle (degrees)", [this](double target_angle)
     {
       critical_section_enter_blocking(&core1::target_access_cs);
-      if (!core1::angle_override_active)
+      if (core1::angle_override_active)
       {
         core1::target_encoder_pos = encoder_pos_from_angle(target_angle);
       }
