@@ -30,6 +30,8 @@ class HeaderWidget(Widget):
     row_count: int
     pages: list[list[HeaderColumn]]
 
+    page_offset: int
+
     def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, app_name: str,
                  state: dict[int, Any], variable_definitions: list[VariableDefinition],
                  persistent_entries: list[PersistentDataEntry], current_page: int,
@@ -47,10 +49,28 @@ class HeaderWidget(Widget):
 
         self.row_count = self.height - 1
         self.pages = []
-        self.gen_rows()
+        self.page_offset = 0
+        self._gen_rows()
 
     def handle_char(self, char: int) -> bool:
+        if char == -203:
+            self.current_page -= 1
+            if self.current_page < 0:
+                self.current_page = 0
+
+            if self.on_page_change is not None:
+                self.on_page_change(self.current_page)
+            return True
+        elif char == -205:
+            self.current_page += 1
+            if self.current_page >= len(self.pages):
+                self.current_page = len(self.pages) - 1
+
+            if self.on_page_change is not None:
+                self.on_page_change(self.current_page)
+            return True
         return False
+
 
     def render(self) -> None:
         curr_time_str = datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
@@ -67,39 +87,45 @@ class HeaderWidget(Widget):
                 self.screen.print_at(value, self.offset_x + column.offset_x + (column.width - len(value)), i + 1 + self.offset_y, colour=Screen.COLOUR_CYAN,  bg=self.background_color)
 
 
-    def gen_rows(self) -> None:
-        page_offset = 0
+    def _gen_rows(self) -> None:
+        self._gen_page_for([var_def for var_def in self.variable_definitions if not var_def.is_hidden], lambda var_def: (var_def.display_name, self.state[var_def.variable_id], var_def.data_type, var_def.display_unit))
+        self._gen_page_for(self.persistent_entries, lambda pe: (pe.display_name, pe.current_value, pe.data_type, ''))
+
+    def _gen_page_for[T](self, data_list: list[T], extract: Callable[[T], Tuple[str, Any, DataType, str]]) -> None:
+        self.page_offset = 0
         curr_page: list[HeaderColumn] = []
         curr_data_column: list[Tuple[str, str]] = []
-        for i, var_def in enumerate(self.variable_definitions):
-            if var_def.is_hidden:
-                continue
+        for i, data in enumerate(data_list):
+            (label, value, data_type, display_unit) = extract(data)
 
-            unit = '%' if var_def.display_unit == '%' else f' {var_def.display_unit}' if var_def.display_unit != '' else ''
-            if var_def.data_type == DataType.DOUBLE:
+            unit = '%' if display_unit == '%' else f' {display_unit}' if display_unit != '' else ''
+            if data_type == DataType.DOUBLE:
                 curr_data_column.append(
-                    (var_def.display_name + ':', f'{self.state[var_def.variable_id]:.3f}{unit}'))
-            elif var_def.data_type == DataType.TIME:
+                    (label + ':', f'{value:.3f}{unit}'))
+            elif data_type == DataType.TIME:
+                assert value is datetime
                 curr_data_column.append(
-                    (var_def.display_name + ':', self.state[var_def.variable_id].strftime("%A %B %-d, %Y %H:%M:%S"))
+                    (label + ':', value.strftime("%A %B %-d, %Y %H:%M:%S"))
                 )
+            elif data_type == DataType.STRING:
+                curr_data_column.append((label + ':', str(value)))
             else:
                 curr_data_column.append(
-                    (var_def.display_name + ':', f'{self.state[var_def.variable_id]}{unit}'))
+                    (label + ':', f'{value}{unit}'))
 
-            if len(curr_data_column) == self.row_count or i == len(self.variable_definitions) - 1:
+            if len(curr_data_column) == self.row_count or i == len(data_list) - 1:
                 max_name_width = max(len(display_name) + 1 for display_name, _ in curr_data_column)
                 max_val_width = max(len(display_value) for _, display_value in curr_data_column)
 
                 col_width = max_name_width + max_val_width
 
-                if page_offset + col_width > self.width:
+                if self.page_offset + col_width > self.width:
                     self.pages.append(curr_page)
-                    page_offset = 0
+                    self.page_offset = 0
                     curr_page = []
 
-                curr_page.append(HeaderColumn(page_offset, col_width, curr_data_column))
-                page_offset += col_width + 1
+                curr_page.append(HeaderColumn(self.page_offset, col_width, curr_data_column))
+                self.page_offset += col_width + 1
                 curr_data_column = []
 
         self.pages.append(curr_page)

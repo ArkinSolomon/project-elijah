@@ -38,16 +38,27 @@ class MetadataSegment(Enum):
 class StateFramework:
     application_name: str
 
-    commands: list[RegisteredCommand] = []
-    persistent_entries: list[PersistentDataEntry] = []
-    fault_definitions: list[FaultDefinition] = []
+    commands: list[RegisteredCommand]
+    persistent_entries: list[PersistentDataEntry]
+    fault_definitions: list[FaultDefinition]
 
     current_phase_id: int = -1
     current_phase: str
 
-    total_data_len = 0
-    variable_definitions: list[VariableDefinition] = []
-    state: dict[int, Any] = {}
+    total_data_len: int
+    variable_definitions: list[VariableDefinition]
+    state: dict[int, Any]
+
+    def __init__(self):
+        self.application_name = None
+        self.commands = []
+        self.persistent_entries = []
+        self.fault_definitions = []
+        self.current_phase_id = -1
+        self.current_phase = "Unknown"
+        self.total_data_len = 0
+        self.variable_definitions = []
+        self.state = {}
 
     @staticmethod
     def generate_framework_configuration(readable: Readable):
@@ -202,7 +213,7 @@ class StateFramework:
 
         str_entries.sort(key=lambda pde: pde.offset)
         non_str_entries.sort(key=lambda pde: pde.offset)
-        self.persistent_data_entries = non_str_entries + str_entries
+        self.persistent_entries = non_str_entries + str_entries
 
         self._update_persistent_data(readable)
 
@@ -213,7 +224,7 @@ class StateFramework:
 
     def _update_persistent_data(self, readable: Readable):
         tag, = struct.unpack('<I', readable.read(4))
-        for entry in self.persistent_data_entries:
+        for entry in self.persistent_entries:
             if entry.data_type == DataType.STRING:
                 entry.current_value = read_string(readable)
             else:

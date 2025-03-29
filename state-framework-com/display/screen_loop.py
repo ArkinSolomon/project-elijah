@@ -16,6 +16,12 @@ HEADER_SIZE = 8
 SIDEBAR_WIDTH = 25
 DEVICE_SELECTION_HEIGHT = 5
 
+def header_page_changed(screen_state: ScreenState) -> Callable[[int], None]:
+    def update(page: int) -> None:
+        screen_state.current_header_page = page
+
+    return update
+
 
 def log_scroll_changed(screen_state: ScreenState) -> Callable[[int], None]:
     def update(pos: int) -> None:
@@ -90,7 +96,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
     if screen_state.selected_device_idx < len(devices) and devices[screen_state.selected_device_idx].uses_state_framework:
         sf = devices[screen_state.selected_device_idx].state_framework
         assert sf is not None
-        header_widget = HeaderWidget(screen, 1, 1, screen.width - 2, HEADER_SIZE, sf.application_name,  sf.state, sf.variable_definitions, sf.persistent_entries, screen_state.current_header_page, None, header_background)
+        header_widget = HeaderWidget(screen, 1, 1, screen.width - 2, HEADER_SIZE, sf.application_name,  sf.state, sf.variable_definitions, sf.persistent_entries, screen_state.current_header_page, header_page_changed(screen_state), header_background)
 
         if header_selected and screen_state.input_mode == InputMode.NONE and ev is not None:
             char_handled = header_widget.handle_char(ev)
