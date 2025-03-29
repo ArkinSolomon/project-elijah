@@ -19,8 +19,9 @@ void pin_init()
   gpio_init(SPEAKER_PIN);
   gpio_set_dir(SPEAKER_PIN, GPIO_OUT);
 
-  gpio_init(PTT_DISABLE);
-  gpio_set_dir(PTT_DISABLE, GPIO_OUT);
+  gpio_init(PTT_ENABLE);
+  gpio_set_dir(PTT_ENABLE, GPIO_OUT);
+  gpio_put(PTT_ENABLE, true);
 
   gpio_init(BMP_CS_PIN);
   gpio_set_dir(BMP_CS_PIN, GPIO_OUT);

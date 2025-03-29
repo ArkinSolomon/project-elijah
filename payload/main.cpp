@@ -22,16 +22,16 @@ int main()
 
   pin_init();
 
-  elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
+  // elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
 
-  core1::launch_core1();
-
-  uint8_t core_data;
-  queue_remove_blocking(&core1::core1_ready_queue, &core_data);
-  payload_state_manager = new PayloadStateManager();
-
-  core_data = 0xBB;
-  queue_add_blocking(&core1::core0_ready_queue, &core_data);
+  // core1::launch_core1();
+  //
+  // uint8_t core_data;
+  // queue_remove_blocking(&core1::core1_ready_queue, &core_data);
+  // payload_state_manager = new PayloadStateManager();
+  //
+  // core_data = 0xBB;
+  // queue_add_blocking(&core1::core0_ready_queue, &core_data);
 
   sensors_init();
 
@@ -40,7 +40,9 @@ int main()
   gpio_put(LED_3_PIN, true);
   while (true)
   {
-    payload_state_manager->check_for_commands();
+    //payload_state_manager->check_for_commands();
+
+    aprs::transmitAllData(state);
 
     bmp280->update(state);
     int32_t p;
@@ -49,9 +51,10 @@ int main()
     mpu6050->update(state);
     onboard_clock::clock_loop(state);
 
-    payload_state_manager->log_message(std::format("bmp280: {}, uses i2c: {}, p: {}, t: {}, a: {}",
+    /*payload_state_manager->log_message(std::format("bmp280: {}, uses i2c: {}, p: {}, t: {}, a: {}",
                                                    payload_state_manager->is_faulted(PayloadFaultKey::BMP280),
                                                    bmp280->get_bmp280().uses_i2c(), p, t, a));
+                                                   */
 
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;

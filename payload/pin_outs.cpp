@@ -36,5 +36,5 @@ void pin_init()
 
   gpio_init(RADIO_PTT_PIN);
   gpio_set_dir(RADIO_PTT_PIN, GPIO_OUT);
-  //aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_PTT_PIN, PWM_CHAN_B);
+  //aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_PIN2, PWM_CHAN_A);
 }

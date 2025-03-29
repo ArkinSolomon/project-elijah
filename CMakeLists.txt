@@ -12,7 +12,7 @@ option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_LED_ENABLE "Enable onboard status LED" OFF)
 option(FLASH_SIM_ENABLE "Use flash simulator on microSd" OFF)
 
-#set(PICO_EXTRAS_FETCH_FROM_GIT ON)
+set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 
 find_program(PICOTOOL_INSTALL_LOC "picotool")
 if (NOT PICOTOOL_INSTALL_LOC)
@@ -22,20 +22,20 @@ else()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
-#include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
 
 project(project-elijah C CXX ASM)
 
 pico_sdk_init()
 
 include(FetchContent)
-#FetchContent_Declare(aprs_pico
-#        GIT_REPOSITORY "https://github.com/eleccoder/raspi-pico-aprs-tnc.git"
-#        GIT_TAG main
-#        GIT_SHALLOW ON
-#)
-#FetchContent_MakeAvailable(aprs_pico)
-#add_library(aprs_pico::aprs_pico ALIAS aprs_pico)
+FetchContent_Declare(aprs_pico
+        GIT_REPOSITORY "https://github.com/eleccoder/raspi-pico-aprs-tnc.git"
+        GIT_TAG main
+        GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(aprs_pico)
+add_library(aprs_pico::aprs_pico ALIAS aprs_pico)
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src fast-fs-build)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/elijah_state_framework)
@@ -95,13 +95,13 @@ function(create_elijah_target SRC_DIR_NAME)
     target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=1024 SYS_CLK_KHZ=200000 PICO_STACK_SIZE=4096)
 
     target_link_libraries(${EXEC_NAME}
-#            aprs_pico
+            aprs_pico
             hardware_i2c
             hardware_spi
             hardware_pio
             hardware_adc
             hardware_pwm
-#            pico_audio_pwm
+            pico_audio_pwm
             pico_multicore
             pico_rand
             pico_mem_ops_default

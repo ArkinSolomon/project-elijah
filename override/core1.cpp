@@ -41,9 +41,9 @@ void core1::core1_main()
       }
       else
       {
-        if (delayed_by_ms(land_time, 5 * 60 * 1000) < get_absolute_time())
+        if (delayed_by_ms(land_time, 4.5 * 60 * 1000) < get_absolute_time())
         {
-          gpio_put(PTT_DISABLE, true);
+          gpio_put(PTT_ENABLE, false);
           override_state_manager->log_message("DISABLING PTT");
         }
       }

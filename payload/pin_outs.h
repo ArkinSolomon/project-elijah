@@ -6,8 +6,8 @@
 #define I2C1_SDA_PIN 14 // Pin 19
 #define I2C1_SCL_PIN 15 // Pin 20
 
-#define LED_2_PIN 2
-#define LED_3_PIN 3
+#define LED_2_PIN 20
+#define LED_3_PIN 21
 #define STATUS_LED_PIN 25 // Onboard
 
 #define SPI0_SCK_PIN 18 // Pin 24
