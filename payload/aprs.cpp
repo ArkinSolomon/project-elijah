@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <hardware/dma.h>
 #include <hardware/gpio.h>
 #include <hardware/pwm.h>
 #include <hardware/structs/io_bank0.h>
@@ -11,11 +12,12 @@
 
 #include "pin_outs.h"
 
-void aprs::transmitAllData(PayloadState state) {
-
+void aprs::transmitAllData(const PayloadState& state) {
 	set_sys_clock_48mhz();
-	audio_buffer_pool_t* audio_buffer_pool = aprs_pico_init();
+	gpio_put(25, true);
 
+	audio_buffer_pool_t* audio_buffer_pool = aprs_pico_init();
+	gpio_put(LED_3_PIN, true);
 
 	gpio_put(LED_2_PIN, true);
 	gpio_put(RADIO_PTT_PIN, false);
@@ -27,7 +29,7 @@ void aprs::transmitAllData(PayloadState state) {
 
 }
 
-void aprs::transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string data) {
+void aprs::transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string& data) {
 	aprs_pico_sendAPRS(audio_buffer_pool,
 						"KF8CDC-11",	// Source call sign
 						"KF8CDC-7",		// Destination call sign

@@ -16,8 +16,8 @@ namespace aprs
     inline pwm_chan pwm_channel;
     inline double pwm_freq;
 
-    void transmitAllData(PayloadState state);
-    void transmitData(audio_buffer_pool_t* audio_buffer_pool, std::string data);
+    void transmitAllData(const PayloadState& state);
+    void transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string& data);
 
     //std::unique_ptr<uint8_t[]> encode_aprs_string_message(const std::string &callsign, const std::string &message, size_t &message_len);
 

@@ -16,6 +16,9 @@ void pin_init()
   gpio_init(LED_3_PIN);
   gpio_set_dir(LED_3_PIN, GPIO_OUT);
 
+  gpio_init(25);
+  gpio_set_dir(25, GPIO_OUT);
+
   // See sd_hw_config.c for microSD card SPI setup
 
   // SPI at 33MHz for W25Q64FV
