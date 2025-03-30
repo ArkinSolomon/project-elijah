@@ -17,7 +17,7 @@ struct AirbrakesState
   double gyro_x, gyro_y, gyro_z;
   double bat_voltage, bat_percent;
   int32_t curr_encoder_pos, target_encoder_pos;
-  double curr_angle, target_angle, calculated_angle;
+  double target_angle, calculated_angle;
 };
 
 enum class AirbrakesPersistentStateKey : uint8_t
@@ -95,13 +95,17 @@ public:
     {
       critical_section_enter_blocking(&core1::target_access_cs);
       core1::angle_override_active = !core1::angle_override_active;
+      if (!core1::angle_override_active)
+      {
+        core1::target_encoder_pos = 0;
+      }
       critical_section_exit(&core1::target_access_cs);
     });
 
-    register_command("Set angle", [this](double target_angle)
+    register_command("Set angle", "Target angle (degrees)", [this](double target_angle)
     {
       critical_section_enter_blocking(&core1::target_access_cs);
-      if (!core1::angle_override_active)
+      if (core1::angle_override_active)
       {
         core1::target_encoder_pos = encoder_pos_from_angle(target_angle);
       }
@@ -127,7 +131,6 @@ protected:
     ENCODE_STATE(target_encoder_pos, DataType::Int32, "Encoder target", "")
     ENCODE_STATE(target_angle, DataType::Double, "Angle", "deg")
     ENCODE_STATE(curr_encoder_pos, DataType::Int32, "Current encoder", "")
-    ENCODE_STATE(curr_angle, DataType::Double, "Current angle", "deg")
     ENCODE_STATE(calculated_angle, DataType::Double, "Calculated angle", "deg")
   END_STATE_ENCODER()
 };

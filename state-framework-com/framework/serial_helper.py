@@ -2,10 +2,10 @@ import struct
 
 from framework.readable.readable import Readable
 
-def read_string(tty: Readable) -> str:
+def read_string(readable: Readable) -> str:
     string = ''
     while True:
-        data = tty.read(1)
+        data = readable.read(1)
         char, = struct.unpack('<B', data)
         if chr(char) == '\0':
             break
@@ -14,5 +14,5 @@ def read_string(tty: Readable) -> str:
     return string
 
 
-def read_fixed_string(tty: Readable, string_length: int) -> str:
-    return tty.read(string_length).decode("utf-8", errors='replace')
+def read_fixed_string(readable: Readable, string_length: int) -> str:
+    return readable.read(string_length).decode("utf-8", errors='replace')

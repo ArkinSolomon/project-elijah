@@ -22,11 +22,12 @@ class RegisteredCommand
 {
 public:
   RegisteredCommand();
-  RegisteredCommand(uint8_t command_id, std::string command_name, CommandInputType command_input,
-                    command_callback_t callback);
+  RegisteredCommand(uint8_t command_id, std::string command_name, std::string input_prompt,
+                    CommandInputType command_input, command_callback_t callback);
 
   [[nodiscard]] uint8_t get_command_id() const;
   [[nodiscard]] const std::string& get_command_name() const;
+  [[nodiscard]] const std::string& get_input_prompt() const;
   [[nodiscard]] CommandInputType get_input_type() const;
   [[nodiscard]] const command_callback_t& get_callback() const;
 
@@ -35,6 +36,7 @@ public:
 private:
   uint8_t command_id;
   std::string command_name;
+  std::string input_prompt;
   CommandInputType command_input;
   command_callback_t callback;
 };

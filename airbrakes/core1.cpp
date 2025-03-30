@@ -5,6 +5,7 @@
 
 #include "airbrakes_state_manager.h"
 #include "airbrake_controls.h"
+#include "pin_outs.h"
 #include "sensors.h"
 #include "state_framework_logger.h"
 
@@ -59,6 +60,9 @@ void core1::core1_main()
     const int32_t static_targ_pos = target_encoder_pos;
     critical_section_exit(&target_access_cs);
 
+    airbrakes_state_manager->log_message(std::format("target: {}, {}", static_targ_pos, angle_override_active));
+    gpio_put(LED_2_PIN, angle_override_active);
+
     read_encoder();
 
     critical_section_enter_blocking(&encoder_pos_cs);
@@ -78,7 +82,7 @@ void core1::core1_main()
       airbrakes_close();
     }
 
-    sleep_ms(5);
+    sleep_ms(50);
   }
 }
 

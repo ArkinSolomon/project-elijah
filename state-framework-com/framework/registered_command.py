@@ -11,13 +11,15 @@ class CommandInputType(Enum):
 class RegisteredCommand:
     command_id: int
     command_name: str
+    input_prompt: str
     command_input: CommandInputType
 
     is_hidden: bool
 
-    def __init__(self, command_id: int, command_name: str, command_input: CommandInputType):
+    def __init__(self, command_id: int, command_name: str, input_prompt: str, command_input: CommandInputType):
         self.command_id = command_id
         self.command_name = command_name
+        self.input_prompt = input_prompt
         self.command_input = command_input
 
         self.is_hidden = self.command_name == '_'

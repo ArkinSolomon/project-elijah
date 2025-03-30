@@ -74,6 +74,10 @@ int main()
 
     if (new_target_pos != state.target_encoder_pos && is_coast_phase)
     {
+      if (queue_is_full(&core1::core0_ready_queue))
+      {
+        queue_remove_blocking(&core1::core0_ready_queue, nullptr);
+      }
       queue_add_blocking(&core1::encoder_target_queue, &new_target_pos);
     }
 
@@ -85,7 +89,6 @@ int main()
     critical_section_enter_blocking(&core1::encoder_pos_cs);
     state.curr_encoder_pos = core1::current_encoder_pos;
     critical_section_exit(&core1::encoder_pos_cs);
-    state.curr_angle = angle_from_encoder_pos(state.curr_encoder_pos);
 
     airbrakes_state_manager->state_changed(state);
     airbrakes_state_manager->check_for_log_write();
