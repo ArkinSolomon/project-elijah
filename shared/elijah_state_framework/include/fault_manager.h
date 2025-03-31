@@ -137,26 +137,30 @@ uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, 
 
   if (changing_fault_def->get_communication_channel() != CommunicationChannel::None)
   {
-    bool one_active = false;
+    bool one_device_not_faulted = false;
     for (const elijah_state_framework::internal::FaultDefinition<FaultKeyEnumType>& other_com_fault_def :
          std::views::values(fault_map))
     {
       if (!other_com_fault_def.is_communication_channel() &&
         other_com_fault_def.get_communication_channel() == changing_fault_def->get_communication_channel())
       {
-        one_active |= (faults & (0x01 << other_com_fault_def.get_fault_bit())) > 0;
+        if ((faults & (0x01 << other_com_fault_def.get_fault_bit())) == 0)
+        {
+          one_device_not_faulted = true;
+          break;
+        }
       }
     }
 
     elijah_state_framework::internal::FaultDefinition<FaultKeyEnumType>& com_entry = fault_map.at(
       static_cast<uint8_t>(changing_fault_def->get_communication_channel()));
-    if (one_active)
+    if (one_device_not_faulted)
     {
-      faults |= 0x01 << com_entry.get_fault_bit();
+      faults &= ~(0x01 << com_entry.get_fault_bit());
     }
     else
     {
-      faults &= ~(0x01 << com_entry.get_fault_bit());
+      faults |= 0x01 << com_entry.get_fault_bit();
     }
   }
 

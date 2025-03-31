@@ -37,7 +37,10 @@ void core1::core1_main()
   while (true)
   {
     payload_state_manager->check_for_log_write();
-    if ((payload_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED || to_ms_since_boot(get_absolute_time()) > 5000) && (next_transmission_time == nil_time || next_transmission_time <= get_absolute_time()))
+
+    if ((payload_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED ||
+      to_ms_since_boot(get_absolute_time()) > 5000) && (next_transmission_time == nil_time || next_transmission_time <=
+      get_absolute_time()))
     {
       const PayloadState last_state = payload_state_manager->get_state_history()[0];
       payload_state_manager->log_message("Transmit!");

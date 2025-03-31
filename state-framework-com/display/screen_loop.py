@@ -14,7 +14,7 @@ from display.widgets.log_widget import LogWidget
 from framework.registered_command import CommandInputType
 
 HEADER_SIZE = 8
-FAULT_WIDTH = 16 * 5 + 4
+FAULT_WIDTH = 19 * 5 + 4
 SIDEBAR_WIDTH = 25
 DEVICE_SELECTION_HEIGHT = 5
 
@@ -22,6 +22,14 @@ DEVICE_SELECTION_HEIGHT = 5
 def header_page_changed(screen_state: ScreenState) -> Callable[[int], None]:
     def update(page: int) -> None:
         screen_state.current_header_page = page
+
+    return update
+
+
+def fault_sel_changed(screen_state: ScreenState) -> Callable[[int, int], None]:
+    def update(col: int, row: int) -> None:
+        screen_state.current_fault_col = col
+        screen_state.current_fault_row = row
 
     return update
 
@@ -50,6 +58,8 @@ def update_hovered_device_idx(screen_state: ScreenState) -> Callable[[int], None
 def handle_device_switch(screen_state: ScreenState) -> Callable[[int], None]:
     def update(selected_idx: int) -> None:
         screen_state.selected_device_idx = selected_idx
+        screen_state.current_fault_col = 0
+        screen_state.current_fault_row = 0
 
     return update
 
@@ -91,7 +101,7 @@ def handle_command(screen_state: ScreenState, device: Device | None) -> Callable
 
 
 def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]) -> bool:
-    line_segments = LineSegments(screen, 0, 0, screen.width, screen.height)
+    line_segments = LineSegments(screen, 0, 0, screen.width, screen.height, Screen.COLOUR_BLACK)
 
     line_segments.add_vertical_line(0, 0, screen.height - 1)
     line_segments.add_vertical_line(screen.width - 1, 0, screen.height - 1)
@@ -137,11 +147,23 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
         sf = devices[screen_state.selected_device_idx].state_framework
         assert sf is not None
         faults = sf.fault_definitions
+        last_updated_fault = sf.last_updated_fault
     else:
         faults = []
+        last_updated_fault = None
 
-    faults_widget = FaultsWidget(screen, screen.width - 1 - FAULT_WIDTH, 1, FAULT_WIDTH, HEADER_SIZE, faults)
+    faults_selected = screen_state.focused_widget == ScreenWidget.FAULTS and screen_state.input_mode != CommandInputType.NONE
+    faults_background = 235 if faults_selected else Screen.COLOUR_BLACK
+    faults_block = ColorBlock(screen, screen.width - 1 - FAULT_WIDTH, 1, FAULT_WIDTH, HEADER_SIZE, faults_background)
+    faults_block.render()
+
+    faults_widget = FaultsWidget(screen, screen.width - 1 - FAULT_WIDTH, 1, FAULT_WIDTH, HEADER_SIZE, faults,
+                                 last_updated_fault, faults_selected, screen_state.current_fault_col,
+                                 screen_state.current_fault_row, fault_sel_changed(screen_state), faults_background)
     faults_widget.render()
+
+    if faults_selected and screen_state.input_mode == InputMode.NONE and ev is not None:
+        char_handled = faults_widget.handle_char(ev)
 
     commands_selected = screen_state.focused_widget == ScreenWidget.COMMANDS and screen_state.input_mode != CommandInputType.NONE
     command_background = 235 if commands_selected else Screen.COLOUR_BLACK

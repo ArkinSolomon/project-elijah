@@ -41,6 +41,7 @@ class StateFramework:
     commands: list[RegisteredCommand]
     persistent_entries: list[PersistentDataEntry]
     fault_definitions: list[FaultDefinition]
+    last_updated_fault: FaultDefinition | None
 
     current_phase_id: int = -1
     current_phase: str
@@ -54,6 +55,7 @@ class StateFramework:
         self.commands = []
         self.persistent_entries = []
         self.fault_definitions = []
+        self.last_updated_fault = None
         self.current_phase_id = -1
         self.current_phase = "Unknown"
         self.total_data_len = 0
@@ -234,12 +236,18 @@ class StateFramework:
         # for entry in self.persistent_data_entries:
         #     print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
 
-    def _update_faults(self, readable: Readable):
+    def _update_faults(self, readable: Readable) -> None:
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))
         change_message = read_string(readable)
 
         for fault in self.fault_definitions:
             fault.is_faulted = ((all_faults >> fault.fault_bit) & 0x01) > 0
+            if fault.fault_bit == changed_fault_bit:
+                self.last_updated_fault = fault
+                if fault.is_faulted:
+                    fault.last_fault_message = change_message
+                else:
+                    fault.last_fault_message = None
             # if fault.fault_bit == changed_fault_bit:
             #     print(
             #         f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')

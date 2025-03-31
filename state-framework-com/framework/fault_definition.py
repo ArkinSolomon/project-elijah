@@ -19,6 +19,10 @@ class FaultDefinition:
     communication_channel: CommunicationChannel
 
     is_faulted: bool
+    last_fault_message: str | None = None
+
+    def __init__(self):
+        self.last_fault_message = None
 
     @staticmethod
     def read_definition(readable: Readable, all_faults: int) -> 'FaultDefinition':

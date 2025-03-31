@@ -25,16 +25,16 @@ class LogMessage:
 
     def get_log_header_str(self) -> str:
         time_str = self.recv_time.strftime("%H:%M:%S")
-        log_type: str = "System"
+        log_type: str = "SYS"
         match self.log_level:
             case LogLevel.DEBUG:
-                log_type = "Debug"
+                log_type = "DBG"
             case LogLevel.INFO:
-                log_type = "Info"
+                log_type = "INF"
             case LogLevel.WARNING:
-                log_type = "Warning"
+                log_type = "WRN"
             case LogLevel.ERROR:
-                log_type = "Error"
+                log_type = "ERR"
             case LogLevel.SERIAL_ONLY:
-                log_type = "Serial"
-        return f"[{time_str}][{log_type:7}]: "
+                log_type = "SER"
+        return f"[{time_str}][{log_type:3}]: "

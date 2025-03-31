@@ -8,13 +8,12 @@
 
 namespace elijah_state_framework
 {
+  void init_usb_comm();
   void log_serial_message(const std::string& message);
 
   namespace internal
   {
     inline critical_section_t usb_cs;
-
-    void init_usb_comm();
 
     void write_to_serial(const uint8_t* write_data, size_t write_len);
     void write_to_serial(const uint8_t* packet_data, size_t packet_len, bool flush);

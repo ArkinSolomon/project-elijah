@@ -37,8 +37,6 @@ std::string ReliableClock::on_init(PayloadState& state)
   tm time_inst{};
   if (!ds_1307.check_and_read_clock(time_inst))
   {
-    get_framework()->set_fault(PayloadFaultKey::DS1307, true,
-                               "Failed to read DS1307 (or not set) while initializing onboard clock");
     return "Failed to initialize onboard clock with DS1307";
   }
 
@@ -71,14 +69,10 @@ std::string ReliableClock::on_update(PayloadState& state)
 
   if (cycles_since_last_check >= DS_1307_FUNCTIONAL_CHECK_CYCLES)
   {
-    const bool rtc_detected = ds_1307.functional_check(state.time_inst);
-    if (!rtc_detected)
+    if (ds_1307.functional_check(state.time_inst))
     {
-      get_framework()->set_fault(PayloadFaultKey::DS1307, true, "Functional check failed");
-      return "";
+      cycles_since_last_check = 0;
     }
-    get_framework()->set_fault(PayloadFaultKey::DS1307, false);
-    cycles_since_last_check = 0;
   }
   else
   {

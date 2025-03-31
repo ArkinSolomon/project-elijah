@@ -4,9 +4,10 @@ from typing import Any
 
 class ScreenWidget(IntEnum):
     HEADER = 1
-    LOGS = 2
-    COMMANDS = 3
-    DEVICES = 4
+    FAULTS = 2
+    LOGS = 3
+    COMMANDS = 4
+    DEVICES = 5
 
 class InputMode(Enum):
     NONE = 0
@@ -15,14 +16,17 @@ class InputMode(Enum):
     STRING = 3
 
 class ScreenState:
-    hovered_device_idx: int
-    selected_device_idx: int
-
     focused_widget: ScreenWidget
 
     current_header_page: int
     current_scroll_pos: int
     selected_command_idx: int
+
+    current_fault_col: int
+    current_fault_row: int
+
+    hovered_device_idx: int
+    selected_device_idx: int
 
     last_render: int
     screen_refresh_rate: int
@@ -33,14 +37,17 @@ class ScreenState:
     enter_callback: Callable[[str], Any] | None
 
     def __init__(self) -> None:
-        self.hovered_device_idx = 0
-        self.selected_device_idx = 0
-
         self.focused_widget = ScreenWidget.HEADER
 
         self.current_header_page = 0
         self.current_scroll_pos = -1
         self.selected_command_idx = 0
+
+        self.current_fault_col = 0
+        self.current_fault_row = 0
+
+        self.hovered_device_idx = 0
+        self.selected_device_idx = 0
 
         self.last_render = 0
         self.screen_refresh_rate = 0

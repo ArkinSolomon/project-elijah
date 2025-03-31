@@ -11,6 +11,7 @@ int main()
 {
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
+  elijah_state_framework::init_usb_comm();
 
   pin_init();
 

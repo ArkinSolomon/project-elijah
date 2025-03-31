@@ -97,6 +97,8 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   FRESULT fr = f_open(&fil, file_name.c_str(), FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
   if (fr != FR_OK)
   {
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     recursive_mutex_exit(&write_buff_rmtx);
     log_serial_message("Will not flush write buffer, failed to open file");
@@ -117,6 +119,8 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK)
   {
     f_close(&fil);
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     recursive_mutex_exit(&write_buff_rmtx);
     log_serial_message("Will not flush write buffer, failed to seek to or write next log position");
@@ -127,6 +131,8 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK || bytes_written != write_size)
   {
     f_close(&fil);
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     recursive_mutex_exit(&write_buff_rmtx);
     log_serial_message("Will not flush write buffer, failed to write data");
@@ -138,6 +144,8 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   if (fr != FR_OK || bytes_written != write_size)
   {
     f_close(&fil);
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     recursive_mutex_exit(&write_buff_rmtx);
     log_serial_message("Failed to update log position, could not seek to beginning of file to write next log position");
@@ -149,6 +157,8 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
 
   if (fr != FR_OK)
   {
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     recursive_mutex_exit(&write_buff_rmtx);
     log_serial_message("Failed to update log position, unable to write at beginning of file");
@@ -216,6 +226,8 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   fr = f_open(&fil, file_name.c_str(), FA_READ);
   if (fr != FR_OK)
   {
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     return;
   }
@@ -223,6 +235,8 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   fr = f_lseek(&fil, 0);
   if (fr != FR_OK)
   {
+    f_unmount("");
+    mounted = false;
     mutex_exit(&sd_card_mtx);
     f_close(&fil);
     return;
@@ -238,5 +252,10 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   if (fr == FR_OK)
   {
     next_log_pos = read_log_pos;
+  }
+  else
+  {
+    f_unmount("");
+    mounted = false;
   }
 }

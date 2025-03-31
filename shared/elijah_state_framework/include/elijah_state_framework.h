@@ -210,7 +210,6 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   application_name(std::move(application_name)), launch_key(launch_key), state_history_size(state_history_size),
   micro_sd_fault_key(micro_sd_fault_key)
 {
-  internal::init_usb_comm();
   critical_section_init(&internal::usb_cs);
   shared_mutex_init(&logger_smtx);
   shared_mutex_init(&state_history_smtx);
@@ -669,7 +668,6 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::send_framework_metadata(
   bool write_to_file, const bool write_to_serial)
 {
-  absolute_time_t s = get_absolute_time();
   if (!(write_to_file || (write_to_serial && stdio_usb_connected())))
   {
     return;
@@ -684,23 +682,13 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   if (write_to_file && logger)
   {
-    absolute_time_t test_t = get_absolute_time();
     if (!logger->is_mounted())
     {
-      absolute_time_t test_e = get_absolute_time();
-      if (!write_to_serial)
-      {
-        log_message(std::format("test time: {}us", absolute_time_diff_us(test_t, test_e)), LogLevel::Debug);
-      }
-
       write_to_file = false;
       shared_mutex_exit_shared(&logger_smtx);
-      absolute_time_t e = get_absolute_time();
 
       if (!write_to_serial)
       {
-        log_message(std::format("ttf: {}us", absolute_time_diff_us(s, e)), LogLevel::Debug);
-
         return;
       }
     }

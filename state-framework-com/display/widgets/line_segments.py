@@ -14,10 +14,12 @@ class LineType(Enum):
 class LineSegments(Widget):
     # position, start, length, vertical/horizontal
     lines: list[Tuple[int, int, int, LineType]]
+    background_color: int
 
-    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int):
+    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, background_color: int):
         super(LineSegments, self).__init__(screen, offset_x, offset_y, width, height)
         self.lines = []
+        self.background_color = background_color
 
     def add_vertical_line(self, x: int, start_y: int, length: int):
         if x < 0 or start_y < 0 or length <= 0:
@@ -58,11 +60,11 @@ class LineSegments(Widget):
             if line[3] == LineType.VERTICAL:
                 x, start_y, vert_length, _ = line
                 for y in range(start_y, start_y + vert_length):
-                    self.screen.print_at("│", self.offset_x + x, self.offset_y + y)
+                    self.screen.print_at("│", self.offset_x + x, self.offset_y + y, bg=self.background_color)
             else:
                 y, start_x, horiz_length, _ = line
                 for x in range(start_x, start_x + horiz_length):
-                    self.screen.print_at("─", self.offset_x + x, self.offset_y + y)
+                    self.screen.print_at("─", self.offset_x + x, self.offset_y + y, bg=self.background_color)
 
         for intersection in intersections:
-            self.screen.print_at(intersection[2], self.offset_x + intersection[0], self.offset_y + intersection[1])
+            self.screen.print_at(intersection[2], self.offset_x + intersection[0], self.offset_y + intersection[1], bg=self.background_color)

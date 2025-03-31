@@ -15,10 +15,9 @@
 
 int main()
 {
-  set_sys_clock_khz(SYS_CLK_KHZ, true);
-
   flash_safe_execute_core_init();
   multicore_lockout_victim_init();
+  elijah_state_framework::init_usb_comm();
 
   pin_init();
 
@@ -42,12 +41,9 @@ int main()
   {
     payload_state_manager->check_for_commands();
 
-    absolute_time_t before_sensors = get_absolute_time();
     bmp280->update(state);
     mpu6050->update(state);
     reliable_clock->update(state);
-    absolute_time_t reliable_clock_t = get_absolute_time();
-    payload_state_manager->log_message(std::format("Command check: {}us", absolute_time_diff_us(before_sensors, reliable_clock_t)), elijah_state_framework::LogLevel::Debug);
 
     /*payload_state_manager->log_message(std::format("bmp280: {}, uses i2c: {}, p: {}, t: {}, a: {}",
                                                    payload_state_manager->is_faulted(PayloadFaultKey::BMP280),
@@ -57,11 +53,7 @@ int main()
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
 
-    absolute_time_t before_sc = get_absolute_time();
     payload_state_manager->state_changed(state);
-    absolute_time_t state_change_t = get_absolute_time();
-
-    payload_state_manager->log_message(std::format("State change: {}us", absolute_time_diff_us(before_sc, state_change_t)), elijah_state_framework::LogLevel::Debug);
 
     gpio_put(LED_2_PIN, led_on = !led_on);
     sleep_ms(50);

@@ -39,10 +39,9 @@ bool DS1307::set_clock(const tm& time_inst) const
   const uint8_t minutes_data = time_inst.tm_min / 10 << 4 | time_inst.tm_min % 10;
   const uint8_t hours_data = time_inst.tm_hour / 10 << 4 | time_inst.tm_hour % 10;
   const uint8_t date_data = time_inst.tm_mday / 10 << 4 | time_inst.tm_mday % 10;
-  const uint8_t month_data = (time_inst.tm_mon + 1) / 10 << 4 | (time_inst.tm_mon + 1) % 10;
+  const uint8_t month_data = ((time_inst.tm_mon + 1) / 10 << 4) | ((time_inst.tm_mon + 1) % 10);
 
-  const int years_since_2000 = time_inst.tm_year - 100;
-  const uint8_t year_data = static_cast<uint8_t>(years_since_2000) / 10 << 4 | years_since_2000 % 10;
+  const uint8_t year_data = static_cast<uint8_t>(time_inst.tm_year) / 10 << 4 | time_inst.tm_year % 10;
   const uint8_t write_data[8] = {
     REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(time_inst.tm_wday & 0xFF),
     date_data, month_data,
@@ -78,7 +77,8 @@ bool DS1307::functional_check(const tm& reset_inst) const
       return true;
     }
 
-    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "Detected, but unable to set during functional reset");
+    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true,
+                                     "Detected, but unable to set during functional reset");
     return false;
   }
 
@@ -115,7 +115,7 @@ bool DS1307::read_clock(tm& time_inst) const
   time_inst.tm_mday = (date >> 4 & 0x3) * 10 + (date & 0xF);
   time_inst.tm_wday = day;
   time_inst.tm_mon = ((month & 0x10) >> 4) * 10 + (month & 0xF) - 1;
-  time_inst.tm_year = 100 + (year >> 4) * 10 + (year & 0xF);
+  time_inst.tm_year = (year >> 4) * 10 + (year & 0xF);
 
   return true;
 }
@@ -157,7 +157,7 @@ void DS1307::reg_dump() const
     }
 
     uint8_t read_data = 0;
-    const bool success = i2c_util::read_ubyte(i2c_inst, i2c_addr, addr,read_data);
+    const bool success = i2c_util::read_ubyte(i2c_inst, i2c_addr, addr, read_data);
     if (!success)
     {
       payload_state_manager->log_message(std::format("Reg dump failed reading 0x{:02x}", addr),

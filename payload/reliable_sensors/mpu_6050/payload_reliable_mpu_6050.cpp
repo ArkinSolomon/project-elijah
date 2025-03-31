@@ -3,8 +3,8 @@
 #include "payload_state_manager.h"
 
 PayloadReliableMPU6050::PayloadReliableMPU6050(PayloadStateManager* payload_state_manager) : ReliableMPU6050(
-  payload_state_manager, PayloadFaultKey::MPU6050,i2c1, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range500,
-  MPU6050::AccelFullScaleRange::Range8g, PayloadPersistentDataKey::AccelCalibX,
+  payload_state_manager, PayloadFaultKey::MPU6050, i2c1, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range2000,
+  MPU6050::AccelFullScaleRange::Range16g, PayloadPersistentDataKey::AccelCalibX,
   PayloadPersistentDataKey::AccelCalibY, PayloadPersistentDataKey::AccelCalibZ,
   PayloadPersistentDataKey::GyroCalibX, PayloadPersistentDataKey::GyroCalibY,
   PayloadPersistentDataKey::GyroCalibZ)
@@ -12,8 +12,8 @@ PayloadReliableMPU6050::PayloadReliableMPU6050(PayloadStateManager* payload_stat
 }
 
 void PayloadReliableMPU6050::update_state(PayloadState& state, const double xa, const double ya, const double za,
-                                           const double xg, const double yg,
-                                           const double zg) const
+                                          const double xg, const double yg,
+                                          const double zg) const
 {
   state.accel_x = xa;
   state.accel_y = ya;

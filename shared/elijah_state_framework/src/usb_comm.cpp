@@ -11,6 +11,21 @@
 
 #include "output_packet.h"
 
+void elijah_state_framework::init_usb_comm()
+{
+  static bool did_init = false;
+  if (did_init)
+  {
+    return;
+  }
+
+  if (!critical_section_is_initialized(&internal::usb_cs))
+  {
+    critical_section_init(&internal::usb_cs);
+  }
+  did_init = stdio_usb_init();
+}
+
 void elijah_state_framework::log_serial_message(const std::string& message)
 {
   if (!stdio_usb_connected())
@@ -26,21 +41,6 @@ void elijah_state_framework::log_serial_message(const std::string& message)
   internal::write_to_serial(encoded_message.get(), encoded_len);
   critical_section_exit(&internal::usb_cs);
 }
-
-
-void elijah_state_framework::internal::init_usb_comm()
-{
-  static bool did_init = false;
-  if (did_init)
-  {
-    return;
-  }
-
-  critical_section_init(&usb_cs);
-  stdio_usb_init();
-  did_init = true;
-}
-
 
 void elijah_state_framework::internal::write_to_serial(
   const uint8_t* write_data, const size_t write_len)
