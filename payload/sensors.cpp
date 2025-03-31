@@ -10,4 +10,5 @@ void sensors_init()
     mpu6050 = new PayloadReliableMPU6050(payload_state_manager);
 
     battery = new OvonicBattery(BAT_VOLTAGE_PIN, 32);
+    reliable_clock = new ReliableClock();
 }

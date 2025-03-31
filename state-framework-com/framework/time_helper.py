@@ -3,7 +3,7 @@ import time
 
 
 def encode_time(time_inst: time.struct_time) -> bytes:
-    full_year = time_inst.tm_year + 1900
+    full_year = time_inst.tm_year
     return bytes([
         time_inst.tm_sec,
         time_inst.tm_min,

@@ -23,6 +23,7 @@
 #include "usb_comm.h"
 #include "state_framework_logger.h"
 #include "variable_definition.h"
+#include "../../../payload/pin_outs.h"
 
 constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
 
@@ -48,7 +49,6 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
   } \
   data_len += curr_data_size_len;
 #define ENCODE_STATE(MEMBER_NAME, DATA_TYPE, DISP_NAME, DISP_UNIT) \
-  assert(!done_with_static); \
   static_assert(DataType::String != (DATA_TYPE) && !std::is_same<decltype(state.MEMBER_NAME), std::string>::value, "Property (" #MEMBER_NAME ") must be not be of type string"); \
   static_assert(DataType::Time != (DATA_TYPE) && !std::is_same<decltype(state.MEMBER_NAME), tm>::value, "Property (" #MEMBER_NAME ") must not be a time type, use ENCODE_TIME_STATE(" #MEMBER_NAME ", " #DISP_NAME ") instead"); \
   curr_data_size_len = data_type_helpers::get_size_for_data_type(DATA_TYPE); \
@@ -59,7 +59,6 @@ constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
   } \
   data_len += curr_data_size_len;
 #define ENCODE_TIME_STATE(MEMBER_NAME, DISP_NAME) \
-  assert(!done_with_static); \
   static_assert(std::is_same<decltype(state.MEMBER_NAME), tm>::value, "Using ENCODE_TIME_STATE requires encoding a time variable"); \
   curr_data_size_len = data_type_helpers::get_size_for_data_type(DataType::Time); \
   if (register_data) { \
@@ -134,6 +133,8 @@ namespace elijah_state_framework
     [[nodiscard]] bool is_faulted(EFaultKey fault_key);
 
   protected:
+    bool is_size_calculated = false;
+
     void register_command(const std::string& command, std::function<void()> callback);
     void register_command(const std::string& command, const std::string& input_prompt,
                           std::function<void(double)> callback);
@@ -174,7 +175,6 @@ namespace elijah_state_framework
     std::map<uint8_t, RegisteredCommand> registered_commands;
     std::map<uint8_t, VariableDefinition> variable_definitions;
 
-    bool is_size_calculated = false;
     size_t encoded_state_size = 0;
 
     shared_mutex_t state_history_smtx;
@@ -198,7 +198,7 @@ namespace elijah_state_framework
     void register_command(const std::string& command, const std::string& input_prompt, CommandInputType command_input,
                           command_callback_t callback);
 
-    void send_framework_metadata(bool write_to_file);
+    void send_framework_metadata(bool write_to_file, bool write_to_serial);
     void send_persistent_state(const void* data, size_t data_len);
   };
 }
@@ -226,7 +226,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
   register_command("_", [this]
   {
-    send_framework_metadata(false);
+    send_framework_metadata(false, true);
   });
 
   // ReSharper disable once CppPassValueParameterByConstReference
@@ -374,7 +374,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
 {
   if (!did_write_metadata)
   {
-    send_framework_metadata(true);
+    send_framework_metadata(true, false);
   }
 
   const size_t total_encoded_packet_size = encoded_state_size + 1;
@@ -503,7 +503,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   {
     if (!did_write_metadata)
     {
-      send_framework_metadata(true);
+      send_framework_metadata(true, false);
     }
     logger->log_data(encoded_data, encoded_size);
   }
@@ -637,10 +637,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
   TStateData collection_data;
   encode_state(nullptr, collection_data, 0, true);
 
-  if (logger->is_new_file())
+  if (!logger->is_mounted() || logger->is_new_file())
   {
+    log_message("Logger not mounted or new file");
     did_write_metadata = false;
-    send_framework_metadata(true);
+    send_framework_metadata(true, false);
   }
   else
   {
@@ -666,42 +667,77 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::reg
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::send_framework_metadata(
-  const bool write_to_file)
+  bool write_to_file, const bool write_to_serial)
 {
-  if (!write_to_file && !stdio_usb_connected())
+  absolute_time_t s = get_absolute_time();
+  if (!(write_to_file || (write_to_serial && stdio_usb_connected())))
   {
     return;
   }
 
-  critical_section_enter_blocking(&internal::usb_cs);
+  if (write_to_serial)
+  {
+    critical_section_enter_blocking(&internal::usb_cs);
+  }
+
+  shared_mutex_enter_blocking_shared(&logger_smtx);
+
   if (write_to_file && logger)
   {
-    shared_mutex_enter_blocking_shared(&logger_smtx);
-    const auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
+    absolute_time_t test_t = get_absolute_time();
+    if (!logger->is_mounted())
+    {
+      absolute_time_t test_e = get_absolute_time();
+      if (!write_to_serial)
+      {
+        log_message(std::format("test time: {}us", absolute_time_diff_us(test_t, test_e)), LogLevel::Debug);
+      }
+
+      write_to_file = false;
+      shared_mutex_exit_shared(&logger_smtx);
+      absolute_time_t e = get_absolute_time();
+
+      if (!write_to_serial)
+      {
+        log_message(std::format("ttf: {}us", absolute_time_diff_us(s, e)), LogLevel::Debug);
+
+        return;
+      }
+    }
+
+    constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
     logger->log_data(&packet_id, sizeof(packet_id));
+  }
+  else
+  {
+    shared_mutex_exit_shared(&logger_smtx);
   }
 
   auto segment_id = static_cast<uint8_t>(internal::MetadataSegment::ApplicationName);
   const size_t initial_size = sizeof(FRAMEWORK_TAG) + sizeof(uint8_t) + application_name.size() + 1;
-  auto initial_data = new uint8_t[initial_size];
+  const auto initial_data = new uint8_t[initial_size];
 
   *reinterpret_cast<uint64_t*>(initial_data) = FRAMEWORK_TAG;
   initial_data[sizeof(FRAMEWORK_TAG)] = segment_id;
   memcpy(initial_data + sizeof(FRAMEWORK_TAG) + sizeof(segment_id), application_name.c_str(),
          application_name.size() + 1);
-  internal::write_to_serial(initial_data, initial_size, false);
+
+  if (write_to_serial)
+  {
+    internal::write_to_serial(initial_data, initial_size, false);
+  }
   if (write_to_file && logger)
   {
     logger->log_data(initial_data + sizeof(FRAMEWORK_TAG), sizeof(uint8_t) + application_name.size() + 1);
   }
 
   const uint8_t command_count = registered_commands.size();
-  if (command_count > 0)
+  if (write_to_serial && command_count > 0)
   {
     segment_id = static_cast<uint8_t>(internal::MetadataSegment::Commands);
     const uint8_t segment_header[2] = {segment_id, command_count};
-    internal::write_to_serial(segment_header, 2, false);
 
+    internal::write_to_serial(segment_header, 2, false);
     for (const auto& command : std::views::values(registered_commands))
     {
       size_t encoded_size;
@@ -715,7 +751,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   {
     segment_id = static_cast<uint8_t>(internal::MetadataSegment::VariableDefinitions);
     const uint8_t segment_header[3] = {segment_id, var_count, static_cast<uint8_t>(sizeof(size_t))};
-    internal::write_to_serial(segment_header, 3, false);
+    if (write_to_serial)
+    {
+      internal::write_to_serial(segment_header, 3, false);
+    }
     if (write_to_file && logger)
     {
       logger->log_data(segment_header, 3);
@@ -725,7 +764,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     {
       size_t encoded_size;
       std::unique_ptr<uint8_t[]> encoded = var_def.encode_var(encoded_size);
-      internal::write_to_serial(encoded.get(), encoded_size, false);
+      if (write_to_serial)
+      {
+        internal::write_to_serial(encoded.get(), encoded_size, false);
+      }
       if (write_to_file && logger)
       {
         logger->log_data(encoded.get(), encoded_size);
@@ -738,7 +780,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   const uint8_t persistent_data_segment_header[3] = {
     segment_id, static_cast<uint8_t>(persistent_data_storage->get_entry_count()), static_cast<uint8_t>(sizeof(size_t))
   };
-  internal::write_to_serial(persistent_data_segment_header, 3, false);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(persistent_data_segment_header, 3, false);
+  }
   if (write_to_file && logger)
   {
     logger->log_data(persistent_data_segment_header, 3);
@@ -748,7 +793,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   std::unique_ptr<uint8_t[]> encoded_data = persistent_data_storage->encode_all_entries(encoded_size);
 
   // We need to flush here so that we can dump persistent storage
-  internal::write_to_serial(encoded_data.get(), encoded_size);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(encoded_data.get(), encoded_size);
+  }
   if (write_to_file && logger)
   {
     logger->log_data(encoded_data.get(), encoded_size);
@@ -756,9 +804,12 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   }
 
   persistent_data_storage->lock_active_data();
-  internal::write_to_serial(
-    static_cast<uint8_t*>(persistent_data_storage->get_active_data_loc()),
-    persistent_data_storage->get_total_byte_size());
+  if (write_to_serial)
+  {
+    internal::write_to_serial(
+      static_cast<uint8_t*>(persistent_data_storage->get_active_data_loc()),
+      persistent_data_storage->get_total_byte_size());
+  }
   if (write_to_file && logger)
   {
     logger->log_data(static_cast<uint8_t*>(persistent_data_storage->get_active_data_loc()),
@@ -776,14 +827,20 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   };
   memcpy(fault_segment_header + 2, &all_faults, sizeof(uint32_t));
 
-  internal::write_to_serial(fault_segment_header, header_len, false);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(fault_segment_header, header_len, false);
+  }
   if (write_to_file && logger)
   {
     logger->log_data(fault_segment_header, header_len);
   }
 
   encoded_data = fault_manager->encode_all_faults(encoded_size);
-  internal::write_to_serial(encoded_data.get(), encoded_size, false);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(encoded_data.get(), encoded_size, false);
+  }
   if (write_to_file && logger)
   {
     logger->log_data(encoded_data.get(), encoded_size);
@@ -791,17 +848,26 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   segment_id = static_cast<uint8_t>(internal::MetadataSegment::InitialPhase);
   const std::string curr_phase_name = flight_phase_controller->get_phase_name(current_phase);
-  size_t phase_change_size = 2 * sizeof(uint8_t) + curr_phase_name.size() + 1;
+  const size_t phase_change_size = 2 * sizeof(uint8_t) + curr_phase_name.size() + 1;
   uint8_t phase_change_packet[encoded_size] = {segment_id, static_cast<uint8_t>(current_phase)};
   memcpy(phase_change_packet + 2, curr_phase_name.c_str(), curr_phase_name.size() + 1);
-  internal::write_to_serial(phase_change_packet, phase_change_size, false);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(phase_change_packet, phase_change_size, false);
+  }
+
   if (write_to_file && logger)
   {
     logger->log_data(phase_change_packet, phase_change_size);
   }
 
   segment_id = static_cast<uint8_t>(internal::MetadataSegment::MetadataEnd);
-  internal::write_to_serial(&segment_id, 1);
+
+  if (!write_to_serial)
+  {
+    log_message("Will flush before exit", LogLevel::Debug);
+  }
+
   if (write_to_file && logger)
   {
     logger->log_data(&segment_id, 1);
@@ -809,7 +875,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     shared_mutex_exit_shared(&logger_smtx);
   }
 
-  critical_section_exit(&internal::usb_cs);
+  if (write_to_serial)
+  {
+    internal::write_to_serial(&segment_id, 1);
+    critical_section_exit(&internal::usb_cs);
+  }
 }
 
 FRAMEWORK_TEMPLATE_DECL

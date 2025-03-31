@@ -15,7 +15,9 @@ class InputMode(Enum):
     STRING = 3
 
 class ScreenState:
+    hovered_device_idx: int
     selected_device_idx: int
+
     focused_widget: ScreenWidget
 
     current_header_page: int
@@ -31,7 +33,9 @@ class ScreenState:
     enter_callback: Callable[[str], Any] | None
 
     def __init__(self) -> None:
+        self.hovered_device_idx = 0
         self.selected_device_idx = 0
+
         self.focused_widget = ScreenWidget.HEADER
 
         self.current_header_page = 0

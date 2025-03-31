@@ -32,27 +32,38 @@
 #define CREATE_SETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   void set_##HUMAN_NAME(PersistentKeyType key, const TYPE_NAME value) \
   { \
+   set_##HUMAN_NAME(key, value, true); \
+  }
+
+#define CREATE_PRIVATE_SETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME)  void set_##HUMAN_NAME(PersistentKeyType key, const TYPE_NAME value, const bool lock) \
+{ \
+  uint32_t saved_ints = 0; \
+  if (lock) { \
+    saved_ints = save_and_disable_interrupts(); \
     shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx); \
-    const uint32_t saved_ints = save_and_disable_interrupts(); \
-    assert(data_entries.contains(key)); \
-    const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
-    if (active_data_loc == flash_data_loc) \
-    { \
-      active_data_loc = malloc(get_total_byte_size()); \
-      memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
-    } \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
-    *data_start = value; \
+  } \
+  assert(data_entries.contains(key)); \
+  const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
+  if (active_data_loc == flash_data_loc) \
+  { \
+  active_data_loc = malloc(get_total_byte_size()); \
+  memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
+  } \
+  const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
+  *data_start = value; \
+  if (lock) { \
     shared_mutex_exit_exclusive(&persistent_storage_smtx); \
     restore_interrupts_from_disabled(saved_ints); \
-  }
+  } \
+}
+
 
 #define CREATE_GETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   TYPE_NAME get_##HUMAN_NAME(PersistentKeyType key) \
   { \
     assert(data_entries.contains(key)); \
-    shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
     const uint32_t saved_ints = save_and_disable_interrupts(); \
+    shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
     const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
     const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
     const TYPE_NAME value = *data_start; \
@@ -110,7 +121,6 @@ namespace elijah_state_framework
     CREATE_GETTER_FOR_TYPE(uint64_t, uint64)
     CREATE_GETTER_FOR_TYPE(float, float)
     CREATE_GETTER_FOR_TYPE(double, double)
-
     tm get_time(PersistentKeyType key);
 
     void finish_registration();
@@ -124,11 +134,25 @@ namespace elijah_state_framework
     [[nodiscard]] size_t get_total_byte_size() const;
 
     void commit_data();
-    void commit_data(bool use_callback, bool lock_mtx);
+    void commit_data(bool use_callback, bool lock_mtx, bool ints_saved, uint32_t saved_ints);
     void load_default_data();
     void on_commit(commit_callback_t&& commit_callback);
 
   private:
+    CREATE_PRIVATE_SETTER_FOR_TYPE(int8_t, int8)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(uint8_t, uint8)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(int16_t, int16)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(uint16_t, uint16)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(int32_t, int32)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(uint32_t, uint32)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(int64_t, int64)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(uint64_t, uint64)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(float, float)
+    CREATE_PRIVATE_SETTER_FOR_TYPE(double, double)
+    void set_string(PersistentKeyType key, const std::string& value, bool lock);
+    void set_time(PersistentKeyType key, const tm& time_inst, bool lock);
+
+
     shared_mutex_t persistent_storage_smtx;
 
     // For fixed length vars (next offset is this size)
@@ -203,8 +227,19 @@ template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_string(
   PersistentKeyType key, const std::string& value)
 {
-  const uint32_t saved_ints = save_and_disable_interrupts();
-  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  set_string(key, value, true);
+}
+
+template <elijah_state_framework::internal::EnumType PersistentKeyType>
+void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_string(
+  PersistentKeyType key, const std::string& value, const bool lock)
+{
+  uint32_t saved_ints = 0;
+  if (lock)
+  {
+    saved_ints = save_and_disable_interrupts();
+    shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  }
 
   assert(data_entries.contains(key));
   const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key];
@@ -252,8 +287,11 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_strin
   }
   active_data_loc = new_data_loc;
 
-  shared_mutex_exit_exclusive(&persistent_storage_smtx);
-  restore_interrupts_from_disabled(saved_ints);
+  if (lock)
+  {
+    shared_mutex_exit_exclusive(&persistent_storage_smtx);
+    restore_interrupts_from_disabled(saved_ints);
+  }
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
@@ -277,8 +315,19 @@ template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_time(
   PersistentKeyType key, const tm& time_inst)
 {
-  shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
-  const uint32_t saved_ints = save_and_disable_interrupts();
+  set_time(key, time_inst, true);
+}
+
+template <elijah_state_framework::internal::EnumType PersistentKeyType>
+void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_time(
+  PersistentKeyType key, const tm& time_inst, const bool lock)
+{
+  uint32_t saved_ints = 0;
+  if (lock)
+  {
+    saved_ints = save_and_disable_interrupts();
+    shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
+  }
   assert(data_entries.contains(key));
 
   const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key];
@@ -291,8 +340,11 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_time(
   uint8_t* data_start = static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset();
   internal::encode_time(data_start, time_inst);
 
-  shared_mutex_exit_exclusive(&persistent_storage_smtx);
-  restore_interrupts_from_disabled(saved_ints);
+  if (lock)
+  {
+    shared_mutex_exit_exclusive(&persistent_storage_smtx);
+    restore_interrupts_from_disabled(saved_ints);
+  }
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
@@ -314,6 +366,7 @@ tm elijah_state_framework::PersistentDataStorage<PersistentKeyType>::get_time(Pe
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::finish_registration()
 {
+  uint32_t saved_ints = save_and_disable_interrupts();
   shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
   done_registering_keys = true;
   tag = static_size * 8409 + data_entries.size() + string_registrations.size() * 48;
@@ -358,7 +411,7 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::finish_re
     string_offset += string_entry->get_default_value_size() + 1;
   }
 
-  commit_data(false, false);
+  commit_data(false, false, true, saved_ints);
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
@@ -422,14 +475,18 @@ size_t elijah_state_framework::PersistentDataStorage<PersistentKeyType>::get_tot
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::commit_data()
 {
-  commit_data(true, true);
+  commit_data(true, true, false, 0);
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::commit_data(
-  const bool use_callback, const bool lock_mtx)
+  const bool use_callback, const bool lock_mtx, const bool ints_saved, uint32_t saved_ints)
 {
-  const uint32_t saved_ints = save_and_disable_interrupts();
+  if (!ints_saved)
+  {
+    saved_ints = save_and_disable_interrupts();
+  }
+
   if (lock_mtx)
   {
     shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
@@ -465,6 +522,7 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::commit_da
 template <elijah_state_framework::internal::EnumType PersistentKeyType>
 void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::load_default_data()
 {
+  const uint32_t saved_ints = save_and_disable_interrupts();
   shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
   for (internal::PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
   {
@@ -478,50 +536,50 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::load_defa
 
         std::string def_str(def_c_str);
 
-        set_string(entry->get_key(), def_str);
+        set_string(entry->get_key(), def_str, false);
         break;
       }
     case DataType::Int8:
-      set_int8(entry->get_key(), *reinterpret_cast<int8_t*>(entry->get_default_value_ptr()));
+      set_int8(entry->get_key(), *reinterpret_cast<int8_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Uint8:
-      set_uint8(entry->get_key(), *reinterpret_cast<uint8_t*>(entry->get_default_value_ptr()));
+      set_uint8(entry->get_key(), *reinterpret_cast<uint8_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Int16:
-      set_int16(entry->get_key(), *reinterpret_cast<int16_t*>(entry->get_default_value_ptr()));
+      set_int16(entry->get_key(), *reinterpret_cast<int16_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::UInt16:
-      set_uint16(entry->get_key(), *reinterpret_cast<uint16_t*>(entry->get_default_value_ptr()));
+      set_uint16(entry->get_key(), *reinterpret_cast<uint16_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Int32:
-      set_int32(entry->get_key(), *reinterpret_cast<int32_t*>(entry->get_default_value_ptr()));
+      set_int32(entry->get_key(), *reinterpret_cast<int32_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::UInt32:
-      set_uint32(entry->get_key(), *reinterpret_cast<uint32_t*>(entry->get_default_value_ptr()));
+      set_uint32(entry->get_key(), *reinterpret_cast<uint32_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Int64:
-      set_int64(entry->get_key(), *reinterpret_cast<int64_t*>(entry->get_default_value_ptr()));
+      set_int64(entry->get_key(), *reinterpret_cast<int64_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::UInt64:
-      set_uint64(entry->get_key(), *reinterpret_cast<uint64_t*>(entry->get_default_value_ptr()));
+      set_uint64(entry->get_key(), *reinterpret_cast<uint64_t*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Float:
-      set_float(entry->get_key(), *reinterpret_cast<float*>(entry->get_default_value_ptr()));
+      set_float(entry->get_key(), *reinterpret_cast<float*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Double:
-      set_double(entry->get_key(), *reinterpret_cast<double*>(entry->get_default_value_ptr()));
+      set_double(entry->get_key(), *reinterpret_cast<double*>(entry->get_default_value_ptr()), false);
       break;
     case DataType::Time:
       {
         tm decoded_time_inst = internal::decode_time(static_cast<uint8_t*>(entry->get_default_value_ptr()));
-        set_time(entry->get_key(), decoded_time_inst);
+        set_time(entry->get_key(), decoded_time_inst, false);
         break;
       }
     }
   }
 
   // Mutex unlocked after commit
-  commit_data(true, false);
+  commit_data(true, false, true, saved_ints);
 }
 
 template <elijah_state_framework::internal::EnumType PersistentKeyType>

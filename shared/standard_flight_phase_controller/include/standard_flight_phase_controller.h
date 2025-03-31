@@ -38,7 +38,7 @@ public:
   [[nodiscard]] StandardFlightPhase update_phase(StandardFlightPhase current_phase,
                                                  const std::deque<TStateData>& state_history) override;
   [[nodiscard]] StandardFlightPhase predict_phase(StandardFlightPhase last_known_phase,
-                                                  const std::deque<TStateData>& states) const override;
+                                                  const std::deque<TStateData>& states) override;
 
   [[nodiscard]] std::string get_phase_name(StandardFlightPhase phase) const override;
 
@@ -46,7 +46,6 @@ protected:
   virtual void extract_state_data(TStateData state, double& accel_x, double& accel_y, double& accel_z,
                                   double& altitude) const = 0;
 
-private:
   double min_preflight_alt, max_preflight_accel;
 
   double max_coast_alt;
@@ -184,9 +183,32 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
 }
 
 template <typename TStateData>
-StandardFlightPhase StandardFlightPhaseController<TStateData>::predict_phase(StandardFlightPhase last_known_phase,
-                                                                             const std::deque<TStateData>& states) const
+StandardFlightPhase StandardFlightPhaseController<TStateData>::predict_phase(const StandardFlightPhase last_known_phase,
+                                                                             const std::deque<TStateData>& states)
 {
+  if (last_known_phase != StandardFlightPhase::PREFLIGHT && last_known_phase != StandardFlightPhase::LANDED)
+  {
+    double first_ax, first_ay, first_az, first_alt;
+    extract_state_data(states[0], first_ax, first_ay, first_az, first_alt);
+
+    double last_ax, last_ay, last_az, last_alt;
+    extract_state_data(states[states.size() - 1], last_ax, last_ay, last_az, last_alt);
+
+    // If there's a deviation of < 3m assume we landed
+    if (abs(first_alt - last_alt) < 3)
+    {
+      return StandardFlightPhase::LANDED;
+    }
+
+    if (first_alt > last_alt)
+    {
+      return StandardFlightPhase::COAST;
+    }
+    else
+    {
+      return StandardFlightPhase::DESCENT;
+    }
+  }
   return last_known_phase;
 }
 

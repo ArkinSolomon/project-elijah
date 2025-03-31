@@ -83,6 +83,8 @@ class LogWidget(Widget):
                                                replace_whitespace=False))
                        for line in log.message.splitlines()]
 
+            if len(wrapped) == 0:
+                continue
             self.log_lines.append(wrapped[0])
             for i in range(1, len(wrapped)):
                 self.log_lines.append((" " * (header_len - 2)) + ': ' + wrapped[i][header_len:])

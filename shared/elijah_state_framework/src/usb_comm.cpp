@@ -2,7 +2,9 @@
 
 #include <cstring>
 #include <ctime>
+#include <format>
 #include <memory>
+#include <hardware/gpio.h>
 #include <pico/critical_section.h>
 #include <pico/stdio.h>
 #include <pico/stdio_usb.h>
@@ -18,7 +20,7 @@ void elijah_state_framework::log_serial_message(const std::string& message)
 
   size_t encoded_len;
   const std::unique_ptr<uint8_t[]> encoded_message = internal::encode_log_message(
-    message, LogLevel::SerialOnly, encoded_len);
+   message, LogLevel::SerialOnly, encoded_len);
 
   critical_section_enter_blocking(&internal::usb_cs);
   internal::write_to_serial(encoded_message.get(), encoded_len);
@@ -50,6 +52,11 @@ void elijah_state_framework::internal::write_to_serial(
   const uint8_t* packet_data,
   const size_t packet_len, const bool flush)
 {
+  if (!stdio_usb_connected())
+  {
+    return;
+  }
+
   stdio_put_string(reinterpret_cast<const char*>(packet_data), static_cast<int>(packet_len), false, false);
   if (flush)
   {
@@ -63,7 +70,7 @@ std::unique_ptr<uint8_t[]> elijah_state_framework::internal::encode_log_message(
   std::string send_message = message;
 
   // TODO, do not hardcode, should be less than write buff len for logger
-  if (message.size() > 1000)
+  if (message.size() > 1000 && log_level != LogLevel::SerialOnly && log_level != LogLevel::Debug)
   {
     send_message = "Message too large... ";
     send_message += message.substr(0, 1000 - send_message.size());
@@ -91,7 +98,7 @@ void elijah_state_framework::internal::encode_time(uint8_t* dest, const tm& time
   dest[4] = time_inst.tm_mday;
   dest[5] = time_inst.tm_mon;
 
-  const uint16_t full_year = time_inst.tm_year + 1900;
+  const uint16_t full_year = time_inst.tm_year + 1980;
   memcpy(dest + 6, &full_year, sizeof(full_year));
 }
 

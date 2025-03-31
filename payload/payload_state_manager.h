@@ -46,7 +46,8 @@ class PayloadStateManager final : public elijah_state_framework::ElijahStateFram
     PayloadState, PayloadPersistentDataKey, PayloadFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
-  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD, 10)
+  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD,
+                                              10)
   {
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
                                                 101325.0);
@@ -72,16 +73,15 @@ public:
     register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
     register_fault(PayloadFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", [this]
+    register_command("Calibrate", "Sea level pressure (Pa)", [this](double sea_level_pressure)
     {
       mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
 
-      const double sea_level_pressure = get_persistent_data_storage()->get_double(
-        PayloadPersistentDataKey::SeaLevelPressure);
       int32_t pressure;
       double temperature, altitude;
       bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
 
+      get_persistent_data_storage()->set_double(PayloadPersistentDataKey::SeaLevelPressure, sea_level_pressure);
       get_persistent_data_storage()->set_int32(PayloadPersistentDataKey::GroundPressure, pressure);
       get_persistent_data_storage()->set_double(PayloadPersistentDataKey::GroundTemperature, temperature);
       get_persistent_data_storage()->set_double(PayloadPersistentDataKey::GroundAltitude, altitude);
@@ -89,9 +89,24 @@ public:
       get_persistent_data_storage()->commit_data();
     });
 
-    register_command("Update clock", [this](const tm& time_inst)
+
+    register_command("Update clock", "Time", [this](tm time_inst)
     {
-      ds_1307::init_clock_with_inst(time_inst);
+      // Because the FAT lib wants this idk man
+      time_inst.tm_year -= 80;
+      gpio_put(25, true);
+      log_message(std::format("year {}", time_inst.tm_year));
+      reliable_clock->set_clock(time_inst);
+    });
+
+    register_command("DS 1307 dump", [this]
+    {
+      reliable_clock->get_ds_1307().reg_dump();
+    });
+
+    register_command("DS 1307 erase", [this]
+    {
+      reliable_clock->get_ds_1307().erase_data();
     });
 
     finish_construction();

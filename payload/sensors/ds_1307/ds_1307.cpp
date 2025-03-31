@@ -1,24 +1,18 @@
 #include "ds_1307.h"
 
-#include <cstdio>
-#include <format>
 #include <pico/aon_timer.h>
 
-#include "../../pin_outs.h"
 #include "i2c_util.h"
-#include "hardware/i2c.h"
-#include "elijah_state_framework.h"
 #include "payload_state_manager.h"
 
-/**
- * Check if the clock is detected,
- *
- * Returns false if the device is not detected. Set is set to true if the clock is detected AND has been set.
- */
-bool ds_1307::check_clock(bool& clock_set)
+DS1307::DS1307(i2c_inst_t* i2c_inst, uint8_t i2c_addr) : i2c_inst(i2c_inst), i2c_addr(i2c_addr)
+{
+}
+
+bool DS1307::check_clock(bool& clock_set) const
 {
   uint8_t seconds_reg;
-  const bool seconds_read_success = i2c_util::read_ubyte(i2c0, DS_1307_ADDR, _reg_defs::REG_SECONDS,
+  const bool seconds_read_success = i2c_util::read_ubyte(i2c0, i2c_addr, REG_SECONDS,
                                                          seconds_reg);
   if (!seconds_read_success)
   {
@@ -34,11 +28,12 @@ bool ds_1307::check_clock(bool& clock_set)
 }
 
 /**
- * Set the clock.
+ * Set the clock. Use 24-hour time.
  *
- * Use 24-hour time.
+ * @param time_inst The time instance at which to set the clock.
+ * @return True if the clock was set successfully.
  */
-bool ds_1307::set_clock(const tm& time_inst)
+bool DS1307::set_clock(const tm& time_inst) const
 {
   const uint8_t seconds_data = time_inst.tm_sec / 10 << 4 | time_inst.tm_sec % 10;
   const uint8_t minutes_data = time_inst.tm_min / 10 << 4 | time_inst.tm_min % 10;
@@ -49,17 +44,23 @@ bool ds_1307::set_clock(const tm& time_inst)
   const int years_since_2000 = time_inst.tm_year - 100;
   const uint8_t year_data = static_cast<uint8_t>(years_since_2000) / 10 << 4 | years_since_2000 % 10;
   const uint8_t write_data[8] = {
-    _reg_defs::REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(time_inst.tm_wday & 0xFF),
+    REG_SECONDS, seconds_data, minutes_data, hours_data, static_cast<uint8_t>(time_inst.tm_wday & 0xFF),
     date_data, month_data,
     year_data
   };
-  const int bytes_written = i2c_write_blocking_until(i2c0, DS_1307_ADDR, write_data, 8, false,
+  const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, write_data, 8, false,
                                                      delayed_by_ms(get_absolute_time(), 32));
 
   return bytes_written == 8;
 }
 
-bool ds_1307::functional_check(const tm& reset_inst)
+/**
+ * Check if the DS1307 is currently functional. Set it if it's not set.
+ *
+ * @param reset_inst The time to set if the clock is not set.
+ * @return True if the clock is functional.
+ */
+bool DS1307::functional_check(const tm& reset_inst) const
 {
   bool clock_set = false;
   if (!check_clock(clock_set))
@@ -87,11 +88,14 @@ bool ds_1307::functional_check(const tm& reset_inst)
 
 /**
  * Get the current time as an instance.
+ *
+ * @param time_inst The location at which to set the read time.
+ * @return True if the clock can be read from successfully.
  */
-bool ds_1307::read_clock(tm& time_inst)
+bool DS1307::read_clock(tm& time_inst) const
 {
   uint8_t reg_data[7];
-  const bool success = i2c_util::read_bytes(i2c0, DS_1307_ADDR, _reg_defs::REG_SECONDS, reg_data, 7);
+  const bool success = i2c_util::read_bytes(i2c_inst, i2c_addr, REG_SECONDS, reg_data, 7);
   if (!success)
   {
     return false;
@@ -116,34 +120,12 @@ bool ds_1307::read_clock(tm& time_inst)
   return true;
 }
 
-void ds_1307::init_clock_with_inst(const tm& time_inst)
+bool DS1307::read_custom_register(const uint8_t addr, uint8_t* output, const uint8_t size) const
 {
-  if (aon_timer_is_running())
-  {
-    aon_timer_set_time_calendar(&time_inst);
-  }
-  else
-  {
-    aon_timer_start_calendar(&time_inst);
-  }
-
-  const bool clock_did_set = set_clock(time_inst);
-  if (!clock_did_set)
-  {
-    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "Failed to set clock");
-  }
-  else
-  {
-    payload_state_manager->set_fault(PayloadFaultKey::DS1307, false);
-  }
+  return i2c_util::read_bytes(i2c_inst, i2c_addr, addr, output, size);
 }
 
-bool ds_1307::read_custom_register(const custom_register addr, uint8_t* output, const uint8_t size)
-{
-  return i2c_util::read_bytes(i2c0, DS_1307_ADDR, static_cast<uint8_t>(addr), output, size);
-}
-
-bool ds_1307::write_custom_register(const custom_register addr, const uint8_t* data, const uint8_t size)
+bool DS1307::write_custom_register(const uint8_t addr, const uint8_t* data, const uint8_t size) const
 {
   const auto write_addr = static_cast<uint8_t>(addr);
   uint8_t write_data[size + 1];
@@ -152,7 +134,7 @@ bool ds_1307::write_custom_register(const custom_register addr, const uint8_t* d
     write_data[i + 1] = data[i];
   }
   write_data[0] = write_addr;
-  const int bytes_written = i2c_write_blocking_until(i2c0, DS_1307_ADDR, write_data, size + 1, false,
+  const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, write_data, size + 1, false,
                                                      delayed_by_ms(get_absolute_time(), 32));
   return bytes_written == size + 1;
 }
@@ -160,7 +142,7 @@ bool ds_1307::write_custom_register(const custom_register addr, const uint8_t* d
 /**
  * Print all registers, or that a read failed.
  */
-void ds_1307::reg_dump()
+void DS1307::reg_dump() const
 {
   std::string output = "     ";
   for (uint8_t i = 0; i < 16; i++)
@@ -175,8 +157,7 @@ void ds_1307::reg_dump()
     }
 
     uint8_t read_data = 0;
-    const bool success = i2c_util::read_ubyte(i2c0, DS_1307_ADDR, addr,
-                                              read_data);
+    const bool success = i2c_util::read_ubyte(i2c_inst, i2c_addr, addr,read_data);
     if (!success)
     {
       payload_state_manager->log_message(std::format("Reg dump failed reading 0x{:02x}", addr),
@@ -192,10 +173,10 @@ void ds_1307::reg_dump()
 /**
  * Clear the DS 1307.
  */
-void ds_1307::erase_data()
+void DS1307::erase_data() const
 {
   constexpr uint8_t zeros[0x3F] = {};
-  const int bytes_written = i2c_write_blocking_until(i2c0, DS_1307_ADDR, zeros, 0x3F, false,
+  const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, zeros, 0x3F, false,
                                                      delayed_by_ms(get_absolute_time(), 32));
   const bool success = bytes_written == 0x3F;
   if (!success)
@@ -207,13 +188,20 @@ void ds_1307::erase_data()
   payload_state_manager->log_message("DS 1307 erased");
 }
 
-bool ds_1307::check_and_read_clock(tm& time_inst)
+/**
+ * Check if the clock is detected and set.
+ *
+ * @param time_inst The time instance to update with the read value.
+ * @return True if the clock is detected.
+ */
+bool DS1307::check_and_read_clock(tm& time_inst) const
 {
   bool clock_set = false;
   bool clock_detected = check_clock(clock_set);;
+
   if (!clock_detected)
   {
-    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "device not detected (no acknowledgement)");
+    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "Clock not detected (no acknowledgement)");
     return false;
   }
 

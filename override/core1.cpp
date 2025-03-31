@@ -3,7 +3,9 @@
 #include <pico/flash.h>
 #include <pico/multicore.h>
 
+#include "aprs.h"
 #include "override_state_manager.h"
+#include "pin_outs.h"
 #include "sensors.h"
 #include "state_framework_logger.h"
 

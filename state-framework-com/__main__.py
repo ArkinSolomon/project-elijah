@@ -22,7 +22,8 @@ def discover_devices() -> None:
     removal_devices: list[Device] = []
     for device in devices:
         if device.last_known_port not in serial_ports:
-            device.disconnect()
+            if device.is_connected:
+                device.disconnect()
             if not device.uses_state_framework:
                 removal_devices.append(device)
 

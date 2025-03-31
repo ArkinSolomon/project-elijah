@@ -13,6 +13,8 @@ namespace elijah_state_framework
 
     void update(TStateData& state);
 
+    [[nodiscard]] bool is_connected() const;
+
   protected:
     virtual std::string on_init(TStateData& state) = 0;
     virtual std::string on_update(TStateData& state) = 0;
@@ -44,6 +46,8 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* elijah_s
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>::update(TStateData& state)
 {
+  connected = connected && !framework->is_faulted(fault_key);
+
   if (!connected)
   {
     const std::string ret_message = on_init(state);
@@ -65,4 +69,10 @@ void elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>::
   }
 
   framework->set_fault(fault_key, false, ret_message);
+}
+
+FRAMEWORK_TEMPLATE_DECL
+bool elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>::is_connected() const
+{
+  return connected;
 }

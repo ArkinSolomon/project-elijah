@@ -5,15 +5,15 @@ from typing import Any, List
 import serial
 from serial.serialutil import SerialException
 
-from framework.data_type import DataType
+from framework.log_message import LogMessage, LogLevel
 from framework.readable.readable_serial import ReadableSerial
-from framework.registered_command import CommandInputType, RegisteredCommand
+from framework.registered_command import CommandInputType
 from framework.state_framework import StateFramework
 from framework.time_helper import encode_time
-from framework.log_message import LogMessage, LogLevel
 
 FRAMEWORK_TAG = 0xBC7AA65201C73901
 MAX_PACKETS_PER_UPDATE = 1024
+
 
 class Device:
     last_known_port: str
@@ -46,15 +46,18 @@ class Device:
         if self.is_connected:
             return
 
+        self.sys_log(f'Device connected to port {port_path}')
         self.last_known_port = port_path
         self.tty = ReadableSerial(serial.Serial(port_path))
         self.is_connected = True
+        self.get_metadata()
 
     def disconnect(self):
         self.tty = None
         self.framework_request_sent = False
         self.is_connected = False
         self.current_reading_framework_tag = bytearray()
+        self.sys_log(f'Device disconnected from port {self.last_known_port}')
 
     def get_metadata(self):
         if not self.is_connected:
@@ -64,13 +67,13 @@ class Device:
             # TODO write again after a while
             if not self.framework_request_sent:
                 self.tty.write(b'\01')
-                self.logs.append(LogMessage(LogLevel.SYSTEM,'Requesting framework metadata...'))
+                self.logs.append(LogMessage(LogLevel.SYSTEM, 'Requesting framework metadata...'))
                 self.framework_request_sent = True
 
             if self.tty.bytes_avail() > 0:
                 self.current_reading_framework_tag.append(self.tty.read(1)[0])
 
-            if len(self.current_reading_framework_tag)> 8:
+            if len(self.current_reading_framework_tag) > 8:
                 self.current_reading_framework_tag.pop(0)
             elif len(self.current_reading_framework_tag) < 8:
                 return
@@ -81,10 +84,10 @@ class Device:
 
             self.state_framework = StateFramework.generate_framework_configuration(self.tty)
             self.uses_state_framework = True
-            self.logs.append(LogMessage(LogLevel.SYSTEM, f'Parsed framework configuration for {self.state_framework.application_name}'))
+            self.sys_log(f'Parsed framework configuration for {self.state_framework.application_name}')
 
         except Exception as e:
-            self.logs.append(LogMessage(LogLevel.SYSTEM, f'Error parsing framework configuration: {e}'))
+            self.sys_log(f'Error parsing framework configuration: {e}')
             self.disconnect()
             raise e
 
@@ -92,14 +95,14 @@ class Device:
         if not self.is_connected or not self.uses_state_framework:
             return
 
-        self.logs.append(LogMessage(LogLevel.SYSTEM, f"data: {data}, command_id: {command_id}"))
+        self.sys_log(f"data: {data}, command_id: {command_id}")
         assert self.tty
         assert self.state_framework
         self.tty.write(struct.pack('<B', command_id))
 
         matching_commands = list(filter(lambda c: c.command_id == command_id, self.state_framework.commands))
         if len(matching_commands) == 0:
-            self.logs.append(LogMessage(LogLevel.SYSTEM, f"Command {command_id} not found"))
+            self.sys_log(f"Command {command_id} not found")
             return
 
         command = matching_commands[0]
@@ -124,7 +127,7 @@ class Device:
         try:
             packets, state_changed, logs = self.state_framework.update(self.tty, MAX_PACKETS_PER_UPDATE)
             self.logs += logs
-            self.logs = self.logs[-4096:]
+            self.logs = self.logs[-8192:]
             # if state_changed:
             #     for var_def in self.state_framework.variable_definitions:
             #         if var_def.is_hidden:
@@ -144,3 +147,6 @@ class Device:
         except SerialException as e:
             print(e)
             self.disconnect()
+
+    def sys_log(self, message: str) -> None:
+        self.logs.append(LogMessage(LogLevel.SYSTEM, message))

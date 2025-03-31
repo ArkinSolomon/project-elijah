@@ -6,6 +6,7 @@ from asciimatics.screen import Screen
 from device import Device
 from display.screen_state import ScreenState, InputMode, ScreenWidget
 from display.widgets.color_block import ColorBlock
+from display.widgets.faults_widget import FaultsWidget
 from display.widgets.header_widget import HeaderWidget
 from display.widgets.line_segments import LineSegments
 from display.widgets.list_widget import ListWidget
@@ -13,8 +14,10 @@ from display.widgets.log_widget import LogWidget
 from framework.registered_command import CommandInputType
 
 HEADER_SIZE = 8
+FAULT_WIDTH = 16 * 5 + 4
 SIDEBAR_WIDTH = 25
 DEVICE_SELECTION_HEIGHT = 5
+
 
 def header_page_changed(screen_state: ScreenState) -> Callable[[int], None]:
     def update(page: int) -> None:
@@ -37,14 +40,30 @@ def update_command_idx(screen_state: ScreenState) -> Callable[[int], None]:
     return update
 
 
+def update_hovered_device_idx(screen_state: ScreenState) -> Callable[[int], None]:
+    def update(hovered_device_idx: int) -> None:
+        screen_state.hovered_device_idx = hovered_device_idx
+
+    return update
+
+
+def handle_device_switch(screen_state: ScreenState) -> Callable[[int], None]:
+    def update(selected_idx: int) -> None:
+        screen_state.selected_device_idx = selected_idx
+
+    return update
+
+
 def handle_command(screen_state: ScreenState, device: Device | None) -> Callable[[int], None]:
     if device is None:
         def handle_empty(_: int): pass
+
         return handle_empty
 
     def handle(command_idx: int):
         assert device.state_framework
-        shown_commands = [command for command in device.state_framework.commands if not command.command_name.startswith('_')]
+        shown_commands = [command for command in device.state_framework.commands if
+                          not command.command_name.startswith('_')]
         command = shown_commands[command_idx]
         if command.command_input == CommandInputType.NONE or command.command_input == CommandInputType.TIME:
             device.execute_command(command.command_id)
@@ -80,6 +99,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
     line_segments.add_horizontal_line(screen.height - 2, 0, screen.width)
 
     line_segments.add_horizontal_line(HEADER_SIZE + 1, 0, screen.width)
+    line_segments.add_vertical_line(screen.width - 2 - FAULT_WIDTH, 0, HEADER_SIZE + 2)
     line_segments.add_vertical_line(screen.width - 2 - SIDEBAR_WIDTH, HEADER_SIZE + 1, screen.height - HEADER_SIZE - 2)
     line_segments.add_horizontal_line(screen.height - HEADER_SIZE, screen.width - 2 - SIDEBAR_WIDTH, SIDEBAR_WIDTH + 1)
 
@@ -90,20 +110,38 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
 
     header_selected = screen_state.focused_widget == ScreenWidget.HEADER and screen_state.input_mode != CommandInputType.NONE
     header_background = 235 if header_selected else Screen.COLOUR_BLACK
-    header_block = ColorBlock(screen, 1, 1, screen.width - 2, HEADER_SIZE, header_background)
+    header_block = ColorBlock(screen, 1, 1, screen.width - 3 - FAULT_WIDTH, HEADER_SIZE, header_background)
     header_block.render()
 
-    if screen_state.selected_device_idx < len(devices) and devices[screen_state.selected_device_idx].uses_state_framework:
+    if screen_state.selected_device_idx < len(devices) and devices[
+        screen_state.selected_device_idx].uses_state_framework:
         sf = devices[screen_state.selected_device_idx].state_framework
         assert sf is not None
-        header_widget = HeaderWidget(screen, 1, 1, screen.width - 2, HEADER_SIZE, sf.application_name,  sf.state, sf.variable_definitions, sf.persistent_entries, screen_state.current_header_page, header_page_changed(screen_state), header_background)
+        header_widget = HeaderWidget(screen, 1, 1, screen.width - 3 - FAULT_WIDTH, HEADER_SIZE, sf.application_name,
+                                     sf.current_phase,
+                                     sf.state, sf.variable_definitions, sf.persistent_entries,
+                                     screen_state.current_header_page, header_page_changed(screen_state),
+                                     header_background)
 
         if header_selected and screen_state.input_mode == InputMode.NONE and ev is not None:
             char_handled = header_widget.handle_char(ev)
     else:
-        app_name = ""
-        header_widget = HeaderWidget(screen, 1, 1, screen.width - 2, HEADER_SIZE, app_name,  {}, [], [], screen_state.current_header_page, None, header_background)
+        app_name = "<Unknown>"
+        flight_phase = "<Unknown>"
+        header_widget = HeaderWidget(screen, 1, 1, screen.width - 2, HEADER_SIZE, app_name, flight_phase, {}, [], [],
+                                     screen_state.current_header_page, None, header_background)
     header_widget.render()
+
+    if screen_state.selected_device_idx < len(devices) and devices[
+        screen_state.selected_device_idx].uses_state_framework:
+        sf = devices[screen_state.selected_device_idx].state_framework
+        assert sf is not None
+        faults = sf.fault_definitions
+    else:
+        faults = []
+
+    faults_widget = FaultsWidget(screen, screen.width - 1 - FAULT_WIDTH, 1, FAULT_WIDTH, HEADER_SIZE, faults)
+    faults_widget.render()
 
     commands_selected = screen_state.focused_widget == ScreenWidget.COMMANDS and screen_state.input_mode != CommandInputType.NONE
     command_background = 235 if commands_selected else Screen.COLOUR_BLACK
@@ -150,11 +188,23 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
 
     command_list.render()
 
+    device_selection_selected = screen_state.focused_widget == ScreenWidget.DEVICES
+    device_selection_background = 235 if device_selection_selected else Screen.COLOUR_BLACK
     device_selection_block = ColorBlock(screen, screen.width - SIDEBAR_WIDTH - 1,
                                         screen.height - 2 - DEVICE_SELECTION_HEIGHT, SIDEBAR_WIDTH,
-                                        DEVICE_SELECTION_HEIGHT,
-                                        235 if screen_state.focused_widget == ScreenWidget.DEVICES else Screen.COLOUR_BLACK)
+                                        DEVICE_SELECTION_HEIGHT, device_selection_background)
     device_selection_block.render()
+    device_list = ListWidget(screen, screen.width - SIDEBAR_WIDTH - 1, screen.height - 2 - DEVICE_SELECTION_HEIGHT,
+                             SIDEBAR_WIDTH, DEVICE_SELECTION_HEIGHT,
+                             [device.last_known_port for device in devices], screen_state.hovered_device_idx,
+                             update_hovered_device_idx(screen_state),
+                             handle_device_switch(screen_state),
+                             command_background)
+
+    if device_selection_selected and screen_state.input_mode == InputMode.NONE and ev is not None:
+        char_handled = device_list.handle_char(ev)
+
+    device_list.render()
 
     if screen_state.input_mode == InputMode.NONE:
         if ev in (ord('Q'), ord('q')):

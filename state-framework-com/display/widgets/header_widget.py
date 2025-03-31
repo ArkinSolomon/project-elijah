@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import time
 from typing import Any, Callable, Tuple
 
 from asciimatics.screen import Screen
@@ -19,6 +20,7 @@ class HeaderColumn:
 
 class HeaderWidget(Widget):
     app_name: str
+    flight_phase: str
     state: dict[int, Any]
     variable_definitions: list[VariableDefinition]
     persistent_entries: list[PersistentDataEntry]
@@ -32,13 +34,14 @@ class HeaderWidget(Widget):
 
     page_offset: int
 
-    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, app_name: str,
+    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, app_name: str, flight_phase: str,
                  state: dict[int, Any], variable_definitions: list[VariableDefinition],
                  persistent_entries: list[PersistentDataEntry], current_page: int,
                  on_page_change: Callable[[int], None] | None, background_color: int):
         super(HeaderWidget, self).__init__(screen, offset_x, offset_y, width, height)
 
         self.app_name = app_name
+        self.flight_phase = flight_phase
 
         self.state = state
         self.variable_definitions = variable_definitions
@@ -74,7 +77,7 @@ class HeaderWidget(Widget):
 
     def render(self) -> None:
         curr_time_str = datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
-        self.screen.print_at(curr_time_str + f' | {self.app_name}', self.offset_x, self.offset_y, bg=self.background_color, attr=Screen.A_BOLD)
+        self.screen.print_at(curr_time_str + f' | {self.app_name} | {self.flight_phase}', self.offset_x, self.offset_y, bg=self.background_color, attr=Screen.A_BOLD)
 
         if len(self.pages) == 0:
             return
@@ -103,10 +106,19 @@ class HeaderWidget(Widget):
                 curr_data_column.append(
                     (label + ':', f'{value:.3f}{unit}'))
             elif data_type == DataType.TIME:
-                assert value is datetime
-                curr_data_column.append(
-                    (label + ':', value.strftime("%A %B %-d, %Y %H:%M:%S"))
-                )
+                if value is None:
+                    curr_data_column.append(
+                        (label + ':', 'Unknown')
+                    )
+                else:
+                    try:
+                        curr_data_column.append(
+                            (label + ':', time.strftime("%A %B %-d, %Y %H:%M:%S", value))
+                        )
+                    except ValueError:
+                        curr_data_column.append(
+                            (label + ':', 'ERROR!')
+                        )
             elif data_type == DataType.STRING:
                 curr_data_column.append((label + ':', str(value)))
             else:

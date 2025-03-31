@@ -58,11 +58,11 @@ class LineSegments(Widget):
             if line[3] == LineType.VERTICAL:
                 x, start_y, vert_length, _ = line
                 for y in range(start_y, start_y + vert_length):
-                    self.screen.print_at("│", x, y)
+                    self.screen.print_at("│", self.offset_x + x, self.offset_y + y)
             else:
                 y, start_x, horiz_length, _ = line
                 for x in range(start_x, start_x + horiz_length):
-                    self.screen.print_at("─", x, y)
+                    self.screen.print_at("─", self.offset_x + x, self.offset_y + y)
 
         for intersection in intersections:
             self.screen.print_at(intersection[2], self.offset_x + intersection[0], self.offset_y + intersection[1])

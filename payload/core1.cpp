@@ -31,17 +31,20 @@ void core1::core1_main()
   queue_remove_blocking(&core0_ready_queue, nullptr);
 
   gpio_put(LED_3_PIN, true);
-  sleep_ms(5000);
-  gpio_put(25, true);
-  for (uint i = 0; i < 12; ++i)
-  {
-      printf(std::format("Channel {}: {}", i, dma_channel_is_claimed(i)).c_str());
-  }
-  gpio_put(25, false);
-  // gpio_put(25, false);
-  //
-  // // while (payload_state_manager->get_current_flight_phase() != StandardFlightPhase::LANDED || to_ms_since_boot(get_absolute_time()) < 5000);
-  // PayloadState last_state = payload_state_manager->get_state_history()[0];
-  // aprs::transmitAllData(last_state);
+  bool led_on = true;
 
+  absolute_time_t next_transmission_time = nil_time;
+  while (true)
+  {
+    payload_state_manager->check_for_log_write();
+    if ((payload_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED || to_ms_since_boot(get_absolute_time()) > 5000) && (next_transmission_time == nil_time || next_transmission_time <= get_absolute_time()))
+    {
+      const PayloadState last_state = payload_state_manager->get_state_history()[0];
+      payload_state_manager->log_message("Transmit!");
+      // aprs::transmitAllData(last_state);
+      next_transmission_time = delayed_by_ms(get_absolute_time(), 5000);
+    }
+    gpio_put(LED_3_PIN, led_on = !led_on);
+    sleep_ms(50);
+  }
 }

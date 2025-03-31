@@ -5,7 +5,9 @@
 #include <string>
 #include <pico/mutex.h>
 
-#define LOG_BUFF_SIZE 1024
+#include "ff.h"
+
+#define LOG_BUFF_SIZE 4096
 
 namespace elijah_state_framework
 {
@@ -13,6 +15,7 @@ namespace elijah_state_framework
   {
   public:
     explicit StateFrameworkLogger(std::string file_name);
+    ~StateFrameworkLogger();
 
     static bool init_driver_on_core();
 
@@ -22,9 +25,15 @@ namespace elijah_state_framework
     bool flush_log();
     bool flush_write_buff();
 
+    [[nodiscard]] bool is_mounted() const;
+
   private:
+    static inline mutex_t sd_card_mtx;
     mutex_t log_buff_mtx;
     recursive_mutex_t write_buff_rmtx;
+
+    FATFS fs;
+    bool mounted = false;
 
     std::string file_name;
     bool was_file_existing = false;
@@ -36,6 +45,7 @@ namespace elijah_state_framework
     std::unique_ptr<uint8_t[]> write_buff = std::unique_ptr<uint8_t[]>(nullptr);
     size_t write_size = 0;
 
+    void mount_card();
     void move_to_write_buff();
     void load_old_data();
   };
