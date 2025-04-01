@@ -44,7 +44,9 @@ void core1::core1_main()
     {
       const PayloadState last_state = payload_state_manager->get_state_history()[0];
       payload_state_manager->log_message("Transmit!");
-      // aprs::transmitAllData(last_state);
+
+      // TODO pull apogee from flight phase controller
+      // aprs::transmitAllData(last_state, 4200, last_state.time_inst);
       next_transmission_time = delayed_by_ms(get_absolute_time(), 5000);
     }
     gpio_put(LED_3_PIN, led_on = !led_on);
