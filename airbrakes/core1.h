@@ -18,5 +18,4 @@ namespace core1 {
     void core1_main();
 
     void read_encoder();
-    void encoder_zero(uint gpio, uint32_t events);
 }

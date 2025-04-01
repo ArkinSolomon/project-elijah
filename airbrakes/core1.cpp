@@ -34,8 +34,6 @@ void core1::core1_main()
   queue_add_blocking(&core1_ready_queue, &core_ready);
   queue_remove_blocking(&core0_ready_queue, &core_ready);
 
-  gpio_set_irq_enabled_with_callback(ZERO_BUTTON_PIN, GPIO_IRQ_EDGE_RISE, true, &encoder_zero);
-
   gpio_put(LED_3_PIN, true);
   bool led_on = true;
 
@@ -96,12 +94,16 @@ void core1::core1_main()
 void core1::read_encoder()
 {
   static int lastCLK = 0;
-  const int currentCLK = gpio_get(ROTARY_CLK_PIN);
-
+  const bool currentCLK = gpio_get(ROTARY_CLK_PIN);
+  const bool is_zero = gpio_get(ZERO_BUTTON_PIN);
   if (currentCLK != lastCLK)
   {
     critical_section_enter_blocking(&encoder_pos_cs);
-    if (gpio_get(ROTARY_DT_PIN) != currentCLK)
+    if (is_zero)
+    {
+      current_encoder_pos = 0;
+    }
+    else if (gpio_get(ROTARY_DT_PIN) != currentCLK)
     {
       current_encoder_pos--;
     }
@@ -112,12 +114,4 @@ void core1::read_encoder()
     critical_section_exit(&encoder_pos_cs);
   }
   lastCLK = currentCLK;
-}
-
-void core1::encoder_zero(const uint gpio, const uint32_t events)
-{
-  gpio_put(ONBOARD_LED_PIN, true);
-  critical_section_enter_blocking(&encoder_pos_cs);
-  current_encoder_pos = 0;
-  critical_section_exit(&encoder_pos_cs);
 }

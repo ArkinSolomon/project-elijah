@@ -45,13 +45,15 @@ public:
 
   [[nodiscard]] std::string get_phase_name(StandardFlightPhase phase) const override;
 
+  [[nodiscard]] double get_apogee() const;
+
 protected:
   virtual void extract_state_data(TStateData state, double& accel_x, double& accel_y, double& accel_z,
                                   double& altitude) const = 0;
 
   double min_preflight_alt, max_preflight_accel;
 
-  double max_coast_alt;
+  double max_coast_alt = 0;
 };
 
 template <typename TStateData>
@@ -106,7 +108,9 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     // Once altitude increases by 30m overall, and an acceleration at some point of greater than 50m/s^2 was reached
     if (altitude - min_preflight_alt > 30 && max_preflight_accel > 50)
     {
-      elijah_state_framework::log_serial_message(std::format("Launch detected! Altitude change of {}m (from {}m to {}m) and an acceleration of max_preflight_accel", altitude - min_preflight_alt, min_preflight_alt, altitude, max_preflight_accel));
+      elijah_state_framework::log_serial_message(std::format(
+        "Launch detected! Altitude change of {}m (from {}m to {}m) and an acceleration of max_preflight_accel",
+        altitude - min_preflight_alt, min_preflight_alt, altitude, max_preflight_accel));
       return StandardFlightPhase::LAUNCH;
     }
     return StandardFlightPhase::PREFLIGHT;
@@ -160,7 +164,8 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     const double diff_from_apogee = max_coast_alt - altitude;
     if (diff_from_apogee > 50)
     {
-      elijah_state_framework::log_serial_message(std::format("Apogee reached! {}m, detected because of an altitude difference of {}m", max_coast_alt, diff_from_apogee));
+      elijah_state_framework::log_serial_message(std::format(
+        "Apogee reached! {}m, detected because of an altitude difference of {}m", max_coast_alt, diff_from_apogee));
       return StandardFlightPhase::DESCENT;
     }
     return StandardFlightPhase::COAST;
@@ -190,7 +195,8 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     double recent_deviation = std::abs(maxRecentAlt - minRecentAlt);
     if (recent_deviation <= 3)
     {
-      elijah_state_framework::log_serial_message(std::format("Landed because recent deviation = {}m ({} states)", recent_deviation, state_history.size()));
+      elijah_state_framework::log_serial_message(std::format("Landed because recent deviation = {}m ({} states)",
+                                                             recent_deviation, state_history.size()));
       return StandardFlightPhase::LANDED;
     }
     return StandardFlightPhase::DESCENT;
@@ -216,7 +222,7 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::predict_phase(con
     extract_state_data(states[states.size() - 1], last_ax, last_ay, last_az, last_alt);
 
     // If there's a deviation of < 3m assume we landed
-    if (abs(first_alt - last_alt) < 3)
+    if (std::abs(first_alt - last_alt) < 3)
     {
       return StandardFlightPhase::LANDED;
     }
@@ -250,4 +256,10 @@ std::string StandardFlightPhaseController<TStateData>::get_phase_name(const Stan
     return "Landed";
   }
   return "Unknown";
+}
+
+template <typename TStateData>
+double StandardFlightPhaseController<TStateData>::get_apogee() const
+{
+  return max_coast_alt;
 }

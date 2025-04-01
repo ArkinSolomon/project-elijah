@@ -125,6 +125,8 @@ namespace elijah_state_framework
     void lock_state_history();
     void release_state_history();
     [[nodiscard]] const std::deque<TStateData>& get_state_history() const;
+
+    [[nodiscard]] TFlightPhaseController& get_flight_phase_controller() const;
     [[nodiscard]] EFlightPhase get_current_flight_phase();
     void set_flight_phase(EFlightPhase new_phase);
 
@@ -447,6 +449,12 @@ const std::deque<TStateData>& elijah_state_framework::ElijahStateFramework<FRAME
 get_state_history() const
 {
   return state_history;
+}
+
+FRAMEWORK_TEMPLATE_DECL
+TFlightPhaseController& elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_flight_phase_controller() const
+{
+  return flight_phase_controller;
 }
 
 FRAMEWORK_TEMPLATE_DECL
