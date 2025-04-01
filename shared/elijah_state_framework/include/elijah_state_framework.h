@@ -23,9 +23,8 @@
 #include "usb_comm.h"
 #include "state_framework_logger.h"
 #include "variable_definition.h"
-#include "../../../payload/pin_outs.h"
 
-constexpr uint64_t FRAMEWORK_TAG = 0xBC7AA65201C73901;
+constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
 
 #define START_STATE_ENCODER(STATE_DATA_TYPE) void encode_state(void* encode_dest, const STATE_DATA_TYPE& state, const uint64_t seq, bool register_data) override \
   { \
@@ -127,6 +126,7 @@ namespace elijah_state_framework
     void release_state_history();
     [[nodiscard]] const std::deque<TStateData>& get_state_history() const;
     [[nodiscard]] EFlightPhase get_current_flight_phase();
+    void set_flight_phase(EFlightPhase new_phase);
 
     void set_fault(EFaultKey fault_key, bool fault_state);
     void set_fault(EFaultKey fault_key, bool fault_state, const std::string& message);
@@ -200,6 +200,7 @@ namespace elijah_state_framework
 
     void send_framework_metadata(bool write_to_file, bool write_to_serial);
     void send_persistent_state(const void* data, size_t data_len);
+    void set_fault(EFaultKey fault_key, bool fault_state, const std::string& message, bool write_to_logger);
   };
 }
 
@@ -239,12 +240,6 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
     logger = new StateFrameworkLogger(launch_name); // NOLINT(*-unnecessary-value-param)
     shared_mutex_exit_exclusive(&logger_smtx);
-  });
-
-  register_command("Reset persistent storage", [this]
-  {
-    // TODO: this doesn't work
-    persistent_data_storage->load_default_data();
   });
 
   std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
@@ -425,7 +420,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   }
 
   shared_mutex_enter_blocking_shared(&logger_smtx);
-  if (logger)
+  if (logger && did_write_metadata)
   {
     logger->log_data(encoded_output_packet, total_encoded_packet_size);
     logger->log_data(phase_change_packet, phase_change_packet_size);
@@ -464,6 +459,39 @@ EFlightPhase elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYP
 }
 
 FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_flight_phase(EFlightPhase new_phase)
+{
+  mutex_enter_blocking(&current_phase_mtx);
+  current_phase = new_phase;
+
+  size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* new state */;
+  const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
+  phase_change_packet_size += phase_name.length() + 1;
+  uint8_t phase_change_packet[phase_change_packet_size] = {
+    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged)
+  };
+
+  phase_change_packet[1] = static_cast<uint8_t>(current_phase);
+  memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
+
+  mutex_exit(&current_phase_mtx);
+
+  if (stdio_usb_connected())
+  {
+    critical_section_enter_blocking(&internal::usb_cs);
+    internal::write_to_serial(phase_change_packet, phase_change_packet_size);
+    critical_section_exit(&internal::usb_cs);
+  }
+
+  shared_mutex_enter_blocking_shared(&logger_smtx);
+  if (logger && did_write_metadata)
+  {
+    logger->log_data(phase_change_packet, phase_change_packet_size);
+  }
+  shared_mutex_exit_shared(&logger_smtx);
+}
+
+FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_fault(
   EFaultKey fault_key,
   const bool fault_state)
@@ -475,43 +503,7 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_fault(
   EFaultKey fault_key, bool fault_state, const std::string& message)
 {
-  uint8_t fault_bit;
-  bool did_fault_change;
-  const uint32_t faults = fault_manager->set_fault_status(fault_key, fault_state, fault_bit, did_fault_change);
-
-  if (!did_fault_change)
-  {
-    return;
-  }
-
-  const size_t encoded_size = 2 * sizeof(uint8_t) /* output packet, fault_bit */ + sizeof(uint32_t) + message.size() +
-    1;
-  uint8_t encoded_data[encoded_size];
-
-  encoded_data[0] = static_cast<uint8_t>(internal::OutputPacket::FaultsChanged);
-  encoded_data[1] = fault_bit;
-  memcpy(encoded_data + 2 * sizeof(uint8_t), &faults, sizeof(uint32_t));
-  memcpy(encoded_data + 2 * sizeof(uint8_t) + sizeof(uint32_t), message.c_str(), message.size() + 1);
-
-  critical_section_enter_blocking(&internal::usb_cs);
-  internal::write_to_serial(encoded_data, encoded_size);
-  critical_section_exit(&internal::usb_cs);
-
-  shared_mutex_enter_blocking_shared(&logger_smtx);
-  if (logger)
-  {
-    if (!did_write_metadata)
-    {
-      send_framework_metadata(true, false);
-    }
-    logger->log_data(encoded_data, encoded_size);
-  }
-  shared_mutex_exit_shared(&logger_smtx);
-
-  if (faults > 0)
-  {
-    // TODO change status LED?
-  }
+  set_fault(fault_key, fault_state, message, true);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -567,7 +559,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   const bool did_succeed = logger->flush_write_buff();
   shared_mutex_exit_shared(&logger_smtx);
 
-  set_fault(micro_sd_fault_key, !did_succeed);
+  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write log", false);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -636,9 +628,14 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
   TStateData collection_data;
   encode_state(nullptr, collection_data, 0, true);
 
-  if (!logger->is_mounted() || logger->is_new_file())
+  if (!logger->is_mounted())
   {
-    log_message("Logger not mounted or new file");
+    did_write_metadata = false;
+    set_fault(micro_sd_fault_key, true, "Failed to mount card", false);
+  }
+
+  if (logger->is_new_file())
+  {
     did_write_metadata = false;
     send_framework_metadata(true, false);
   }
@@ -853,7 +850,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   if (!write_to_serial)
   {
-    log_message("Will flush before exit", LogLevel::Debug);
+    log_message("Will flush before exiting send_framework_metadata()", LogLevel::Debug);
   }
 
   if (write_to_file && logger)
@@ -867,6 +864,18 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   {
     internal::write_to_serial(&segment_id, 1);
     critical_section_exit(&internal::usb_cs);
+  }
+
+  if (write_to_file)
+  {
+    if (did_write_metadata)
+    {
+      set_fault(micro_sd_fault_key, true, "Failed to write state framework metadata", false);
+    }
+    else
+    {
+      set_fault(micro_sd_fault_key, false, "Successfully wrote state framework metadata", false);
+    }
   }
 }
 
@@ -883,12 +892,71 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   critical_section_exit(&internal::usb_cs);
 
+  shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger)
   {
-    shared_mutex_enter_blocking_shared(&logger_smtx);
-    logger->log_data(&packet_id, 1);
-    logger->log_data(static_cast<const uint8_t*>(data), data_len);
+    if (!did_write_metadata)
+    {
+      send_framework_metadata(true, false);
+    }
+
     logger->flush_log();
+    if (did_write_metadata)
+    {
+      logger->log_data(&packet_id, 1);
+      logger->log_data(static_cast<const uint8_t*>(data), data_len);
+      logger->flush_log();
+    }
+  }
+  shared_mutex_exit_shared(&logger_smtx);
+}
+
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_fault(
+  EFaultKey fault_key, bool fault_state, const std::string& message, bool write_to_logger)
+{
+  uint8_t fault_bit;
+  bool did_fault_change;
+  const uint32_t faults = fault_manager->set_fault_status(fault_key, fault_state, fault_bit, did_fault_change);
+
+  if (!did_fault_change)
+  {
+    return;
+  }
+
+  const size_t encoded_size = 2 * sizeof(uint8_t) /* output packet, fault_bit */ + sizeof(uint32_t) + message.size() +
+    1;
+  uint8_t encoded_data[encoded_size];
+
+  encoded_data[0] = static_cast<uint8_t>(internal::OutputPacket::FaultsChanged);
+  encoded_data[1] = fault_bit;
+  memcpy(encoded_data + 2 * sizeof(uint8_t), &faults, sizeof(uint32_t));
+  memcpy(encoded_data + 2 * sizeof(uint8_t) + sizeof(uint32_t), message.c_str(), message.size() + 1);
+
+  critical_section_enter_blocking(&internal::usb_cs);
+  internal::write_to_serial(encoded_data, encoded_size);
+  critical_section_exit(&internal::usb_cs);
+
+  if (write_to_logger)
+  {
+    shared_mutex_enter_blocking_shared(&logger_smtx);
+    if (logger)
+    {
+      if (!did_write_metadata)
+      {
+        send_framework_metadata(true, false);
+      }
+
+      if (did_write_metadata)
+      {
+        logger->log_data(encoded_data, encoded_size);
+      }
+    }
     shared_mutex_exit_shared(&logger_smtx);
+  }
+
+  if (faults > 0)
+  {
+    // TODO change status LED/speaker?
   }
 }

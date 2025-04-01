@@ -2,105 +2,151 @@
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <bits/stl_algo.h>
 #include <hardware/gpio.h>
 
 #include "pin_outs.h"
 
-double calculate_airbrake_target_angle(const double current_pressure, const double prev_pressure,
-                                       const double ground_pressure, double ground_temperature, const double dt)
+double calculate_target_angle(double current_alt, double prev_alt, double init_alt, double init_vel,
+                              const double curr_press, double T0, const double dt)
 {
-  constexpr double weight = 24.732f; // lb
+  // Constants
+  constexpr double weight = 25.07f; // lb
   constexpr double mass = weight / 32.2f; // slug
-  constexpr double g = 32.2f; // ft/s^2
-  constexpr double R = 1716.46f; // (ft*lb)/(slug*R)
-  constexpr double lapse = 0.0033f; // Temperature lapse rate Rankine/ft
-  constexpr double pa_ft = 0.020887542f; // pa to lb/ft^2
 
-  ground_temperature = ground_temperature * 9.0f / 5.0f + 32.0f + 459.67f;
+  constexpr double L = .0065; // temperature lapse rate in Kelvin/m
+  constexpr double R = 287.06; // specific gas constant J/(kg*K)
+  T0 = T0 + 273.15; // C to K
 
-  // Compute altitude
-  const double current_alt = (1 - std::pow(current_pressure / ground_pressure, 0.190284f)) * 145366.45f;
-  const double prev_alt = (1 - std::pow(prev_pressure / ground_pressure, 0.190284f)) * 145366.45f;
+  current_alt = current_alt * 3.28084; // ft
+  prev_alt = prev_alt * 3.28084; // ft
+  init_alt = init_alt * 3.28084; // ft
+  init_vel = init_vel * 3.28084; // ft/s
 
-  // Calculate velocity
-  const double vel = (current_alt - prev_alt) / dt;
+  const double vel = (current_alt - prev_alt) / dt; // ft/s
+
+  static bool did_matrix_init = false;
+  static size_t chosen_trajectory_idx = 0;
+  if (!did_matrix_init)
+  {
+    std::vector<double> cost;
+    cost.reserve(5);
+
+    for (size_t i = 0; i < H.size(); i++)
+    {
+      size_t min_idx = 0;
+      double min_diff = std::numeric_limits<double>::max();
+      for (size_t j = 0; j < H[i].size(); j++)
+      {
+        double curr_diff = std::abs(H[i][j] - init_alt);
+        if (curr_diff < min_diff)
+        {
+          min_diff = curr_diff;
+          min_idx = j;
+        }
+      }
+
+      // double h_traj = H[i][min_idx];
+      const double v_traj = V[i][min_idx];
+      cost.push_back(std::pow(init_vel - v_traj, 2));
+    }
+
+    double min_cost = std::numeric_limits<double>::max();
+
+    for (size_t i = 0; i < cost.size(); i++)
+    {
+      if (cost[i] < min_cost)
+      {
+        min_cost = cost[i];
+        chosen_trajectory_idx = i;
+      }
+    }
+    did_matrix_init = true;
+  }
+
+  const std::vector<float>* alt_ideal = &H[chosen_trajectory_idx];
+  const std::vector<float>* vel_ideal = &V[chosen_trajectory_idx];
 
   // Find ideal velocity at current altitude
   int i = 0;
-  if (current_alt <= alt_ideal.front())
+  if (current_alt <= alt_ideal->front())
   {
     i = 0;
   }
-  else if (current_alt >= alt_ideal.back())
+  else if (current_alt >= alt_ideal->back())
   {
-    i = static_cast<int>(alt_ideal.size()) - 2;
+    i = alt_ideal->size() - 2;
   }
   else
   {
-    for (i = static_cast<int>(alt_ideal.size()) - 2; i >= 0; --i)
+    for (i = alt_ideal->size() - 2; i >= 0; --i)
     {
-      if (alt_ideal[i] <= current_alt && alt_ideal[i + 1] > current_alt)
+      if (alt_ideal->at(i) <= current_alt && alt_ideal->at(i + 1) > current_alt)
       {
         break;
       }
     }
   }
 
-  double x1 = alt_ideal[i], x2 = alt_ideal[i + 1];
-  double y1 = vel_ideal[i], y2 = vel_ideal[i + 1];
-  double slope = (y2 - y1) / (x2 - x1);
-  const double vel_ideal_interp = y1 + slope * (current_alt - x1);
+  const double x1_vel = alt_ideal->at(i), x2_vel = alt_ideal->at(i + 1);
+  const double y1_vel = vel_ideal->at(i), y2_vel = vel_ideal->at(i + 1);
+  const double slope_vel = (y2_vel - y1_vel) / (x2_vel - x1_vel);
+  const double vel_ideal_interp = y1_vel + slope_vel * (current_alt - x1_vel);
 
   // Velocity error and required deceleration
   const double vel_err = vel - vel_ideal_interp;
   const double tau = dt;
   const double req_decel = vel_err / tau;
-  const double rho = (current_pressure * pa_ft) / (R * (ground_temperature - current_alt * lapse));
-  const double cd_area_req = (2 * mass * req_decel) / (rho * vel * vel);
+  const double rho = curr_press / (R * (T0 - current_alt / 3.28084 * L)) / 515.4;
+  const double cd_area_req = (2 * mass * req_decel) / (rho * std::pow(vel, 2));
 
-  static std::vector<double> angle_range;
-  static std::vector<double> cd_range;
-  static std::vector<double> area_range;
-  static std::vector<double> cd_area_range;
-  if (angle_range.empty())
+  static std::vector<double> angle_range, cd_area_range;
+  static bool did_ranges_init = false;
+  if (!did_ranges_init)
   {
-    for (double a = 0; a <= 55.08; a += 0.1)
+    // We want this on the heap because pico only has 4kb of stack, and we don't use them again
+    const std::unique_ptr<std::vector<double>> cd_range(new std::vector<double>(angle_range.size()));
+    const std::unique_ptr<std::vector<double>> area_range(new std::vector<double>(angle_range.size()));
+
+    for (double a = 0; a <= 55.05; a += 0.1)
     {
       angle_range.push_back(a);
     }
 
-    cd_range.reserve(angle_range.size());
+    cd_area_range.reserve(angle_range.size());
+
     for (const auto& a : angle_range)
     {
-      cd_range.push_back(
+      cd_range->push_back(
         0.00000011 * pow(a, 4) - 0.00001733 * pow(a, 3) + 0.00087041 * pow(a, 2) - 0.00884173 * a + 0.68);
     }
 
-    area_range.reserve(angle_range.size());
     for (const auto& a : angle_range)
     {
-      area_range.push_back(-0.00001793 * pow(a, 2) + 0.00306557 * a + 0.08801463);
+      area_range->push_back(-0.00001548 * pow(a, 2) + 0.00272439 * a + 0.09652135);
     }
 
-    cd_area_range.reserve(angle_range.size());
-    for (unsigned int i = 0; i < angle_range.size(); ++i)
+    for (size_t ar_idx = 0; ar_idx < angle_range.size(); ++ar_idx)
     {
-      cd_area_range.push_back(cd_range[i] * area_range[i]);
+      cd_area_range.push_back(cd_range->at(ar_idx) * area_range->at(ar_idx));
     }
+
+    did_ranges_init = true;
   }
 
+  // Find desired angle
   if (cd_area_req <= cd_area_range.front())
   {
     i = 0;
   }
   else if (cd_area_req >= cd_area_range.back())
   {
-    i = static_cast<int>(cd_area_range.size()) - 2;
+    i = cd_area_range.size() - 2;
   }
   else
   {
-    for (i = static_cast<int>(cd_area_range.size()) - 2; i >= 0; --i)
+    for (i = cd_area_range.size() - 2; i >= 0; --i)
     {
       if (cd_area_range[i] <= cd_area_req && cd_area_range[i + 1] > cd_area_req)
       {
@@ -109,16 +155,15 @@ double calculate_airbrake_target_angle(const double current_pressure, const doub
     }
   }
 
-  x1 = cd_area_range[i];
-  x2 = cd_area_range[i + 1];
-  y1 = angle_range[i];
-  y2 = angle_range[i + 1];
-  slope = (y2 - y1) / (x2 - x1);
+  const double x1_drag = cd_area_range[i];
+  const double x2_drag = cd_area_range[i + 1];
+  const double y1_drag = angle_range[i];
+  const double y2_drag = angle_range[i + 1];
+  const double slope_drag = (y2_drag - y1_drag) / (x2_drag - x1_drag);
+  const double desired_angle = y1_drag + slope_drag * (cd_area_req - x1_drag);
 
-  const double desiredAngle = y1 + slope * (cd_area_req - x1);
-  return std::clamp(desiredAngle, 0.0, 55.0);
+  return std::clamp(desired_angle, 0.0, 55.0);
 }
-
 
 int32_t encoder_pos_from_angle(const double angle)
 {

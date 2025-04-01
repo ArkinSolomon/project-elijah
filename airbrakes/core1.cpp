@@ -36,6 +36,9 @@ void core1::core1_main()
 
   gpio_set_irq_enabled_with_callback(ZERO_BUTTON_PIN, GPIO_IRQ_EDGE_RISE, true, &encoder_zero);
 
+  gpio_put(LED_3_PIN, true);
+  bool led_on = true;
+
   while (true)
   {
     critical_section_enter_blocking(&target_access_cs);
@@ -60,7 +63,7 @@ void core1::core1_main()
     const int32_t static_targ_pos = target_encoder_pos;
     critical_section_exit(&target_access_cs);
 
-    airbrakes_state_manager->log_message(std::format("target: {}, {}", static_targ_pos, angle_override_active));
+    // airbrakes_state_manager->log_message(std::format("target: {}, {}", static_targ_pos, angle_override_active));
     gpio_put(LED_2_PIN, angle_override_active);
 
     read_encoder();
@@ -69,20 +72,23 @@ void core1::core1_main()
     const int32_t static_encoder_pos = current_encoder_pos;
     critical_section_exit(&encoder_pos_cs);
 
-    if (abs(static_encoder_pos - static_targ_pos) < 3)
+    if (abs(static_encoder_pos - static_targ_pos) < 1)
     {
       airbrakes_freeze();
     }
     else if (static_encoder_pos < static_targ_pos)
     {
+      airbrakes_state_manager->log_message("Opening", elijah_state_framework::LogLevel::Debug);
       airbrakes_open();
     }
     else
     {
+      airbrakes_state_manager->log_message("Closing", elijah_state_framework::LogLevel::Debug);
       airbrakes_close();
     }
 
-    sleep_ms(50);
+    gpio_put(LED_3_PIN, led_on = !led_on);
+    sleep_ms(10);
   }
 }
 
@@ -97,11 +103,11 @@ void core1::read_encoder()
     critical_section_enter_blocking(&encoder_pos_cs);
     if (gpio_get(ROTARY_DT_PIN) != currentCLK)
     {
-      current_encoder_pos++;
+      current_encoder_pos--;
     }
     else
     {
-      current_encoder_pos--;
+      current_encoder_pos++;
     }
     critical_section_exit(&encoder_pos_cs);
   }
@@ -110,6 +116,7 @@ void core1::read_encoder()
 
 void core1::encoder_zero(const uint gpio, const uint32_t events)
 {
+  gpio_put(ONBOARD_LED_PIN, true);
   critical_section_enter_blocking(&encoder_pos_cs);
   current_encoder_pos = 0;
   critical_section_exit(&encoder_pos_cs);

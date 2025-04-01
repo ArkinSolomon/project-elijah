@@ -47,7 +47,7 @@ class PayloadStateManager final : public elijah_state_framework::ElijahStateFram
 {
 public:
   PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD,
-                                              10)
+                                              100)
   {
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
                                                 101325.0);

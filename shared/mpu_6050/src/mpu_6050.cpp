@@ -4,6 +4,7 @@
 #include <cmath>
 #include <hardware/gpio.h>
 
+#include "elijah_state_framework.h"
 #include "i2c_util.h"
 
 MPU6050::MPU6050(i2c_inst_t* i2c_inst, const uint8_t i2c_addr, const GyroFullScaleRange default_gyro_range,
@@ -18,13 +19,13 @@ double MPU6050::get_accel_scale(const AccelFullScaleRange accel_range)
   switch (accel_range)
   {
   case AccelFullScaleRange::Range2g:
-    return GRAVITY_CONSTANT / 16384.0;
+    return GRAVITY_CONSTANT * 1.0 / 16384.0;
   case AccelFullScaleRange::Range4g:
-    return GRAVITY_CONSTANT / 8192.0;
+    return GRAVITY_CONSTANT * 2.0 / 16384.0;
   case AccelFullScaleRange::Range8g:
-    return GRAVITY_CONSTANT / 4096.0;
+    return GRAVITY_CONSTANT * 4.0 / 16384.0;
   case AccelFullScaleRange::Range16g:
-    return GRAVITY_CONSTANT / 2048.0;
+    return GRAVITY_CONSTANT * 8.0 / 16384.0;
   }
   return 0;
 }
@@ -33,14 +34,15 @@ double MPU6050::get_gyro_scale(const GyroFullScaleRange gyro_range)
 {
   switch (gyro_range)
   {
+  // No clue where these numbers come from but everyone else uses them so idk
   case GyroFullScaleRange::Range250:
-    return 1.0 / 131.0;
+    return 0.007633;
   case GyroFullScaleRange::Range500:
-    return 1.0 / 65.5;
+    return 0.015267;
   case GyroFullScaleRange::Range1000:
-    return 1.0 / 32.8;
+    return 0.030487;
   case GyroFullScaleRange::Range2000:
-    return 1.0 / 16.4;
+    return 0.060975f;
   }
   return 0;
 }
@@ -62,21 +64,21 @@ bool MPU6050::configure(const uint8_t dlpf_cfg, const GyroFullScaleRange gyro_ra
                         const bool self_test_en, const bool enable_ints)
 {
   const uint8_t config_reg_data = dlpf_cfg & 0x07;
-  uint8_t gyro_config_reg_data = static_cast<uint8_t>(gyro_range) << 3 & 0x18;
-  uint8_t accel_config_reg_dat = static_cast<uint8_t>(accel_range) << 3 & 0x18;
+  uint8_t gyro_config_reg_data = (static_cast<uint8_t>(gyro_range) << 3) & 0x18;
+  uint8_t accel_config_reg_data = (static_cast<uint8_t>(accel_range) << 3) & 0x18;
 
   if (self_test_en)
   {
     gyro_config_reg_data |= 0xE0;
-    accel_config_reg_dat |= 0xE0;
+    accel_config_reg_data |= 0xE0;
   }
 
   const uint8_t write_cfg_data[4] = {
-    REG_CONFIG, config_reg_data, gyro_config_reg_data, accel_config_reg_dat
+    REG_CONFIG, config_reg_data, gyro_config_reg_data, accel_config_reg_data
   };
 
   int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, write_cfg_data, 4, false,
-                                               delayed_by_ms(get_absolute_time(), 32));
+                                               delayed_by_ms(get_absolute_time(), 64));
   if (bytes_written != 4)
   {
     return false;
@@ -96,7 +98,24 @@ bool MPU6050::configure(const uint8_t dlpf_cfg, const GyroFullScaleRange gyro_ra
   constexpr uint8_t power_mgmt_data[2] = {REG_PWR_MGMT_1, 0x08};
   bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, power_mgmt_data, 2, false,
                                            delayed_by_ms(get_absolute_time(), 32));
-  return bytes_written == 2;
+  if (bytes_written != 2)
+  {
+    return false;
+  }
+
+  uint8_t output[3];
+  const bool read_success = i2c_util::read_bytes(i2c_inst, i2c_addr, REG_CONFIG, output, 3);
+  if (!read_success || output[0] != config_reg_data || output[1] != gyro_config_reg_data || output[2] !=
+    accel_config_reg_data)
+  {
+    // elijah_state_framework::log_serial_message(std::format(
+    //     "Read success: {}, output[0]: {}, expected: {}, output[1]: {}, expected: {}, output[2]: {}, expected: {}",
+    //     read_success, output[0], config_reg_data, output[1], gyro_config_reg_data, output[2], accel_config_reg_data
+    //   )
+    // );
+    return false;
+  }
+  return true;
 }
 
 bool MPU6050::configure_default()
@@ -164,8 +183,9 @@ bool MPU6050::calibrate(const uint calibration_cycles, const double expected_xa,
   return true;
 }
 
-void MPU6050::load_calibration_data(const double diff_xa, const double diff_ya, const double diff_za, const double diff_xg, const double diff_yg,
-  const double diff_zg)
+void MPU6050::load_calibration_data(const double diff_xa, const double diff_ya, const double diff_za,
+                                    const double diff_xg, const double diff_yg,
+                                    const double diff_zg)
 {
   calibration_data.diff_xa = diff_xa;
   calibration_data.diff_ya = diff_ya;

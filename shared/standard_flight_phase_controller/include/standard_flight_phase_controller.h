@@ -2,10 +2,13 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <format>
 #include <limits>
 #include <string>
 
+#include "elijah_state_framework.h"
 #include "flight_phase_controller.h"
+#include "usb_comm.h"
 
 enum class StandardFlightPhase : uint8_t
 {
@@ -52,7 +55,9 @@ protected:
 };
 
 template <typename TStateData>
-StandardFlightPhaseController<TStateData>::StandardFlightPhaseController()
+StandardFlightPhaseController<
+  TStateData>::StandardFlightPhaseController(): elijah_state_framework::FlightPhaseController<
+  TStateData, StandardFlightPhase>()
 {
   min_preflight_alt = std::numeric_limits<double>::max();
   max_preflight_accel = std::numeric_limits<double>::min();
@@ -67,7 +72,8 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::initial_flight_ph
 }
 
 template <typename TStateData>
-bool StandardFlightPhaseController<TStateData>::should_log(const StandardFlightPhase current_phase) const
+bool StandardFlightPhaseController<TStateData>::should_log(
+  const StandardFlightPhase current_phase) const
 {
   return current_phase != StandardFlightPhase::PREFLIGHT;
 }
@@ -82,6 +88,11 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
 
   if (current_phase == StandardFlightPhase::PREFLIGHT)
   {
+    if (stdio_usb_connected() || state_history.size() < 10)
+    {
+      return StandardFlightPhase::PREFLIGHT;
+    }
+
     if (altitude < min_preflight_alt)
     {
       min_preflight_alt = altitude;
@@ -95,23 +106,29 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     // Once altitude increases by 30m overall, and an acceleration at some point of greater than 50m/s^2 was reached
     if (altitude - min_preflight_alt > 30 && max_preflight_accel > 50)
     {
+      elijah_state_framework::log_serial_message(std::format("Launch detected! Altitude change of {}m (from {}m to {}m) and an acceleration of max_preflight_accel", altitude - min_preflight_alt, min_preflight_alt, altitude, max_preflight_accel));
       return StandardFlightPhase::LAUNCH;
     }
     return StandardFlightPhase::PREFLIGHT;
   }
   else if (current_phase == StandardFlightPhase::LAUNCH)
   {
-    if (state_history.size() < 3)
+    if (state_history.size() < 25)
     {
       return StandardFlightPhase::LAUNCH;
     }
 
     uint8_t missCount = 0;
     double last_accel = std::numeric_limits<double>::max();
-    for (TStateData state : state_history)
+    auto begin = std::begin(state_history);
+    auto end = std::begin(state_history) + 25;
+    if (std::distance(begin, end) > state_history.size())
+      end = std::end(state_history);
+
+    for (auto it = begin; it != end; ++it)
     {
       double curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude;
-      extract_state_data(state, curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude);
+      extract_state_data(*it, curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude);
       const double curr_accel = sqrt(
         curr_accel_x * curr_accel_x + curr_accel_y * curr_accel_y + curr_accel_z * curr_accel_z);
       if (curr_accel < last_accel)
@@ -140,8 +157,10 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     }
 
     // Once rocket dropped 50m
-    if (max_coast_alt - altitude > 50)
+    const double diff_from_apogee = max_coast_alt - altitude;
+    if (diff_from_apogee > 50)
     {
+      elijah_state_framework::log_serial_message(std::format("Apogee reached! {}m, detected because of an altitude difference of {}m", max_coast_alt, diff_from_apogee));
       return StandardFlightPhase::DESCENT;
     }
     return StandardFlightPhase::COAST;
@@ -168,8 +187,10 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
     }
 
     // If recently there is a total deviation of less than 3m
-    if (std::abs(maxRecentAlt - minRecentAlt) <= 3)
+    double recent_deviation = std::abs(maxRecentAlt - minRecentAlt);
+    if (recent_deviation <= 3)
     {
+      elijah_state_framework::log_serial_message(std::format("Landed because recent deviation = {}m ({} states)", recent_deviation, state_history.size()));
       return StandardFlightPhase::LANDED;
     }
     return StandardFlightPhase::DESCENT;
@@ -213,7 +234,7 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::predict_phase(con
 }
 
 template <typename TStateData>
-std::string StandardFlightPhaseController<TStateData>::get_phase_name(StandardFlightPhase phase) const
+std::string StandardFlightPhaseController<TStateData>::get_phase_name(const StandardFlightPhase phase) const
 {
   switch (phase)
   {

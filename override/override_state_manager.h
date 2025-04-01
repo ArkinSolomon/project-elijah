@@ -45,7 +45,7 @@ class OverrideStateManager final : public elijah_state_framework::ElijahStateFra
 {
 public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
-                                                OverrideFaultKey::MicroSD, 10)
+                                                OverrideFaultKey::MicroSD, 100)
   {
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
                                                 101083.7);
@@ -67,7 +67,7 @@ public:
 
     register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
-    register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::SPI_0);
+    register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
     register_command("Calibrate", [this]
     {

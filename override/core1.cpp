@@ -3,7 +3,6 @@
 #include <pico/flash.h>
 #include <pico/multicore.h>
 
-#include "aprs.h"
 #include "override_state_manager.h"
 #include "pin_outs.h"
 #include "sensors.h"
@@ -30,6 +29,9 @@ void core1::core1_main()
   queue_add_blocking(&core1_ready_queue, &core_ready);
   queue_remove_blocking(&core0_ready_queue, &core_ready);
 
+  gpio_put(LED_3_PIN, true);
+  bool led_on = true;
+
   bool is_first_detection = false;
   absolute_time_t land_time = 0;
   while (true)
@@ -51,6 +53,7 @@ void core1::core1_main()
       }
     }
 
+    gpio_put(LED_3_PIN, led_on = !led_on);
     sleep_ms(50);
   }
 }

@@ -3,8 +3,8 @@
 #include "airbrakes_state_manager.h"
 
 AirbrakesReliableMPU6050::AirbrakesReliableMPU6050(AirbrakesStateManager* override_state_manager) : ReliableMPU6050(
-  override_state_manager, AirbrakesFaultKey::MPU6050,i2c0, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range500,
-  MPU6050::AccelFullScaleRange::Range4g, AirbrakesPersistentStateKey::AccelCalibX,
+  override_state_manager, AirbrakesFaultKey::MPU6050, i2c0, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range2000,
+  MPU6050::AccelFullScaleRange::Range16g, AirbrakesPersistentStateKey::AccelCalibX,
   AirbrakesPersistentStateKey::AccelCalibY, AirbrakesPersistentStateKey::AccelCalibZ,
   AirbrakesPersistentStateKey::GyroCalibX, AirbrakesPersistentStateKey::GyroCalibY,
   AirbrakesPersistentStateKey::GyroCalibZ)
@@ -12,8 +12,8 @@ AirbrakesReliableMPU6050::AirbrakesReliableMPU6050(AirbrakesStateManager* overri
 }
 
 void AirbrakesReliableMPU6050::update_state(AirbrakesState& state, const double xa, const double ya, const double za,
-                                           const double xg, const double yg,
-                                           const double zg) const
+                                            const double xg, const double yg,
+                                            const double zg) const
 {
   state.accel_x = xa;
   state.accel_y = ya;

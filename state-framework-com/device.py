@@ -11,7 +11,7 @@ from framework.registered_command import CommandInputType
 from framework.state_framework import StateFramework
 from framework.time_helper import encode_time
 
-FRAMEWORK_TAG = 0xBC7AA65201C73901
+FRAMEWORK_TAG = 0x11335577AAEEFF33
 MAX_PACKETS_PER_UPDATE = 1024
 
 

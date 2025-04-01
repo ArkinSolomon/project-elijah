@@ -93,7 +93,7 @@ function(create_elijah_target SRC_DIR_NAME)
             $<$<CONFIG:Release>:RELEASE>
     )
 
-    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=4096 CFG_TUD_CDC_RX_BUFSIZE=512 SYS_CLK_KHZ=200000 PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=3)
+    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=4096 SYS_CLK_KHZ=200000 PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=6)
 
     target_link_libraries(${EXEC_NAME}
             aprs_pico

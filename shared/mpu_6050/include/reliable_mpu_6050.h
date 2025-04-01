@@ -21,6 +21,7 @@ public:
   [[nodiscard]] MPU6050& get_mpu_6050();
 
   void calibrate(unsigned int cycles, double xa, double ya, double za, double xg, double yg, double zg);
+  void load_calibration_data();
 
 protected:
   std::string on_init(TStateData& state) override;
@@ -75,6 +76,21 @@ void ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::calibrate(const unsigned int cyc
 }
 
 FRAMEWORK_TEMPLATE_DECL
+void ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::load_calibration_data()
+{
+#define PERSISTENT_CALIB_GET(K) this->get_framework()->get_persistent_data_storage()->get_double(K)
+  mpu.load_calibration_data(
+    PERSISTENT_CALIB_GET(calib_xa_key),
+    PERSISTENT_CALIB_GET(calib_ya_key),
+    PERSISTENT_CALIB_GET(calib_za_key),
+    PERSISTENT_CALIB_GET(calib_xg_key),
+    PERSISTENT_CALIB_GET(calib_yg_key),
+    PERSISTENT_CALIB_GET(calib_zg_key)
+  );
+#undef PERSISTENT_CALIB_GET
+}
+
+FRAMEWORK_TEMPLATE_DECL
 std::string ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::on_init(TStateData& state)
 {
   if (!mpu.check_chip_id())
@@ -87,16 +103,7 @@ std::string ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::on_init(TStateData& state
     return "Failed to configure";
   }
 
-#define PERSISTENT_CALIB_GET(K) this->get_framework()->get_persistent_data_storage()->get_double(K)
-  mpu.load_calibration_data(
-    PERSISTENT_CALIB_GET(calib_xa_key),
-    PERSISTENT_CALIB_GET(calib_ya_key),
-    PERSISTENT_CALIB_GET(calib_za_key),
-    PERSISTENT_CALIB_GET(calib_xg_key),
-    PERSISTENT_CALIB_GET(calib_yg_key),
-    PERSISTENT_CALIB_GET(calib_zg_key)
-  );
-#undef PERSISTENT_CALIB_GET
+  load_calibration_data();
   return "";
 }
 

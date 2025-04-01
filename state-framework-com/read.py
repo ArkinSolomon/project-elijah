@@ -4,25 +4,35 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Desktop/launch-72cd94e96d88e706'
-# csv_path = '/Users/arkinsolomon/Downloads/launch-data-from-fullscale.csv'
+file = '/Users/arkinsolomon/Desktop/launch-381ebcfae0c5683'
+csv_path = '/Users/arkinsolomon/Downloads/launch-data.csv'
 
-with open(file, 'rb') as f:
-    #, open(csv_path, 'w', newline='') as csv_file:
+with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
     readable = ReadableFile(f)
     f.read(9)
     sf = StateFramework.generate_framework_configuration(readable)
 
-    # writer = csv.writer(csv_file)
+    writer = csv.writer(csv_file)
 
-    # var_defs = [(var_def.display_name, var_def.display_unit, var_def.variable_id) for var_def in sf.variable_definitions]
-    # writer.writerow([f'{var_def[0]} {var_def[1]}' for var_def in var_defs])
+    var_defs = [(var_def.display_name, var_def.display_unit, var_def.variable_id) for var_def in sf.variable_definitions]
+    writer.writerow([f'{var_def[0]} {var_def[1]}' for var_def in var_defs])
 
-    while sf.update(readable, 1) > 0:
-        print(sf.state)
-        # data: list[Any] = []
-        #
-        # for var_def in var_defs:
-        #     data.append(sf.state[var_def[2]])
-        #
-        # writer.writerow(data)
+    last_seq: int
+    while True:
+        packets_read, phase_changed, logs = sf.update(readable, 1)
+        if packets_read == 0:
+            break
+        if len(logs) > 0:
+            for log in logs:
+                print(log)
+
+        if packets_read[0] == last_seq:
+            continue
+        last_seq = packets_read[0]
+
+        data: list[Any] = []
+
+        for var_def in var_defs:
+            data.append(sf.state[var_def[2]])
+
+        writer.writerow(data)

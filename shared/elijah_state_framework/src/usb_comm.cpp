@@ -23,7 +23,7 @@ void elijah_state_framework::init_usb_comm()
   {
     critical_section_init(&internal::usb_cs);
   }
-  did_init = stdio_usb_init();
+  did_init = stdio_init_all();
 }
 
 void elijah_state_framework::log_serial_message(const std::string& message)

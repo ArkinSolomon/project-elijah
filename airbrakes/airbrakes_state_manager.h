@@ -10,6 +10,7 @@ enum class StandardFlightPhase : uint8_t;
 
 struct AirbrakesState
 {
+  double ms_since_last;
   int32_t pressure;
   double temperature;
   double altitude;
@@ -17,7 +18,8 @@ struct AirbrakesState
   double gyro_x, gyro_y, gyro_z;
   double bat_voltage, bat_percent;
   int32_t curr_encoder_pos, target_encoder_pos;
-  double target_angle, calculated_angle;
+  double calculated_angle;
+  int32_t calculated_encoder_pos;
 };
 
 enum class AirbrakesPersistentStateKey : uint8_t
@@ -47,10 +49,10 @@ class AirbrakesStateManager final : public elijah_state_framework::ElijahStateFr
 {
 public:
   AirbrakesStateManager() : ElijahStateFramework("Airbrakes", AirbrakesPersistentStateKey::LaunchKey,
-                                                 AirbrakesFaultKey::MicroSD, 10)
+                                                 AirbrakesFaultKey::MicroSD, 100)
   {
     get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::SeaLevelPressure, "Barometric pressure",
-                                                101083.7);
+                                                101325.0);
     get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
     get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
@@ -72,7 +74,7 @@ public:
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(AirbrakesFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
-    register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::SPI_0);
+    register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
     register_command("Calibrate", [this]
     {
@@ -89,6 +91,12 @@ public:
       get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::GroundAltitude, altitude);
 
       get_persistent_data_storage()->commit_data();
+    });
+
+    register_command("Reset persistent storage", [this]
+    {
+      get_persistent_data_storage()->load_default_data();
+      mpu6050->load_calibration_data();
     });
 
     register_command("Manual target toggle", [this]
@@ -112,11 +120,40 @@ public:
       critical_section_exit(&core1::target_access_cs);
     });
 
+    register_command("Next flight phase", [this]
+    {
+      StandardFlightPhase curr_phase = get_current_flight_phase();
+      StandardFlightPhase next_phase;
+      if (get_current_flight_phase() == StandardFlightPhase::LANDED)
+      {
+        next_phase = StandardFlightPhase::PREFLIGHT;
+      }
+      else
+      {
+        next_phase = static_cast<StandardFlightPhase>(static_cast<std::underlying_type_t<StandardFlightPhase>>(
+          curr_phase) + 1);
+      }
+      set_flight_phase(next_phase);
+    });
+
+    register_command("Reconfigure MPU 6050", [this]
+    {
+      if (!mpu6050->get_mpu_6050().configure_default())
+      {
+        set_fault(AirbrakesFaultKey::MPU6050, true, "Failed to reconfigure from command input");
+      }
+      else
+      {
+        set_fault(AirbrakesFaultKey::MPU6050, false);
+      }
+    });
+
     finish_construction();
   }
 
 protected:
   START_STATE_ENCODER(AirbrakesState)
+    ENCODE_STATE(ms_since_last, DataType::Double, "dt", "ms")
     ENCODE_STATE(pressure, DataType::Int32, "Pressure", "Pa")
     ENCODE_STATE(temperature, DataType::Double, "Temperature", "degC")
     ENCODE_STATE(altitude, DataType::Double, "Altitude", "m")
@@ -129,9 +166,9 @@ protected:
     ENCODE_STATE(bat_voltage, DataType::Double, "Voltage", "V")
     ENCODE_STATE(bat_percent, DataType::Double, "Battery percentage", "%")
     ENCODE_STATE(target_encoder_pos, DataType::Int32, "Encoder target", "")
-    ENCODE_STATE(target_angle, DataType::Double, "Angle", "deg")
     ENCODE_STATE(curr_encoder_pos, DataType::Int32, "Current encoder", "")
     ENCODE_STATE(calculated_angle, DataType::Double, "Calculated angle", "deg")
+    ENCODE_STATE(calculated_encoder_pos, DataType::Int32, "Calculated encoder", "")
   END_STATE_ENCODER()
 };
 

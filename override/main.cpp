@@ -27,6 +27,9 @@ int main()
 
   sensors_init();
 
+  gpio_put(LED_2_PIN, true);
+  bool led_on = true;
+
   OverrideState state{};
 
   while (true)
@@ -41,6 +44,8 @@ int main()
 
     override_state_manager->state_changed(state);
     override_state_manager->check_for_log_write();
+
+    gpio_put(LED_2_PIN, led_on = !led_on);
     sleep_ms(50);
   }
 }
