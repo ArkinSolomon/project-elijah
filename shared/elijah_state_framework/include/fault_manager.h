@@ -5,7 +5,6 @@
 #include <memory>
 #include <string>
 #include <ranges>
-#include <malloc.h>
 
 #include "communication_channel.h"
 #include "enum_type.h"
@@ -96,10 +95,8 @@ template <elijah_state_framework::internal::EnumType FaultKeyType>
 uint32_t FaultManager<FaultKeyType>::get_all_faults()
 {
   shared_mutex_enter_blocking_shared(&faults_smtx);
-  const uint32_t saved_ints = save_and_disable_interrupts();
   const uint32_t curr_faults = faults;
   shared_mutex_exit_shared(&faults_smtx);
-  restore_interrupts(saved_ints);
   return curr_faults;
 }
 
@@ -108,7 +105,6 @@ uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, 
                                                           uint8_t& fault_bit, bool& did_fault_change)
 {
   shared_mutex_enter_blocking_exclusive(&faults_smtx);
-  const uint32_t saved_ints = save_and_disable_interrupts();
 
   elijah_state_framework::internal::FaultDefinition<FaultKeyEnumType>* changing_fault_def = find_fault(key);
 
@@ -119,7 +115,6 @@ uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, 
   if (is_currently_faulted == is_faulted)
   {
     shared_mutex_exit_exclusive(&faults_smtx);
-    restore_interrupts_from_disabled(saved_ints);
 
     did_fault_change = false;
     return faults;
@@ -165,7 +160,6 @@ uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, 
   }
 
   shared_mutex_exit_exclusive(&faults_smtx);
-  restore_interrupts_from_disabled(saved_ints);
   return faults;
 }
 
