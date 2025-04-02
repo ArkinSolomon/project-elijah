@@ -76,16 +76,15 @@ public:
     register_fault(AirbrakesFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", [this]
+    register_command("Calibrate", "Sea level pressure (Pa)", [this](double sea_level_pressure)
     {
       mpu6050->calibrate(100, 0, 0, -GRAVITY_CONSTANT, 0, 0, 0);
 
-      const double sea_level_pressure = get_persistent_data_storage()->get_double(
-        AirbrakesPersistentStateKey::SeaLevelPressure);
       int32_t pressure;
       double temperature, altitude;
       bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
 
+      get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::SeaLevelPressure, pressure);
       get_persistent_data_storage()->set_int32(AirbrakesPersistentStateKey::GroundPressure, pressure);
       get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::GroundTemperature, temperature);
       get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::GroundAltitude, altitude);

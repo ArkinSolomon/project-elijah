@@ -44,7 +44,7 @@ void core1::core1_main()
     {
       const PayloadState last_state = payload_state_manager->get_state_history()[0];
       payload_state_manager->log_message("Transmit!");
-      double apogee = payload_state_manager->get_flight_phase_controller().get_apogee();
+      double apogee = payload_state_manager->get_flight_phase_controller()->get_apogee();
       // aprs::transmitAllData(last_state, 4200, last_state.time_inst);
       next_transmission_time = delayed_by_ms(get_absolute_time(), 5000);
     }

@@ -49,7 +49,7 @@ public:
   PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD,
                                               100)
   {
-    get_persistent_data_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Barometric pressure",
+    get_persistent_data_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Sea level pressure",
                                                 101325.0);
     get_persistent_data_storage()->register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);

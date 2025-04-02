@@ -15,9 +15,8 @@ void pin_init()
   gpio_set_dir(LED_2_PIN, GPIO_OUT);
   gpio_init(LED_3_PIN);
   gpio_set_dir(LED_3_PIN, GPIO_OUT);
-
-  gpio_init(25);
-  gpio_set_dir(25, GPIO_OUT);
+  gpio_init(ONBOARD_LED_PIN);
+  gpio_set_dir(ONBOARD_LED_PIN, GPIO_OUT);
 
   // See sd_hw_config.c for microSD card SPI setup
 
@@ -39,5 +38,4 @@ void pin_init()
 
   gpio_init(RADIO_PTT_PIN);
   gpio_set_dir(RADIO_PTT_PIN, GPIO_OUT);
-  //aprs::init_aprs_system(SYS_CLK_KHZ, RADIO_PIN2, PWM_CHAN_A);
 }

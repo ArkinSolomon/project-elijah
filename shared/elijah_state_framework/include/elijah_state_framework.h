@@ -19,6 +19,7 @@
 #include "metadata_segment.h"
 #include "output_packet.h"
 #include "persistent_data_storage.h"
+#include "pin_outs.h"
 #include "registered_command.h"
 #include "usb_comm.h"
 #include "state_framework_logger.h"
@@ -126,7 +127,7 @@ namespace elijah_state_framework
     void release_state_history();
     [[nodiscard]] const std::deque<TStateData>& get_state_history() const;
 
-    [[nodiscard]] TFlightPhaseController& get_flight_phase_controller() const;
+    [[nodiscard]] TFlightPhaseController* get_flight_phase_controller() const;
     [[nodiscard]] EFlightPhase get_current_flight_phase();
     void set_flight_phase(EFlightPhase new_phase);
 
@@ -232,7 +233,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   });
 
   // ReSharper disable once CppPassValueParameterByConstReference
-  register_command("New launch", "Launch name", true, [this](std::string launch_name)
+  register_command("New launch", "Launch name", true, [this, launch_key](std::string launch_name)
   {
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
 
@@ -240,8 +241,15 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     delete logger;
     did_write_metadata = false;
 
-    logger = new StateFrameworkLogger(launch_name); // NOLINT(*-unnecessary-value-param)
+    logger = new StateFrameworkLogger(launch_name);
+    send_framework_metadata(true, false);
     shared_mutex_exit_exclusive(&logger_smtx);
+
+    persistent_data_storage->set_string(launch_key, launch_name);
+    persistent_data_storage->commit_data();
+
+
+    log_message(std::format("New launch: {}", launch_name));
   });
 
   std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
@@ -452,7 +460,7 @@ get_state_history() const
 }
 
 FRAMEWORK_TEMPLATE_DECL
-TFlightPhaseController& elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_flight_phase_controller() const
+TFlightPhaseController* elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_flight_phase_controller() const
 {
   return flight_phase_controller;
 }

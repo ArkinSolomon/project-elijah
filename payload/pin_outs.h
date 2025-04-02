@@ -8,7 +8,7 @@
 
 #define LED_2_PIN 20
 #define LED_3_PIN 21
-#define STATUS_LED_PIN 25 // Onboard
+#define ONBOARD_LED_PIN 25
 
 #define SPI0_SCK_PIN 18 // Pin 24
 #define SPI0_TX_PIN 19 // Pin 25

@@ -95,7 +95,7 @@ class Device:
         if not self.is_connected or not self.uses_state_framework:
             return
 
-        self.sys_log(f"data: {data}, command_id: {command_id}")
+        self.sys_log(f"Sending command {command_id}, data: {data}")
         assert self.tty
         assert self.state_framework
         self.tty.write(struct.pack('<B', command_id))
@@ -115,7 +115,9 @@ class Device:
                 encoded_data = struct.pack('<d', float(data))
                 self.tty.write(encoded_data)
             case CommandInputType.STRING | CommandInputType.ALPHANUMERIC:
-                self.tty.write(str.encode(data, encoding='utf-8'))
+                self.tty.write(struct.pack('<H', len(data)))
+                encoded_str = str.encode(data, encoding='utf-8')
+                self.tty.write(encoded_str)
             case _:
                 pass
 

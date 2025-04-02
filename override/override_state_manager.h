@@ -48,7 +48,7 @@ public:
                                                 OverrideFaultKey::MicroSD, 100)
   {
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
-                                                101083.7);
+                                                101325.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
     get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
@@ -69,16 +69,15 @@ public:
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", [this]
+    register_command("Calibrate", "Sea level pressure (Pa)", [this](double sea_level_pressure)
     {
       mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
 
-      const double sea_level_pressure = get_persistent_data_storage()->get_double(
-        OverridePersistentStateKey::SeaLevelPressure);
       int32_t pressure;
       double temperature, altitude;
       bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
 
+      get_persistent_data_storage()->set_double(OverridePersistentStateKey::SeaLevelPressure, sea_level_pressure);
       get_persistent_data_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
       get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
       get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundAltitude, altitude);

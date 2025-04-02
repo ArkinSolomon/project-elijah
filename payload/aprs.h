@@ -9,6 +9,6 @@
 
 namespace aprs
 {
-    void aprs::transmitAllData(PayloadState state, int apogee, tm tmLand);
+    void transmitAllData(PayloadState state, int apogee, tm tmLand);
     void transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string& data);
 }
