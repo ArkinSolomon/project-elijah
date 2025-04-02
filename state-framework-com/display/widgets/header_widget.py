@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 from typing import Any, Callable, Tuple
+from display.color_manager import color_defs
 
 from asciimatics.screen import Screen
 
