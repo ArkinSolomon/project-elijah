@@ -2,6 +2,7 @@ from typing import Callable
 
 from asciimatics.screen import Screen
 
+from display.color_manager import color_defs
 from display.widgets.line_segments import LineSegments
 from display.widgets.widget import Widget
 from framework.fault_definition import FaultDefinition, CommunicationChannel
@@ -156,7 +157,7 @@ class FaultsWidget(Widget):
         label_color = Screen.COLOUR_RED if is_faulted else Screen.COLOUR_WHITE
         bg = self.background_color
         if row_selected:
-            bg = 17
+            bg = color_defs.selection
             self.screen.print_at(' ' * self.col_width, self.offset_x + rel_row_x, self.offset_y + rel_row_y, bg=bg)
 
         self.screen.print_at(name, self.offset_x + rel_row_x, self.offset_y + rel_row_y,
@@ -164,10 +165,10 @@ class FaultsWidget(Widget):
                              bg=bg)
 
         status_text = 'FAULT' if is_faulted else 'OK'
-        status_text_color = Screen.COLOUR_RED if is_faulted else Screen.COLOUR_GREEN
+        status_text_color = color_defs.bad if is_faulted else color_defs.good
         if not fault_known:
             status_text = 'N/A'
-            status_text_color = 243
+            status_text_color = color_defs.disabled
 
         status_text_rel_off_x = self.col_width - len(status_text)
 

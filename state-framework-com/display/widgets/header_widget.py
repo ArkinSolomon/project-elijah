@@ -87,7 +87,7 @@ class HeaderWidget(Widget):
             for i, row in enumerate(column.data):
                 label, value = row
                 self.screen.print_at(label, self.offset_x + column.offset_x, i + 1 + self.offset_y, bg=self.background_color)
-                self.screen.print_at(value, self.offset_x + column.offset_x + (column.width - len(value)), i + 1 + self.offset_y, colour=Screen.COLOUR_CYAN,  bg=self.background_color)
+                self.screen.print_at(value, self.offset_x + column.offset_x + (column.width - len(value)), i + 1 + self.offset_y, colour=color_defs.data,  bg=self.background_color)
 
 
     def _gen_rows(self) -> None:

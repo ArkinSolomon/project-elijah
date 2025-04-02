@@ -4,6 +4,7 @@ from typing import Callable
 from asciimatics.screen import Screen
 
 from device import Device
+from display.color_manager import color_defs
 from display.screen_state import ScreenState, InputMode, ScreenWidget
 from display.widgets.color_block import ColorBlock
 from display.widgets.faults_widget import FaultsWidget
@@ -119,7 +120,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
     ev = screen.get_key()
 
     header_selected = screen_state.focused_widget == ScreenWidget.HEADER and screen_state.input_mode != CommandInputType.NONE
-    header_background = 235 if header_selected else Screen.COLOUR_BLACK
+    header_background = color_defs.selected_widget_background if header_selected else Screen.COLOUR_BLACK
     header_block = ColorBlock(screen, 1, 1, screen.width - 3 - FAULT_WIDTH, HEADER_SIZE, header_background)
     header_block.render()
 
@@ -153,7 +154,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
         last_updated_fault = None
 
     faults_selected = screen_state.focused_widget == ScreenWidget.FAULTS and screen_state.input_mode != CommandInputType.NONE
-    faults_background = 235 if faults_selected else Screen.COLOUR_BLACK
+    faults_background = color_defs.selected_widget_background if faults_selected else color_defs.background
     faults_block = ColorBlock(screen, screen.width - 1 - FAULT_WIDTH, 1, FAULT_WIDTH, HEADER_SIZE, faults_background)
     faults_block.render()
 
@@ -166,16 +167,16 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
         char_handled = faults_widget.handle_char(ev)
 
     commands_selected = screen_state.focused_widget == ScreenWidget.COMMANDS and screen_state.input_mode != CommandInputType.NONE
-    command_background = 235 if commands_selected else Screen.COLOUR_BLACK
+    command_background = color_defs.selected_widget_background if commands_selected else color_defs.background
     commands_block = ColorBlock(screen, screen.width - SIDEBAR_WIDTH - 1, HEADER_SIZE + 2, SIDEBAR_WIDTH,
                                 screen.height - HEADER_SIZE - 5 - DEVICE_SELECTION_HEIGHT,
                                 command_background)
     commands_block.render()
-    screen.print_at("Commands", screen.width - SIDEBAR_WIDTH - 1, HEADER_SIZE + 2, colour=Screen.COLOUR_WHITE,
+    screen.print_at("Commands", screen.width - SIDEBAR_WIDTH - 1, HEADER_SIZE + 2, colour=color_defs.text,
                     attr=Screen.A_BOLD if commands_selected else Screen.A_NORMAL, bg=command_background)
 
     logs_selected = screen_state.focused_widget == ScreenWidget.LOGS and screen_state.input_mode != CommandInputType.NONE
-    logs_background = 235 if logs_selected else Screen.COLOUR_BLACK
+    logs_background = color_defs.selected_widget_background if logs_selected else color_defs.background
     logs_block = ColorBlock(screen, 1, HEADER_SIZE + 2, screen.width - SIDEBAR_WIDTH - 3,
                             screen.height - HEADER_SIZE - 4, logs_background)
     logs_block.render()
@@ -211,7 +212,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
     command_list.render()
 
     device_selection_selected = screen_state.focused_widget == ScreenWidget.DEVICES
-    device_selection_background = 235 if device_selection_selected else Screen.COLOUR_BLACK
+    device_selection_background = color_defs.selected_widget_background if device_selection_selected else color_defs.background
     device_selection_block = ColorBlock(screen, screen.width - SIDEBAR_WIDTH - 1,
                                         screen.height - 2 - DEVICE_SELECTION_HEIGHT, SIDEBAR_WIDTH,
                                         DEVICE_SELECTION_HEIGHT, device_selection_background)
@@ -235,7 +236,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
             screen_state.focus_next()
         screen.print_at(
             f"Project Elijah State Framework Communication — Cedarville University | {screen.width}x{screen.height} | {len(devices)} {"devices" if len(devices) != 1 else "device"} | Screen: {screen_state.screen_refresh_rate} Hz | Press Q to quit",
-            0, screen.height - 1, colour=242)
+            0, screen.height - 1, colour=color_defs.footer_text)
     else:
         if (ev == 10 or ev == -1) and not char_handled:
             if ev != -1 and screen_state.enter_callback is not None:
@@ -270,11 +271,11 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
                 pass
 
         prompt = f"Press ESC to cancel | {screen_state.input_prompt} > "
-        screen.print_at(prompt, 0, screen.height - 1, colour=Screen.COLOUR_BLACK, bg=226)
-        screen.print_at(screen_state.current_input, len(prompt), screen.height - 1, colour=Screen.COLOUR_BLUE, bg=226)
+        screen.print_at(prompt, 0, screen.height - 1, colour=color_defs.prompt_text, bg=color_defs.prompt_background)
+        screen.print_at(screen_state.current_input, len(prompt), screen.height - 1, colour=color_defs.prompt_input, bg=color_defs.prompt_background)
 
         remaining_fill_size = screen.width - len(prompt) - len(screen_state.current_input)
         screen.print_at(" " * remaining_fill_size, len(prompt) + len(screen_state.current_input), screen.height - 1,
-                        bg=226)
+                        bg=color_defs.prompt_background)
 
     return False

@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 from asciimatics.screen import Screen
 
+from display.color_manager import color_defs
 from display.widgets.widget import Widget
 
 
@@ -46,7 +47,7 @@ class ListWidget(Widget):
     def render(self):
         for i, option in enumerate(self.options):
             self.screen.print_at(option, self.offset_x, self.offset_y + i,
-                                 bg=55 if i == self.selected_option_idx else self.default_color)
+                                 bg=color_defs.selection if i == self.selected_option_idx else self.default_color)
             if i == self.selected_option_idx:
                 remaining_width = self.width - len(option)
-                self.screen.print_at(" " * remaining_width, self.offset_x + len(option), self.offset_y + i, bg=55)
+                self.screen.print_at(" " * remaining_width, self.offset_x + len(option), self.offset_y + i, bg=color_defs.selection)
