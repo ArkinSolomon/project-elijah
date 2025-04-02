@@ -1,7 +1,6 @@
 #pragma once
 #include <hardware/i2c.h>
 
-#include "reliable_component_helper.h"
 #include "payload_flight_phase_controller.h"
 
 enum class PayloadPersistentDataKey : uint8_t;

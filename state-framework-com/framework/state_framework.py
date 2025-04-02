@@ -223,6 +223,7 @@ class StateFramework:
         def_count, all_faults = struct.unpack('<BI', readable.read(5))
         for _ in range(def_count):
             self.fault_definitions.append(FaultDefinition.read_definition(readable, all_faults))
+        self._update_last_fault()
 
     def _update_persistent_data(self, readable: Readable):
         tag, = struct.unpack('<I', readable.read(4))
@@ -243,14 +244,19 @@ class StateFramework:
         for fault in self.fault_definitions:
             fault.is_faulted = ((all_faults >> fault.fault_bit) & 0x01) > 0
             if fault.fault_bit == changed_fault_bit:
-                self.last_updated_fault = fault
-                if fault.is_faulted:
-                    fault.last_fault_message = change_message
-                else:
-                    fault.last_fault_message = None
+                if self.last_updated_fault is None or self.last_updated_fault.fault_bit == changed_fault_bit or not self.last_updated_fault.is_faulted:
+                    self.last_updated_fault = fault
+                fault.last_fault_message = change_message
             # if fault.fault_bit == changed_fault_bit:
             #     print(
             #         f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')
+        self._update_last_fault()
+
+    def _update_last_fault(self):
+        if self.last_updated_fault is None or not self.last_updated_fault.is_faulted:
+            faulted_devices = list(filter(lambda f: f.is_faulted and not f.is_communication_channel, self.fault_definitions))
+            if len(faulted_devices) > 0:
+                self.last_updated_fault = faulted_devices[0]
 
     def _update_phase(self, readable: Readable):
         old_phase_id = self.current_phase_id

@@ -23,7 +23,7 @@ public:
   [[nodiscard]] std::unique_ptr<uint8_t[]> encode_all_faults(size_t& encoded_size) const;
 
   [[ nodiscard ]] uint32_t get_all_faults();
-  uint32_t set_fault_status(FaultKeyType key, bool is_faulted, uint8_t& fault_bit, bool& did_fault_change);
+  uint32_t set_fault_status(FaultKeyType key, bool is_faulted, uint8_t& fault_bit, bool& did_fault_change, const std::string& fault_message);
   [[nodiscard]] bool is_faulted(FaultKeyType key);
   [[nodiscard]] bool is_faulted(CommunicationChannel communication_channel);
 
@@ -102,7 +102,7 @@ uint32_t FaultManager<FaultKeyType>::get_all_faults()
 
 template <elijah_state_framework::internal::EnumType FaultKeyEnumType>
 uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, const bool is_faulted,
-                                                          uint8_t& fault_bit, bool& did_fault_change)
+                                                          uint8_t& fault_bit, bool& did_fault_change, const std::string& fault_message)
 {
   shared_mutex_enter_blocking_exclusive(&faults_smtx);
 
@@ -117,9 +117,15 @@ uint32_t FaultManager<FaultKeyEnumType>::set_fault_status(FaultKeyEnumType key, 
     shared_mutex_exit_exclusive(&faults_smtx);
 
     did_fault_change = false;
+    if (changing_fault_def->get_last_fault_message() != fault_message)
+    {
+      did_fault_change = true;
+      changing_fault_def->set_last_fault_message(fault_message);
+    }
     return faults;
   }
   did_fault_change = true;
+  changing_fault_def->set_last_fault_message(fault_message);
 
   if (is_faulted)
   {

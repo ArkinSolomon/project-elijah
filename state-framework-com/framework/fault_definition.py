@@ -29,6 +29,7 @@ class FaultDefinition:
       new_def = FaultDefinition()
       new_def.fault_bit, comm_channel_id = struct.unpack('<2B', readable.read(2))
       new_def.fault_name = read_string(readable)
+      new_def.last_fault_message = read_string(readable)
 
       new_def.communication_channel = CommunicationChannel(comm_channel_id)
 

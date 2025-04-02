@@ -129,7 +129,7 @@ class FaultsWidget(Widget):
                     if cell_selected:
                         self._render_fault_reason(fault)
             else:
-                self.screen.print_at(comm_channel.name, self.offset_x + ch_off_x, self.offset_y + 0, attr=Screen.A_BOLD,
+                self.screen.print_at(comm_channel.name.replace('_', ' '), self.offset_x + ch_off_x, self.offset_y + 0, attr=Screen.A_BOLD,
                                      bg=self.background_color)
         table_lines.render()
 

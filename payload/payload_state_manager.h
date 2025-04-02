@@ -97,7 +97,6 @@ public:
     {
       // Because the FAT lib wants this idk man
       time_inst.tm_year -= 80;
-      log_message(std::format("year {}", time_inst.tm_year));
       reliable_clock->set_clock(time_inst);
     });
 

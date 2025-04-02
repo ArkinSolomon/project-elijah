@@ -22,22 +22,8 @@ void ReliableClock::set_clock(const tm& time_inst)
   if (!clock_set)
   {
     get_framework()->set_fault(PayloadFaultKey::DS1307, true,
-                           "Failed to read DS1307 (or not set) while initializing onboard clock");
+                               "Failed to read DS1307 (or not set) while initializing onboard clock");
     return;
-  }
-
-  if (is_connected())
-  {
-    aon_timer_set_time_calendar(&time_inst);
-  }
-}
-
-std::string ReliableClock::on_init(PayloadState& state)
-{
-  tm time_inst{};
-  if (!ds_1307.check_and_read_clock(time_inst))
-  {
-    return "Failed to initialize onboard clock with DS1307";
   }
 
   if (aon_timer_is_running())
@@ -47,6 +33,30 @@ std::string ReliableClock::on_init(PayloadState& state)
   else
   {
     aon_timer_start_calendar(&time_inst);
+  }
+}
+
+std::string ReliableClock::on_init(PayloadState& state)
+{
+  tm time_inst{};
+
+  if (!ds_1307.check_and_read_clock(time_inst))
+  {
+    if (!aon_timer_is_running())
+    {
+      return "Failed to initialize onboard clock with DS1307";
+    }
+  }
+  else
+  {
+    if (aon_timer_is_running())
+    {
+      aon_timer_set_time_calendar(&time_inst);
+    }
+    else
+    {
+      aon_timer_start_calendar(&time_inst);
+    }
   }
 
   busy_wait_ms(1);

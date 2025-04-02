@@ -22,6 +22,9 @@ namespace elijah_state_framework::internal
     [[nodiscard]] CommunicationChannel get_communication_channel() const;
     [[nodiscard]] bool is_communication_channel() const;
 
+    void set_last_fault_message(const std::string& message);
+    [[nodiscard]] const std::string& get_last_fault_message() const;
+
     [[nodiscard]] size_t get_encoded_definition_size() const;
     void encode_definition(uint8_t* dest) const;
 
@@ -30,6 +33,7 @@ namespace elijah_state_framework::internal
     uint8_t fault_bit;
     CommunicationChannel communication_channel;
     bool is_com_channel;
+    std::string last_fault_message;
 
     std::string fault_name;
   };
@@ -78,9 +82,21 @@ bool elijah_state_framework::internal::FaultDefinition<FaultKeyType>::is_communi
 }
 
 template <elijah_state_framework::internal::EnumType FaultKeyType>
+void elijah_state_framework::internal::FaultDefinition<FaultKeyType>::set_last_fault_message(const std::string& message)
+{
+  last_fault_message = message;
+}
+
+template <elijah_state_framework::internal::EnumType FaultKeyType>
+const std::string& elijah_state_framework::internal::FaultDefinition<FaultKeyType>::get_last_fault_message() const
+{
+  return last_fault_message;
+}
+
+template <elijah_state_framework::internal::EnumType FaultKeyType>
 size_t elijah_state_framework::internal::FaultDefinition<FaultKeyType>::get_encoded_definition_size() const
 {
-  return 2 * sizeof(uint8_t) /* is_com_channel | bit#, channel */ + fault_name.size() + 1;
+  return 2 * sizeof(uint8_t) /* is_com_channel | bit#, channel */ + fault_name.size() + 1 + last_fault_message.size() + 1;
 }
 
 template <elijah_state_framework::internal::EnumType FaultKeyType>
@@ -96,4 +112,5 @@ void elijah_state_framework::internal::FaultDefinition<FaultKeyType>::encode_def
   dest[1] = static_cast<uint8_t>(communication_channel);
 
   memcpy(dest + 2, fault_name.c_str(), fault_name.size() + 1);
+  memcpy(dest + 2 + fault_name.size() + 1, last_fault_message.c_str(), last_fault_message.size() + 1);
 }

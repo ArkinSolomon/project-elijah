@@ -22,8 +22,8 @@ class LineSegments(Widget):
         self.background_color = background_color
 
     def add_vertical_line(self, x: int, start_y: int, length: int):
-        if x < 0 or start_y < 0 or length <= 0:
-            raise ValueError("x, start_y must be >= 0 and length > 0")
+        # if x < 0 or start_y < 0 or length <= 0:
+        #     raise ValueError("x, start_y must be >= 0 and length > 0")
         self.lines.append((x, start_y, length, LineType.VERTICAL))
 
     def add_horizontal_line(self, y: int, start_x: int, length: int):
