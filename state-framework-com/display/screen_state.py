@@ -28,7 +28,7 @@ class ScreenState:
     hovered_device_idx: int
     selected_device_idx: int
 
-    last_render: int
+    last_render: float
     screen_refresh_rate: int
 
     input_mode: InputMode

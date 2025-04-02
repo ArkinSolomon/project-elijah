@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 from typing import Any, Callable, Tuple
+import platform
 
 from asciimatics.screen import Screen
 
@@ -76,7 +77,10 @@ class HeaderWidget(Widget):
 
 
     def render(self) -> None:
-        curr_time_str = datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
+        if platform.system() == "Windows":
+            curr_time_str = datetime.now().strftime("%A %B %#d, %Y %H:%M:%S")
+        else:
+            curr_time_str = datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
         self.screen.print_at(curr_time_str + f' | {self.app_name} | {self.flight_phase}', self.offset_x, self.offset_y, bg=self.background_color, attr=Screen.A_BOLD)
 
         if len(self.pages) == 0:

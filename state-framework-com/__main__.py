@@ -15,7 +15,7 @@ screen_state = ScreenState()
 def discover_devices() -> None:
     ports = serial.tools.list_ports.comports()
     if platform.system() == "Windows":
-        serial_ports = [port[0] for port in ports]
+        serial_ports = [port[0] for port in ports if not 'bluetooth' in port.description.lower()]
     else:
         serial_ports = ['/dev/' + device for device in os.listdir('/dev') if 'tty.usbmodem' in device]
 
@@ -56,14 +56,15 @@ def main(screen: Screen):
 
         screen.clear_buffer(Screen.COLOUR_WHITE, Screen.A_NORMAL, Screen.COLOUR_BLACK)
 
-        screen_state.screen_refresh_rate = int(1 / ((time.process_time_ns() - screen_state.last_render) / 1e9))
+        dt = time.process_time() - screen_state.last_render
+        screen_state.screen_refresh_rate = 9999 if dt == 0 else int(1 / dt)
         user_has_quit = screen_loop(screen, screen_state, devices)
 
         if user_has_quit:
             break
 
         screen.refresh()
-        screen_state.last_render = time.process_time_ns()
+        screen_state.last_render = time.process_time()
 
 while True:
     Screen.wrapper(main)
