@@ -34,3 +34,8 @@ void PayloadFlightPhaseController::extract_state_data(const PayloadState state, 
   accel_z = state.accel_z;
   altitude = state.altitude;
 }
+
+bool PayloadFlightPhaseController::is_calibrated() const
+{
+  return payload_state_manager->get_persistent_storage()->get_uint8(PayloadPersistentDataKey::IsCalibrated) > 0;
+}
