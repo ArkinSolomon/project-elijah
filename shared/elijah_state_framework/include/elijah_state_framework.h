@@ -112,14 +112,14 @@ namespace elijah_state_framework
                          size_t state_history_size);
     virtual ~ElijahStateFramework();
 
-    PersistentDataStorage<EPersistentStorageKey>* get_persistent_data_storage() const;
+    PersistentDataStorage<EPersistentStorageKey>* get_persistent_storage() const;
 
     [[nodiscard]] const std::string& get_application_name() const;
 
     void check_for_log_write();
 
     void log_message(const std::string& message,
-                     LogLevel log_level = LogLevel::Default) const;
+                     LogLevel log_level = LogLevel::Default);
     void check_for_commands();
 
     void state_changed(const TStateData& new_state);
@@ -191,6 +191,7 @@ namespace elijah_state_framework
     shared_mutex_t logger_smtx;
     EFaultKey micro_sd_fault_key;
     bool did_write_metadata = false;
+    absolute_time_t last_mount_attempt_time = nil_time;
 
     FaultManager<EFaultKey>* fault_manager = new FaultManager<EFaultKey>(0x0000);
 
@@ -242,12 +243,12 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     did_write_metadata = false;
 
     logger = new StateFrameworkLogger(launch_name);
-    send_framework_metadata(true, false);
     shared_mutex_exit_exclusive(&logger_smtx);
+
+    send_framework_metadata(true, false);
 
     persistent_data_storage->set_string(launch_key, launch_name);
     persistent_data_storage->commit_data();
-
 
     log_message(std::format("New launch: {}", launch_name));
   });
@@ -272,7 +273,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::~ElijahS
 
 FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::PersistentDataStorage<EPersistentStorageKey>* elijah_state_framework::ElijahStateFramework<
-  FRAMEWORK_TEMPLATE_TYPES>::get_persistent_data_storage() const
+  FRAMEWORK_TEMPLATE_TYPES>::get_persistent_storage() const
 {
   return persistent_data_storage;
 }
@@ -460,7 +461,8 @@ get_state_history() const
 }
 
 FRAMEWORK_TEMPLATE_DECL
-TFlightPhaseController* elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_flight_phase_controller() const
+TFlightPhaseController* elijah_state_framework::ElijahStateFramework<
+  FRAMEWORK_TEMPLATE_TYPES>::get_flight_phase_controller() const
 {
   return flight_phase_controller;
 }
@@ -549,7 +551,7 @@ const std::string& elijah_state_framework::ElijahStateFramework<TStateData, EPer
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::log_message(
   const std::string& message,
-  const LogLevel log_level) const
+  const LogLevel log_level)
 {
   size_t encoded_len;
   const std::unique_ptr<uint8_t[]> encoded_message = internal::encode_log_message(
@@ -564,7 +566,9 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::log
 
   if (log_level != LogLevel::Debug && logger)
   {
+    shared_mutex_enter_blocking_shared(&logger_smtx);
     logger->log_data(encoded_message.get(), encoded_len);
+    shared_mutex_exit_shared(&logger_smtx);
   }
 }
 
@@ -575,7 +579,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   const bool did_succeed = logger->flush_write_buff();
   shared_mutex_exit_shared(&logger_smtx);
 
-  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write log", false);
+  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write", false);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -697,21 +701,47 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   {
     if (!logger->is_mounted())
     {
-      write_to_file = false;
-      shared_mutex_exit_shared(&logger_smtx);
-
-      if (!write_to_serial)
+      // If it has been more than 1.5s since we last tried to mount, try again
+      if (absolute_time_diff_us(last_mount_attempt_time, get_absolute_time()) / 1000 > 1500)
       {
-        return;
+        last_mount_attempt_time = get_absolute_time();
+        if (logger->mount_card())
+        {
+          last_mount_attempt_time = nil_time;
+        }
+        else
+        {
+          write_to_file = false;
+          shared_mutex_exit_shared(&logger_smtx);
+
+          set_fault(micro_sd_fault_key, true, "Failed to mount card", false);
+          if (!write_to_serial)
+          {
+            log_message("Logger is not mounted (and not writing to serial), can not write framework metadata",
+                        LogLevel::Debug);
+            return;
+          }
+        }
       }
     }
 
+    if (!write_to_serial)
+    {
+      log_message("Logger mounted (and not writing to serial), writing framework metadata", LogLevel::Debug);
+    }
+    set_fault(micro_sd_fault_key, false, "", false);
     constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
     logger->log_data(&packet_id, sizeof(packet_id));
   }
   else
   {
     shared_mutex_exit_shared(&logger_smtx);
+
+    if (!write_to_serial)
+    {
+      critical_section_enter_blocking(&internal::usb_cs);
+      return;
+    }
   }
 
   auto segment_id = static_cast<uint8_t>(internal::MetadataSegment::ApplicationName);

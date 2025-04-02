@@ -61,9 +61,20 @@ bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, F
     static_cast<uint8_t>(mode);
   const uint8_t config_data = static_cast<uint8_t>(standby_time) << 5 | static_cast<uint8_t>(filter_setting) << 2;
 
-  const uint8_t write_data[2] = {ctrl_meas, config_data};
-  const bool success = write_bytes_to_device(REG_CTRL_MEAS, write_data, 2);
-  return success;
+   uint8_t data_buff[2] = {ctrl_meas, config_data};
+  const bool data_write_success = write_bytes_to_device(REG_CTRL_MEAS, data_buff, 2);
+  if (!data_write_success)
+  {
+    return false;
+  }
+
+  const bool data_read_success = read_bytes(REG_CTRL_MEAS, data_buff, 2);
+  if (!data_read_success)
+  {
+    return false;
+  }
+
+  return data_buff[0] == ctrl_meas && data_buff[1] == config_data;
 }
 
 bool BMP280::read_calibration_data()

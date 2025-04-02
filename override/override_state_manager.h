@@ -30,7 +30,8 @@ enum class OverridePersistentStateKey : uint8_t
   GyroCalibZ = 8,
   GroundPressure = 9,
   GroundTemperature = 10,
-  GroundAltitude = 11
+  GroundAltitude = 11,
+  IsCalibrated = 12,
 };
 
 enum class OverrideFaultKey : uint8_t
@@ -47,23 +48,24 @@ public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
                                                 OverrideFaultKey::MicroSD, 100)
   {
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
                                                 101325.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
                                                 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
                                                 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground pressure",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground pressure",
                                                 static_cast<int32_t>(0));
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
                                                 0.0);
-    get_persistent_data_storage()->register_key(OverridePersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
-    get_persistent_data_storage()->finish_registration();
+    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
+    get_persistent_storage()->register_key(OverridePersistentStateKey::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0));
+    get_persistent_storage()->finish_registration();
 
     register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
@@ -77,12 +79,13 @@ public:
       double temperature, altitude;
       bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
 
-      get_persistent_data_storage()->set_double(OverridePersistentStateKey::SeaLevelPressure, sea_level_pressure);
-      get_persistent_data_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
-      get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
-      get_persistent_data_storage()->set_double(OverridePersistentStateKey::GroundAltitude, altitude);
+      get_persistent_storage()->set_double(OverridePersistentStateKey::SeaLevelPressure, sea_level_pressure);
+      get_persistent_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
+      get_persistent_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
+      get_persistent_storage()->set_double(OverridePersistentStateKey::GroundAltitude, altitude);
+      get_persistent_storage()->set_uint8(OverridePersistentStateKey::IsCalibrated, 0xFF);
 
-      get_persistent_data_storage()->commit_data();
+      get_persistent_storage()->commit_data();
     });
 
     finish_construction();

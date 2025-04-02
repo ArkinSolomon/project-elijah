@@ -34,7 +34,8 @@ enum class AirbrakesPersistentStateKey : uint8_t
   GyroCalibZ = 8,
   GroundPressure = 9,
   GroundTemperature = 10,
-  GroundAltitude = 11
+  GroundAltitude = 11,
+  IsCalibrated = 12
 };
 
 enum class AirbrakesFaultKey : uint8_t
@@ -51,26 +52,27 @@ public:
   AirbrakesStateManager() : ElijahStateFramework("Airbrakes", AirbrakesPersistentStateKey::LaunchKey,
                                                  AirbrakesFaultKey::MicroSD, 100)
   {
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::SeaLevelPressure, "Barometric pressure",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::SeaLevelPressure, "Sea level pressure",
                                                 101325.0);
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibX, "Accelerometer calibration X",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
                                                 0.0);
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
                                                 0.0);
-    get_persistent_data_storage()->
+    get_persistent_storage()->
       register_key(AirbrakesPersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
-    get_persistent_data_storage()->
+    get_persistent_storage()->
       register_key(AirbrakesPersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
-    get_persistent_data_storage()->
+    get_persistent_storage()->
       register_key(AirbrakesPersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::GroundPressure, "Ground pressure",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundPressure, "Ground pressure",
                                                 static_cast<int32_t>(0));
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::GroundTemperature, "Ground temperature",
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundTemperature, "Ground temperature",
                                                 0.0);
-    get_persistent_data_storage()->register_key(AirbrakesPersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
-    get_persistent_data_storage()->finish_registration();
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0));
+    get_persistent_storage()->finish_registration();
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(AirbrakesFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
@@ -84,17 +86,18 @@ public:
       double temperature, altitude;
       bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
 
-      get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::SeaLevelPressure, pressure);
-      get_persistent_data_storage()->set_int32(AirbrakesPersistentStateKey::GroundPressure, pressure);
-      get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::GroundTemperature, temperature);
-      get_persistent_data_storage()->set_double(AirbrakesPersistentStateKey::GroundAltitude, altitude);
+      get_persistent_storage()->set_double(AirbrakesPersistentStateKey::SeaLevelPressure, sea_level_pressure);
+      get_persistent_storage()->set_int32(AirbrakesPersistentStateKey::GroundPressure, pressure);
+      get_persistent_storage()->set_double(AirbrakesPersistentStateKey::GroundTemperature, temperature);
+      get_persistent_storage()->set_double(AirbrakesPersistentStateKey::GroundAltitude, altitude);
+      get_persistent_storage()->set_uint8(AirbrakesPersistentStateKey::IsCalibrated, 0xFF);
 
-      get_persistent_data_storage()->commit_data();
+      get_persistent_storage()->commit_data();
     });
 
     register_command("Reset persistent storage", [this]
     {
-      get_persistent_data_storage()->load_default_data();
+      get_persistent_storage()->load_default_data();
       mpu6050->load_calibration_data();
     });
 

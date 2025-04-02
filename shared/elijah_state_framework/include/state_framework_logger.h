@@ -26,6 +26,7 @@ namespace elijah_state_framework
     bool flush_write_buff();
 
     [[nodiscard]] bool is_mounted() const;
+    bool mount_card();
 
   private:
     static inline mutex_t sd_card_mtx;
@@ -45,7 +46,6 @@ namespace elijah_state_framework
     std::unique_ptr<uint8_t[]> write_buff = std::unique_ptr<uint8_t[]>(nullptr);
     size_t write_size = 0;
 
-    void mount_card();
     void move_to_write_buff();
     void load_old_data();
   };

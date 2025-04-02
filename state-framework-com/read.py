@@ -4,7 +4,7 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Desktop/launch-381ebcfae0c5683'
+file = '/Users/arkinsolomon/Desktop/sick launch'
 csv_path = '/Users/arkinsolomon/Downloads/launch-data.csv'
 
 with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
@@ -17,18 +17,19 @@ with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
     var_defs = [(var_def.display_name, var_def.display_unit, var_def.variable_id) for var_def in sf.variable_definitions]
     writer.writerow([f'{var_def[0]} {var_def[1]}' for var_def in var_defs])
 
-    last_seq: int
+    last_seq: int = -1
     while True:
         packets_read, phase_changed, logs = sf.update(readable, 1)
         if packets_read == 0:
             break
+
         if len(logs) > 0:
             for log in logs:
                 print(log)
 
-        if packets_read[0] == last_seq:
+        if sf.state[1] == last_seq:
             continue
-        last_seq = packets_read[0]
+        last_seq = sf.state[1]
 
         data: list[Any] = []
 

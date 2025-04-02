@@ -13,6 +13,6 @@ void PayloadReliableBMP280::update_state(PayloadState& state, const int32_t pres
 {
   state.pressure = pressure;
   state.temperature = temperature;
-  state.altitude = altitude - this->get_framework()->get_persistent_data_storage()->get_double(
+  state.altitude = altitude - this->get_framework()->get_persistent_storage()->get_double(
     PayloadPersistentDataKey::GroundAltitude);
 }

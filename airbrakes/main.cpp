@@ -106,7 +106,7 @@ int main()
       }
 
 #ifndef AIBRAKES_TEST
-      const double ground_temp  =airbrakes_state_manager->get_persistent_data_storage()->get_double(
+      const double ground_temp  =airbrakes_state_manager->get_persistent_storage()->get_double(
               AirbrakesPersistentStateKey::GroundTemperature);
       const double dt_s = static_cast<double>(dt_ms) / 1000.0;
 #else

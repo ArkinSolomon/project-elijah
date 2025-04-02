@@ -36,7 +36,6 @@
 
 #define CREATE_PRIVATE_SETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME)  void set_##HUMAN_NAME(PersistentKeyType key, const TYPE_NAME value, const bool lock) \
 { \
-  uint32_t saved_ints = 0; \
   if (lock) { \
     shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx); \
   } \
@@ -44,8 +43,8 @@
   const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
   if (active_data_loc == flash_data_loc) \
   { \
-  active_data_loc = malloc(get_total_byte_size()); \
-  memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
+    active_data_loc = malloc(get_total_byte_size()); \
+    memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
   } \
   const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
   *data_start = value; \
@@ -206,7 +205,7 @@ std::string elijah_state_framework::PersistentDataStorage<PersistentKeyType>::ge
   for (uint i = 0; i < entry->get_offset(); i++)
   {
     const auto curr_c_str = reinterpret_cast<char*>(static_cast<uint8_t*>(str_data_loc) + str_byte_offset);
-    str_byte_offset += strlen(curr_c_str + 1);
+    str_byte_offset += strlen(curr_c_str) + 1;
   }
 
   const auto str_start = reinterpret_cast<char*>(static_cast<uint8_t*>(str_data_loc) + str_byte_offset);

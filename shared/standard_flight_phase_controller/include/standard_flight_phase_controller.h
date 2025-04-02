@@ -51,7 +51,7 @@ protected:
   virtual void extract_state_data(TStateData state, double& accel_x, double& accel_y, double& accel_z,
                                   double& altitude) const = 0;
 
-  double min_preflight_alt, max_preflight_accel;
+  [[nodiscard]] virtual bool is_calibrated() const = 0;
 
   double max_coast_alt = 0;
 };
@@ -61,9 +61,6 @@ StandardFlightPhaseController<
   TStateData>::StandardFlightPhaseController(): elijah_state_framework::FlightPhaseController<
   TStateData, StandardFlightPhase>()
 {
-  min_preflight_alt = std::numeric_limits<double>::max();
-  max_preflight_accel = std::numeric_limits<double>::min();
-
   max_coast_alt = std::numeric_limits<double>::min();
 }
 
@@ -84,34 +81,39 @@ template <typename TStateData>
 StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
   const StandardFlightPhase current_phase, const std::deque<TStateData>& state_history)
 {
+  if (!is_calibrated())
+  {
+    return StandardFlightPhase::PREFLIGHT;
+  }
+
   double accel_x, accel_y, accel_z, altitude;
   extract_state_data(state_history.front(), accel_x, accel_y, accel_z, altitude);
-  const double accel = sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
 
   if (current_phase == StandardFlightPhase::PREFLIGHT)
   {
-    if (stdio_usb_connected() || state_history.size() < 10)
+    if (altitude > 300)
     {
       return StandardFlightPhase::PREFLIGHT;
     }
 
-    if (altitude < min_preflight_alt)
+    if (stdio_usb_connected() || state_history.size() < 50)
     {
-      min_preflight_alt = altitude;
+      return StandardFlightPhase::PREFLIGHT;
     }
 
-    if (accel > max_preflight_accel)
+    // Once altitude increases by 30m, and an acceleration is recently greater than 50m/s^2
+    if (altitude > 30)
     {
-      max_preflight_accel = accel;
-    }
-
-    // Once altitude increases by 30m overall, and an acceleration at some point of greater than 50m/s^2 was reached
-    if (altitude - min_preflight_alt > 30 && max_preflight_accel > 50)
-    {
-      elijah_state_framework::log_serial_message(std::format(
-        "Launch detected! Altitude change of {}m (from {}m to {}m) and an acceleration of max_preflight_accel",
-        altitude - min_preflight_alt, min_preflight_alt, altitude, max_preflight_accel));
-      return StandardFlightPhase::LAUNCH;
+      for (const auto& state : state_history)
+      {
+        extract_state_data(state, accel_x, accel_y, accel_z, altitude);
+        const double accel_mag = sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
+        if (accel_mag > 50)
+        {
+          return StandardFlightPhase::LAUNCH;
+        }
+      }
+      return StandardFlightPhase::PREFLIGHT;
     }
     return StandardFlightPhase::PREFLIGHT;
   }

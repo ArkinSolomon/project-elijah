@@ -83,12 +83,10 @@ std::string ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::on_update(TStateData& stat
   int32_t pressure;
   double temperature, altitude;
   if (!bmp.read_press_temp_alt(pressure, temperature, altitude,
-                               this->get_framework()->get_persistent_data_storage()->get_double(
-                                 sea_level_pressure_key)))
+                               this->get_framework()->get_persistent_storage()->get_double(sea_level_pressure_key)))
   {
     return "Failed to read pressure/temperature/altitude";
   }
-
   update_state(state, pressure, temperature, altitude);
   return "";
 }

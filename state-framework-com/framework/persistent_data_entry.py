@@ -24,7 +24,7 @@ class PersistentDataEntry:
         }.get(offset_bytes, 'I')
 
         entry = PersistentDataEntry()
-        entry.key_id, data_type_id, entry.offset = struct.unpack(f'<BB{offset_unit}', readable.read(2 + offset_bytes))
+        entry.key_id, data_type_id, entry.offset = struct.unpack(f'<2B{offset_unit}', readable.read(2 + offset_bytes))
         entry.data_type = DataType(data_type_id)
         entry.display_name = read_string(readable)
 

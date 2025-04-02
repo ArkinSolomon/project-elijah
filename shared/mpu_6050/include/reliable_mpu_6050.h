@@ -65,7 +65,7 @@ void ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::calibrate(const unsigned int cyc
                                                           const double zg)
 {
   mpu.calibrate(cycles, xa, ya, za, xg, yg, zg);
-#define MPU_OVERRIDE_PERSISTENT_STATE_SAVE(K, PROP) this->get_framework()->get_persistent_data_storage()->set_double(K, mpu.get_calibration_data().PROP)
+#define MPU_OVERRIDE_PERSISTENT_STATE_SAVE(K, PROP) this->get_framework()->get_persistent_storage()->set_double(K, mpu.get_calibration_data().PROP)
   MPU_OVERRIDE_PERSISTENT_STATE_SAVE(calib_xa_key, diff_xa);
   MPU_OVERRIDE_PERSISTENT_STATE_SAVE(calib_ya_key, diff_ya);
   MPU_OVERRIDE_PERSISTENT_STATE_SAVE(calib_za_key, diff_za);
@@ -78,7 +78,7 @@ void ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::calibrate(const unsigned int cyc
 FRAMEWORK_TEMPLATE_DECL
 void ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::load_calibration_data()
 {
-#define PERSISTENT_CALIB_GET(K) this->get_framework()->get_persistent_data_storage()->get_double(K)
+#define PERSISTENT_CALIB_GET(K) this->get_framework()->get_persistent_storage()->get_double(K)
   mpu.load_calibration_data(
     PERSISTENT_CALIB_GET(calib_xa_key),
     PERSISTENT_CALIB_GET(calib_ya_key),

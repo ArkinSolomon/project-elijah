@@ -16,8 +16,7 @@ elijah_state_framework::StateFrameworkLogger::StateFrameworkLogger(std::string f
   mutex_init(&log_buff_mtx);
   recursive_mutex_init(&write_buff_rmtx);
 
-  mount_card();
-  if (mounted)
+  if (mount_card())
   {
     load_old_data();
   }
@@ -82,9 +81,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   mutex_enter_blocking(&sd_card_mtx);
   if (!mounted)
   {
-    mount_card();
-
-    if (!mounted)
+    if (!mount_card())
     {
       mutex_exit(&sd_card_mtx);
       recursive_mutex_exit(&write_buff_rmtx);
@@ -178,16 +175,17 @@ bool elijah_state_framework::StateFrameworkLogger::is_mounted() const
   return mounted;
 }
 
-void elijah_state_framework::StateFrameworkLogger::mount_card()
+bool elijah_state_framework::StateFrameworkLogger::mount_card()
 {
   const FRESULT fr = f_mount(&fs, "0:", 1);
   if (fr != FR_OK)
   {
     mounted = false;
-    return;
+    return false;
   }
 
   mounted = true;
+  return true;
 }
 
 void elijah_state_framework::StateFrameworkLogger::move_to_write_buff()
@@ -206,9 +204,7 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   mutex_enter_blocking(&sd_card_mtx);
   if (!mounted)
   {
-    mount_card();
-
-    if (!mounted)
+    if (!mount_card())
     {
       return;
     }

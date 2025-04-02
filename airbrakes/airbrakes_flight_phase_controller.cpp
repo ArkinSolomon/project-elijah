@@ -10,3 +10,8 @@ void AirbrakesFlightPhaseController::extract_state_data(const AirbrakesState sta
   accel_z = state.accel_z;
   altitude = state.altitude;
 }
+
+bool AirbrakesFlightPhaseController::is_calibrated() const
+{
+  return airbrakes_state_manager->get_persistent_storage()->get_uint8(AirbrakesPersistentStateKey::IsCalibrated) > 0;
+}
