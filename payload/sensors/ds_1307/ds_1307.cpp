@@ -23,7 +23,7 @@ bool DS1307::check_clock(bool& clock_set) const
   tm time_inst{};
   const bool read_success = read_clock(time_inst);
 
-  clock_set = read_success && (seconds_reg & 0x80) == 0 && time_inst.tm_year > 100;
+  clock_set = read_success && (seconds_reg & 0x80) == 0 && time_inst.tm_year > 0;
   return true;
 }
 
@@ -120,12 +120,12 @@ bool DS1307::read_clock(tm& time_inst) const
   return true;
 }
 
-bool DS1307::read_custom_register(const uint8_t addr, uint8_t* output, const uint8_t size) const
+bool DS1307::read_custom_register(const uint8_t addr, uint8_t* output, const uint8_t size)
 {
   return i2c_util::read_bytes(i2c_inst, i2c_addr, addr, output, size);
 }
 
-bool DS1307::write_custom_register(const uint8_t addr, const uint8_t* data, const uint8_t size) const
+bool DS1307::write_custom_register(const uint8_t addr, const uint8_t* data, const uint8_t size)
 {
   const auto write_addr = static_cast<uint8_t>(addr);
   uint8_t write_data[size + 1];
@@ -175,10 +175,11 @@ void DS1307::reg_dump() const
  */
 void DS1307::erase_data() const
 {
-  constexpr uint8_t zeros[0x3F] = {};
+  // Overwrite from reg 0x00 to 0x3F (+ 1 byte for addr)
+  constexpr uint8_t zeros[0x40] = {};
   const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, zeros, 0x3F, false,
                                                      delayed_by_ms(get_absolute_time(), 32));
-  const bool success = bytes_written == 0x3F;
+  const bool success = bytes_written == 0x40;
   if (!success)
   {
     payload_state_manager->log_message("DS 1307 failed to erase");
@@ -207,7 +208,7 @@ bool DS1307::check_and_read_clock(tm& time_inst) const
 
   if (!clock_set)
   {
-    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "Clock not set");
+    payload_state_manager->set_fault(PayloadFaultKey::DS1307, true, "Clock detected, but not set");
     return false;
   }
 

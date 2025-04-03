@@ -7,6 +7,8 @@
 #include "sensors.h"
 #include "sensors/ds_1307/ds_1307.h"
 
+#define DS_1307_TEST_REG 0x37
+
 struct PayloadState
 {
   tm time_inst;
@@ -108,6 +110,12 @@ public:
     register_command("DS 1307 erase", [this]
     {
       reliable_clock->get_ds_1307().erase_data();
+    });
+
+    register_command(std::format("DS 1307 0xAA to 0x{:02X}", DS_1307_TEST_REG), [this]
+    {
+      constexpr uint8_t test_data = 0xAA;
+      reliable_clock->get_ds_1307().write_custom_register(DS_1307_TEST_REG, &test_data, 1);
     });
 
     finish_construction();

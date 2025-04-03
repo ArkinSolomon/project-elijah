@@ -8,9 +8,11 @@
 #include <string>
 #include <format>
 #include <variant>
+#include <hardware/watchdog.h>
 #include <pico/critical_section.h>
 #include <pico/rand.h>
 #include <pico/stdio_usb.h>
+#include <hardware/gpio.h>
 
 #include "data_type.h"
 #include "fault_manager.h"
@@ -19,7 +21,6 @@
 #include "metadata_segment.h"
 #include "output_packet.h"
 #include "persistent_data_storage.h"
-#include "pin_outs.h"
 #include "registered_command.h"
 #include "usb_comm.h"
 #include "state_framework_logger.h"
@@ -583,7 +584,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   const bool did_succeed = logger->is_mounted() && logger->flush_write_buff();
   shared_mutex_exit_shared(&logger_smtx);
 
-  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write", false);
+  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write in check_for_log_write()", false);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -739,6 +740,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
       set_fault(micro_sd_fault_key, false, "", false);
       constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
       logger->log_data(&packet_id, sizeof(packet_id));
+      gpio_put(25, true);
     }
     else if (!write_to_serial)
     {

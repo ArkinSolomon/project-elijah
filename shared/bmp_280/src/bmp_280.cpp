@@ -74,7 +74,7 @@ bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, F
     return false;
   }
 
-  elijah_state_framework::log_serial_message(std::format("0x{:02X} == 0x{:02X} && 0x{:02X} == 0x{:02X}", data_buff[0], ctrl_meas, data_buff[1], config_data));
+  // elijah_state_framework::log_serial_message(std::format("0x{:02X} == 0x{:02X} && 0x{:02X} == 0x{:02X}", data_buff[0], ctrl_meas, data_buff[1], config_data));
   return data_buff[0] == ctrl_meas && data_buff[1] == config_data;
 }
 
@@ -203,7 +203,7 @@ bool BMP280::read_bytes(const uint8_t reg_addr, uint8_t* data, const size_t len)
 {
   if (is_i2c_interface)
   {
-    elijah_state_framework::log_serial_message(std::format("addr: 0x{:02X} , reg: 0x{:02X}, {}", i2c_addr, reg_addr, i2c_inst == i2c0));
+    // elijah_state_framework::log_serial_message(std::format("addr: 0x{:02X} , reg: 0x{:02X}, {}", i2c_addr, reg_addr, i2c_inst == i2c0));
     return i2c_util::read_bytes(i2c_inst, i2c_addr, reg_addr, data, len);
   }
 
@@ -216,7 +216,7 @@ bool BMP280::write_bytes_to_device(uint8_t start_reg_addr, const uint8_t* data, 
 {
   if (is_i2c_interface)
   {
-    i2c_write_blocking_until(i2c_inst, i2c_addr, &start_reg_addr, 1, false,
+    i2c_write_blocking_until(i2c_inst, i2c_addr, &start_reg_addr, 1, true,
                              delayed_by_ms(get_absolute_time(), 5));
     const size_t bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, data, len, false,
                                                           delayed_by_ms(get_absolute_time(), 5 * len));

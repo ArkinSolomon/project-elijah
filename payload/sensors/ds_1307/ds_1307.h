@@ -20,8 +20,8 @@ public:
     bool read_clock(tm &time_inst) const;
     bool check_and_read_clock(tm& time_inst) const;
 
-    bool read_custom_register(uint8_t addr, uint8_t* output, uint8_t size) const;
-    bool write_custom_register(uint8_t addr, const uint8_t* data, uint8_t size) const;
+    bool read_custom_register(uint8_t addr, uint8_t* output, uint8_t size);
+    bool write_custom_register(uint8_t addr, const uint8_t* data, uint8_t size);
     void reg_dump() const;
     void erase_data() const;
 
