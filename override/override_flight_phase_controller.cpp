@@ -10,3 +10,8 @@ void OverrideFlightPhaseController::extract_state_data(const OverrideState state
   accel_z = state.accel_z;
   altitude = state.altitude;
 }
+
+bool OverrideFlightPhaseController::is_calibrated() const
+{
+  return override_state_manager->get_persistent_storage()->get_double(OverridePersistentStateKey::IsCalibrated) > 0;
+}

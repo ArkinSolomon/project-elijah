@@ -21,7 +21,6 @@ struct OverrideState
 enum class OverridePersistentStateKey : uint8_t
 {
   LaunchKey = 1,
-  SeaLevelPressure = 2,
   AccelCalibX = 3,
   AccelCalibY = 4,
   AccelCalibZ = 5,
@@ -30,7 +29,6 @@ enum class OverridePersistentStateKey : uint8_t
   GyroCalibZ = 8,
   GroundPressure = 9,
   GroundTemperature = 10,
-  GroundAltitude = 11,
   IsCalibrated = 12,
 };
 
@@ -48,8 +46,6 @@ public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
                                                 OverrideFaultKey::MicroSD, 100)
   {
-    get_persistent_storage()->register_key(OverridePersistentStateKey::SeaLevelPressure, "Barometric pressure",
-                                                101325.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
@@ -63,7 +59,6 @@ public:
                                                 static_cast<int32_t>(0));
     get_persistent_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
                                                 0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
@@ -77,12 +72,10 @@ public:
 
       int32_t pressure;
       double temperature, altitude;
-      bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
+      bmp280->get_bmp280().read_press_temp(pressure, temperature);
 
-      get_persistent_storage()->set_double(OverridePersistentStateKey::SeaLevelPressure, sea_level_pressure);
       get_persistent_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
       get_persistent_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
-      get_persistent_storage()->set_double(OverridePersistentStateKey::GroundAltitude, altitude);
       get_persistent_storage()->set_uint8(OverridePersistentStateKey::IsCalibrated, 0xFF);
 
       get_persistent_storage()->commit_data();

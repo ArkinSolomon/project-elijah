@@ -4,7 +4,9 @@
 #include "pin_outs.h"
 
 OverrideReliableBMP280::OverrideReliableBMP280(OverrideStateManager* override_state_manager): ReliableBMP280(
-  override_state_manager, OverrideFaultKey::BMP280, spi0, BMP_CS_PIN, OverridePersistentStateKey::SeaLevelPressure)
+override_state_manager, OverrideFaultKey::BMP280, spi0, BMP_CS_PIN, BMP280::FilterCoefficientSetting::Filter4x,
+BMP280::OssSettingPressure::PressureOss8, BMP280::OssSettingTemperature::TemperatureOss16,
+OverridePersistentStateKey::GroundPressure, OverridePersistentStateKey::GroundTemperature)
 {
 }
 
@@ -13,6 +15,5 @@ void OverrideReliableBMP280::update_state(OverrideState& state, const int32_t pr
 {
   state.pressure = pressure;
   state.temperature = temperature;
-  state.altitude = altitude - this->get_framework()->get_persistent_storage()->get_double(
-    OverridePersistentStateKey::GroundAltitude);
+  state.altitude = altitude;
 }

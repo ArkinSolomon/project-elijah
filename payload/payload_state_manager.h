@@ -23,7 +23,6 @@ struct PayloadState
 enum class PayloadPersistentDataKey : uint8_t
 {
   LaunchKey = 1,
-  SeaLevelPressure = 2,
   AccelCalibX = 3,
   AccelCalibY = 4,
   AccelCalibZ = 5,
@@ -32,7 +31,6 @@ enum class PayloadPersistentDataKey : uint8_t
   GyroCalibZ = 8,
   GroundPressure = 9,
   GroundTemperature = 10,
-  GroundAltitude = 11,
   IsCalibrated = 12
 };
 
@@ -52,8 +50,6 @@ public:
   PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD,
                                               100)
   {
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::SeaLevelPressure, "Sea level pressure",
-                                                101325.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X",
                                                 0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibY, "Accelerometer calibration Y",
@@ -67,7 +63,6 @@ public:
                                                 static_cast<int32_t>(0));
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundTemperature, "Ground temperature",
                                                 0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundAltitude, "Ground altitude", 0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::IsCalibrated, "Ground altitude", static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
@@ -77,18 +72,16 @@ public:
     register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
     register_fault(PayloadFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", "Sea level pressure (Pa)", [this](double sea_level_pressure)
+    register_command("Calibrate", [this]
     {
       mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
 
       int32_t pressure;
-      double temperature, altitude;
-      bmp280->get_bmp280().read_press_temp_alt(pressure, temperature, altitude, sea_level_pressure);
+      double temperature;
+      bmp280->get_bmp280().read_press_temp(pressure, temperature);
 
-      get_persistent_storage()->set_double(PayloadPersistentDataKey::SeaLevelPressure, sea_level_pressure);
       get_persistent_storage()->set_int32(PayloadPersistentDataKey::GroundPressure, pressure);
       get_persistent_storage()->set_double(PayloadPersistentDataKey::GroundTemperature, temperature);
-      get_persistent_storage()->set_double(PayloadPersistentDataKey::GroundAltitude, altitude);
       get_persistent_storage()->set_uint8(PayloadPersistentDataKey::IsCalibrated, 0xFF);
 
       get_persistent_storage()->commit_data();

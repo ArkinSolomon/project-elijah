@@ -79,7 +79,8 @@ public:
                        OssSettingPressure pressure_oss, OssSettingTemperature temperature_oss);
 
   bool read_calibration_data();
-  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude, double sea_level_pressure) const;
+  bool read_press_temp(int32_t& pressure, double& temperature) const;
+  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude, double ground_pressure, double ground_temperature) const;
 
 private:
   // 2-byte registers

@@ -97,8 +97,7 @@ bool BMP280::read_calibration_data()
   return success;
 }
 
-bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude,
-                                 const double sea_level_pressure) const
+bool BMP280::read_press_temp(int32_t& pressure, double& temperature) const
 {
   bool measuring, writing;
   bool success = check_status(measuring, writing);
@@ -151,10 +150,20 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   var1 = ((double)calibration_data.dig_P9) * p * p / 2147483648.0;
   var2 = p * ((double)calibration_data.dig_P8) / 32768.0;
   p = p + (var1 + var2 + ((double)calibration_data.dig_P7)) / 16.0;
+  // ReSharper restore All
 
   pressure = static_cast<int32_t>(std::round(p));
-  altitude = 44330.0 * (1 - std::pow(p / sea_level_pressure, 1 / 5.255));
-  // ReSharper restore All
+  return true;
+}
+
+bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude,
+                                 const double ground_pressure, const double ground_temperature) const
+{
+  if (!read_press_temp(pressure, temperature))
+  {
+    return false;
+  }
+  altitude = (ground_temperature / 0.0065) * (1 - std::pow(pressure / ground_pressure, 1 / 5.255));
 
   return true;
 }
