@@ -13,6 +13,8 @@
 #include <pico/rand.h>
 #include <pico/stdio_usb.h>
 #include <hardware/gpio.h>
+#include <hardware/pwm.h>
+#include <hardware/clocks.h>
 
 #include "data_type.h"
 #include "fault_manager.h"
@@ -22,11 +24,10 @@
 #include "output_packet.h"
 #include "persistent_data_storage.h"
 #include "registered_command.h"
+#include "speaker_controller.h"
 #include "usb_comm.h"
 #include "state_framework_logger.h"
 #include "variable_definition.h"
-
-constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
 
 #define START_STATE_ENCODER(STATE_DATA_TYPE) void encode_state(void* encode_dest, const STATE_DATA_TYPE& state, const uint64_t seq, bool register_data) override \
   { \
@@ -88,7 +89,10 @@ template <typename TStateData, \
   EFlightPhase, \
   TFlightPhaseController
 
-#define MAX_MICRO_SD_REMOUNT_ATTEMPTS 5
+#define MAX_MICRO_SD_REMOUNT_ATTEMPTS 10
+
+constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
+const uint16_t fault_freq_list[5] = {100, 1600, 5000, 100, 7000};
 
 namespace elijah_state_framework
 {
@@ -258,8 +262,18 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     log_message(std::format("New launch: {}", launch_name));
   });
 
+  register_command("Restart", [this]
+  {
+    log_message("Restarting...", LogLevel::Warning);
+    shared_mutex_enter_blocking_exclusive(&logger_smtx);
+    logger->flush_log();
+    delete logger;
+    watchdog_enable(100, true);
+    sleep_ms(500);
+  });
+
   std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
-  persistent_data_storage->register_key(launch_key, "_launch_key", rand_launch_name);
+  persistent_data_storage->register_key(launch_key, "Launch key", rand_launch_name);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -371,7 +385,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
     break;
   }
 
-    std::visit(overloaded{
+  std::visit(overloaded{
                [](const std::function<void()>& cb) { cb(); },
                [&double_arg](const std::function<void(double)>& cb) { cb(double_arg); },
                [&str_arg](const std::function<void(std::string)>& cb) { cb(str_arg); },
@@ -723,8 +737,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
         set_fault(micro_sd_fault_key, true, "Failed to mount card", false);
         if (!write_to_serial)
         {
-          log_message(std::format("Logger failed to mount (and not writing to serial), can not write framework metadata ({} remount attempts)", remount_attempts),
-                      LogLevel::Debug);
+          log_message(
+            std::format(
+              "Logger failed to mount (and not writing to serial), can not write framework metadata ({}/{} remount attempts)",
+              remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS),
+            LogLevel::Debug);
           return;
         }
       }
@@ -744,7 +761,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     }
     else if (!write_to_serial)
     {
-      log_message(std::format("Logger is not mounted (and not writing to serial), can not write framework metadata ({} remount attempts)", remount_attempts), LogLevel::Debug);
       return;
     }
   }
@@ -1018,6 +1034,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
 
   if (faults > 0)
   {
-    // TODO change status LED/speaker?
+    speaker_controller::internal::play_status_freqs(fault_freq_list, 5);
   }
 }

@@ -18,6 +18,11 @@ void pin_init()
   gpio_init(ONBOARD_LED_PIN);
   gpio_set_dir(ONBOARD_LED_PIN, GPIO_OUT);
 
+  gpio_init(SPEAKER_GND_PIN);
+  gpio_set_dir(SPEAKER_GND_PIN, GPIO_OUT);
+  gpio_put(SPEAKER_GND_PIN, true);
+  elijah_state_framework::speaker_controller::init(SPEAKER_PIN);
+
   // See sd_hw_config.c for microSD card SPI setup
 
   // SPI at 33MHz for W25Q64FV

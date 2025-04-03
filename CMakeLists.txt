@@ -102,6 +102,7 @@ function(create_elijah_target SRC_DIR_NAME)
             hardware_pio
             hardware_adc
             hardware_pwm
+            hardware_clocks
             pico_audio_pwm
             pico_multicore
             pico_rand

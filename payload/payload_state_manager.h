@@ -6,6 +6,7 @@
 #include "payload_flight_phase_controller.h"
 #include "sensors.h"
 #include "sensors/ds_1307/ds_1307.h"
+#include "pin_outs.h"
 
 #define DS_1307_TEST_REG 0x37
 
@@ -51,19 +52,20 @@ public:
                                               100)
   {
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibY, "Accelerometer calibration Y",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibZ, "Accelerometer calibration Z",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibX, "Gyroscope calibration X", 0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundPressure, "Ground altitude",
-                                                static_cast<int32_t>(0));
+                                           static_cast<int32_t>(0));
     get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundTemperature, "Ground temperature",
-                                                0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::IsCalibrated, "Ground altitude", static_cast<uint8_t>(0));
+                                           0.0);
+    get_persistent_storage()->register_key(PayloadPersistentDataKey::IsCalibrated, "Ground altitude",
+                                           static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
     register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);

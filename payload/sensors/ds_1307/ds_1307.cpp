@@ -177,12 +177,12 @@ void DS1307::erase_data() const
 {
   // Overwrite from reg 0x00 to 0x3F (+ 1 byte for addr)
   constexpr uint8_t zeros[0x40] = {};
-  const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, zeros, 0x3F, false,
+  const int bytes_written = i2c_write_blocking_until(i2c_inst, i2c_addr, zeros, 0x40, false,
                                                      delayed_by_ms(get_absolute_time(), 32));
   const bool success = bytes_written == 0x40;
   if (!success)
   {
-    payload_state_manager->log_message("DS 1307 failed to erase");
+    payload_state_manager->log_message("DS 1307 failed to erase", elijah_state_framework::LogLevel::Warning);
     return;
   }
 

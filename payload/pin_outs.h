@@ -10,6 +10,9 @@
 #define LED_3_PIN 21
 #define ONBOARD_LED_PIN 25
 
+#define SPEAKER_GND_PIN 26
+#define SPEAKER_PIN 27
+
 #define SPI0_SCK_PIN 18 // Pin 24
 #define SPI0_TX_PIN 19 // Pin 25
 #define SPI0_RX_PIN 16 // Pin 21
