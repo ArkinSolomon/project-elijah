@@ -3,6 +3,8 @@
 #include "airbrakes_flight_phase_controller.h"
 #include "reliable_mpu_6050.h"
 
+#define MPU_6050_ADDR 0x68
+
 class AirbrakesStateManager;
 struct AirbrakesState;
 enum class AirbrakesFaultKey : uint8_t;

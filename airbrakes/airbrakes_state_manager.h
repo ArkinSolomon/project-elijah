@@ -41,6 +41,7 @@ enum class AirbrakesFaultKey : uint8_t
   MicroSD = 1,
   BMP280 = 2,
   MPU6050 = 3,
+  Encoder = 4
 };
 
 class AirbrakesStateManager final : public elijah_state_framework::ElijahStateFramework<
@@ -72,6 +73,7 @@ public:
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(AirbrakesFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
+    register_fault(AirbrakesFaultKey::Encoder, "Encoder", CommunicationChannel::None);
 
     register_command("Calibrate", [this]
     {
@@ -113,22 +115,6 @@ public:
         core1::target_encoder_pos = encoder_pos_from_angle(target_angle);
       }
       critical_section_exit(&core1::target_access_cs);
-    });
-
-    register_command("Next flight phase", [this]
-    {
-      StandardFlightPhase curr_phase = get_current_flight_phase();
-      StandardFlightPhase next_phase;
-      if (get_current_flight_phase() == StandardFlightPhase::LANDED)
-      {
-        next_phase = StandardFlightPhase::PREFLIGHT;
-      }
-      else
-      {
-        next_phase = static_cast<StandardFlightPhase>(static_cast<std::underlying_type_t<StandardFlightPhase>>(
-          curr_phase) + 1);
-      }
-      set_flight_phase(next_phase);
     });
 
     register_command("Reconfigure MPU 6050", [this]

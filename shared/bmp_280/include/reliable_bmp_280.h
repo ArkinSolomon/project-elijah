@@ -16,7 +16,7 @@
   oss_press(oss_press), \
   oss_temp(oss_temp), \
   ground_pressure_key(ground_pressure_key), \
-  ground_temp_key(ground_pressure_key)
+  ground_temp_key(ground_temp_key)
 
 FRAMEWORK_TEMPLATE_DECL
 class ReliableBMP280 : public elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>
@@ -98,8 +98,8 @@ on_init(TStateData& state)
 FRAMEWORK_TEMPLATE_DECL
 std::string ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::on_update(TStateData& state)
 {
-  const double ground_pressure = this->get_framework()->get_persistent_storage()->get_double(ground_pressure_key);
-  const double ground_temperature = this->get_framework()->get_persistent_storage()->get_double(ground_pressure_key);
+  const int32_t ground_pressure = this->get_framework()->get_persistent_storage()->get_int32(ground_pressure_key);
+  const double ground_temperature = this->get_framework()->get_persistent_storage()->get_double(ground_temp_key);
   int32_t pressure;
   double temperature, altitude;
   if (!bmp.read_press_temp_alt(pressure, temperature, altitude, ground_pressure, ground_temperature))

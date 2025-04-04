@@ -222,7 +222,7 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
                              [device.last_known_port for device in devices], screen_state.hovered_device_idx,
                              update_hovered_device_idx(screen_state),
                              handle_device_switch(screen_state),
-                             command_background)
+                             device_selection_background)
 
     if device_selection_selected and screen_state.input_mode == InputMode.NONE and ev is not None:
         char_handled = device_list.handle_char(ev)

@@ -11,6 +11,8 @@
 
 void core1::launch_core1()
 {
+  multicore_reset_core1();
+
   queue_init(&core0_ready_queue, 1, 1);
   queue_init(&core1_ready_queue, 1, 1);
   queue_init(&encoder_target_queue, 4, 16);
@@ -18,7 +20,11 @@ void core1::launch_core1()
   critical_section_init(&target_access_cs);
   critical_section_init(&encoder_pos_cs);
 
-  multicore_reset_core1();
+  if (gpio_get(ZERO_BUTTON_PIN))
+  {
+    current_encoder_pos = 0;
+  }
+
   sleep_ms(100);
   multicore_launch_core1(core1_main);
 }
@@ -33,6 +39,9 @@ void core1::core1_main()
   uint8_t core_ready = 0xAA;
   queue_add_blocking(&core1_ready_queue, &core_ready);
   queue_remove_blocking(&core0_ready_queue, &core_ready);
+
+  gpio_set_irq_enabled_with_callback(ROTARY_CLK_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &handle_int);
+  gpio_set_irq_enabled(ZERO_BUTTON_PIN, GPIO_IRQ_EDGE_RISE, true);
 
   gpio_put(LED_3_PIN, true);
   bool led_on = true;
@@ -62,26 +71,23 @@ void core1::core1_main()
     critical_section_exit(&target_access_cs);
 
     // airbrakes_state_manager->log_message(std::format("target: {}, {}", static_targ_pos, angle_override_active));
-    gpio_put(LED_2_PIN, angle_override_active);
-
-    read_encoder();
 
     critical_section_enter_blocking(&encoder_pos_cs);
     const int32_t static_encoder_pos = current_encoder_pos;
     critical_section_exit(&encoder_pos_cs);
 
-    if (abs(static_encoder_pos - static_targ_pos) < 1)
+    if (abs(static_encoder_pos - static_targ_pos) <= 2)
     {
       airbrakes_freeze();
     }
     else if (static_encoder_pos < static_targ_pos)
     {
-      airbrakes_state_manager->log_message("Opening", elijah_state_framework::LogLevel::Debug);
+      // airbrakes_state_manager->log_message("Opening", elijah_state_framework::LogLevel::Debug);
       airbrakes_open();
     }
     else
     {
-      airbrakes_state_manager->log_message("Closing", elijah_state_framework::LogLevel::Debug);
+      // airbrakes_state_manager->log_message("Closing", elijah_state_framework::LogLevel::Debug);
       airbrakes_close();
     }
 
@@ -91,27 +97,31 @@ void core1::core1_main()
 }
 
 // See https://docs.cirkitdesigner.com/component/fb77c67b-258e-42e8-840b-9cf445a0d2f2/hw-040-rotary-encoder
-void core1::read_encoder()
+void core1::handle_int(const uint gpio, const uint32_t events)
 {
-  static int lastCLK = 0;
-  const bool currentCLK = gpio_get(ROTARY_CLK_PIN);
-  const bool is_zero = gpio_get(ZERO_BUTTON_PIN);
-  if (currentCLK != lastCLK)
+  critical_section_enter_blocking(&encoder_pos_cs);
+  if (gpio == ROTARY_CLK_PIN)
   {
-    critical_section_enter_blocking(&encoder_pos_cs);
-    if (is_zero)
+    static bool last_clk = gpio_get(ROTARY_CLK_PIN);
+    const bool current_clk = gpio_get(ROTARY_CLK_PIN);
+
+    if (last_clk != current_clk)
     {
-      current_encoder_pos = 0;
+      if (gpio_get(ROTARY_DT_PIN) != current_clk)
+      {
+        current_encoder_pos--;
+      }
+      else
+      {
+        current_encoder_pos++;
+      }
     }
-    else if (gpio_get(ROTARY_DT_PIN) != currentCLK)
-    {
-      current_encoder_pos--;
-    }
-    else
-    {
-      current_encoder_pos++;
-    }
-    critical_section_exit(&encoder_pos_cs);
+    last_clk = current_clk;
   }
-  lastCLK = currentCLK;
+  else if (gpio_get(ZERO_BUTTON_PIN))
+  {
+    current_encoder_pos = 0;
+  }
+
+  critical_section_exit(&encoder_pos_cs);
 }

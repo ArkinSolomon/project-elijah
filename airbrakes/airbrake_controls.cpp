@@ -6,6 +6,7 @@
 #include <bits/stl_algo.h>
 #include <hardware/gpio.h>
 
+#include "airbrakes_state_manager.h"
 #include "pin_outs.h"
 
 double calculate_target_angle(double current_alt, double prev_alt, double init_alt, double init_vel,
@@ -62,6 +63,8 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
         chosen_trajectory_idx = i;
       }
     }
+
+    airbrakes_state_manager->log_message(std::format("Choosing airbrakes trajectory: {}", chosen_trajectory_idx));
     did_matrix_init = true;
   }
 
@@ -161,6 +164,9 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
   const double y2_drag = angle_range[i + 1];
   const double slope_drag = (y2_drag - y1_drag) / (x2_drag - x1_drag);
   const double desired_angle = y1_drag + slope_drag * (cd_area_req - x1_drag);
+
+  airbrakes_state_manager->log_message(std::format("cd_area_req: {}", cd_area_req),
+                                       elijah_state_framework::LogLevel::Debug);
 
   return std::clamp(desired_angle, 0.0, 55.0);
 }

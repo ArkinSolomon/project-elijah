@@ -12,10 +12,10 @@ namespace core1 {
 
     inline critical_section_t target_access_cs, encoder_pos_cs;
     inline bool angle_override_active = false;
-    inline int32_t current_encoder_pos, target_encoder_pos;
+    inline int32_t current_encoder_pos = MAX_ENCODER_POS, target_encoder_pos;
 
     void launch_core1();
     void core1_main();
 
-    void read_encoder();
+    void handle_int(uint gpio, uint32_t events);
 }

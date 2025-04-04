@@ -1,12 +1,12 @@
+import platform
+import time
 from dataclasses import dataclass
 from datetime import datetime
-import time
 from typing import Any, Callable, Tuple
-import platform
-from display.color_manager import color_defs
 
 from asciimatics.screen import Screen
 
+from display.color_manager import color_defs
 from display.widgets.widget import Widget
 from framework.data_type import DataType
 from framework.persistent_data_entry import PersistentDataEntry
@@ -36,7 +36,8 @@ class HeaderWidget(Widget):
 
     page_offset: int
 
-    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, app_name: str, flight_phase: str,
+    def __init__(self, screen: Screen, offset_x: int, offset_y: int, width: int, height: int, app_name: str,
+                 flight_phase: str,
                  state: dict[int, Any], variable_definitions: list[VariableDefinition],
                  persistent_entries: list[PersistentDataEntry], current_page: int,
                  on_page_change: Callable[[int], None] | None, background_color: int):
@@ -76,13 +77,13 @@ class HeaderWidget(Widget):
             return True
         return False
 
-
     def render(self) -> None:
         if platform.system() == "Windows":
             curr_time_str = datetime.now().strftime("%A %B %#d, %Y %H:%M:%S")
         else:
             curr_time_str = datetime.now().strftime("%A %B %-d, %Y %H:%M:%S")
-        self.screen.print_at(curr_time_str + f' | {self.app_name} | {self.flight_phase}', self.offset_x, self.offset_y, bg=self.background_color, attr=Screen.A_BOLD)
+        self.screen.print_at(curr_time_str + f' | {self.app_name} | {self.flight_phase}', self.offset_x, self.offset_y,
+                             bg=self.background_color, attr=Screen.A_BOLD)
 
         if len(self.pages) == 0:
             return
@@ -91,12 +92,15 @@ class HeaderWidget(Widget):
         for column in disp_page:
             for i, row in enumerate(column.data):
                 label, value = row
-                self.screen.print_at(label, self.offset_x + column.offset_x, i + 1 + self.offset_y, bg=self.background_color)
-                self.screen.print_at(value, self.offset_x + column.offset_x + (column.width - len(value)), i + 1 + self.offset_y, colour=color_defs.data,  bg=self.background_color)
-
+                self.screen.print_at(label, self.offset_x + column.offset_x, i + 1 + self.offset_y,
+                                     bg=self.background_color)
+                self.screen.print_at(value, self.offset_x + column.offset_x + (column.width - len(value)),
+                                     i + 1 + self.offset_y, colour=color_defs.data, bg=self.background_color)
 
     def _gen_rows(self) -> None:
-        self._gen_page_for([var_def for var_def in self.variable_definitions if not var_def.is_hidden], lambda var_def: (var_def.display_name, self.state[var_def.variable_id], var_def.data_type, var_def.display_unit))
+        self._gen_page_for([var_def for var_def in self.variable_definitions if not var_def.is_hidden],
+                           lambda var_def: (var_def.display_name, self.state[var_def.variable_id], var_def.data_type,
+                                            var_def.display_unit))
         self._gen_page_for(self.persistent_entries, lambda pe: (pe.display_name, pe.current_value, pe.data_type, ''))
 
     def _gen_page_for[T](self, data_list: list[T], extract: Callable[[T], Tuple[str, Any, DataType, str]]) -> None:
@@ -108,8 +112,11 @@ class HeaderWidget(Widget):
 
             unit = '%' if display_unit == '%' else f' {display_unit}' if display_unit != '' else ''
             if data_type == DataType.DOUBLE:
-                curr_data_column.append(
-                    (label + ':', f'{value:.3f}{unit}'))
+                if abs(value) > 99999 or (abs(value) < 0.0001 and value != 0):
+                    curr_data_column.append(
+                        (label + ':', f'{value:.3e}{unit}'))
+                else:
+                    curr_data_column.append((label + ':', f'{value:.3f}{unit}'))
             elif data_type == DataType.TIME:
                 if value is None:
                     curr_data_column.append(

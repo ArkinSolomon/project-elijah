@@ -15,7 +15,10 @@
     </libraryRoots>
     <excludeRoots>
       <file path="$PROJECT_DIR$/build-debug" />
+      <file path="$PROJECT_DIR$/build-debug-ab" />
       <file path="$PROJECT_DIR$/build-release" />
+      <file path="$PROJECT_DIR$/build-release-ab" />
+      <file path="$PROJECT_DIR$/build-release-sp" />
     </excludeRoots>
   </component>
   <component name="WestSettings">{}</component>

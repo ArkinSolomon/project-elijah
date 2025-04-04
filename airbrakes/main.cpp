@@ -48,7 +48,7 @@ int main()
   {
     airbrakes_state_manager->check_for_commands();
 
-    const double last_alt = state.altitude;
+    double last_alt = state.altitude;
 
     bmp280->update(state);
     mpu6050->update(state);
@@ -69,10 +69,11 @@ int main()
 #ifdef AIBRAKES_TEST
       if (test_data::curr_idx == test_data::curr_alt.size())
       {
-        test_data::curr_idx = 0;
+        test_data::curr_idx = 3;
       }
 
       state.altitude = test_data::curr_alt[test_data::curr_idx];
+      last_alt = test_data::curr_alt[test_data::curr_idx - 1];
       state.pressure = static_cast<int32_t>(std::round(test_data::curr_p[test_data::curr_idx]));
 #endif
 

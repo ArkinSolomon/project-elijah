@@ -3,6 +3,8 @@
 #include "i2c_util.h"
 #include <hardware/adc.h>
 
+#include "elijah_state_framework.h"
+
 void pin_init()
 {
   gpio_init(LED_2_PIN);
@@ -15,9 +17,7 @@ void pin_init()
   gpio_init(SPEAKER_GND_PIN);
   gpio_set_dir(SPEAKER_GND_PIN, GPIO_OUT);
   gpio_put(SPEAKER_GND_PIN, false);
-
-  gpio_init(SPEAKER_PIN);
-  gpio_set_dir(SPEAKER_PIN, GPIO_OUT);
+  elijah_state_framework::speaker_controller::init(SPEAKER_PIN);
 
   gpio_init(MOTOR_PIN_1);
   gpio_set_dir(MOTOR_PIN_1, GPIO_OUT);

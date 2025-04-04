@@ -3,24 +3,24 @@ cmake_minimum_required(VERSION 3.20)
 # Yeah this gets undefined later idk
 if (WIN32)
     set(USING_WINDOWS 1)
-endif()
+endif ()
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
-option(STATUS_LED_ENABLE "Enable onboard status LED" OFF)
-option(FLASH_SIM_ENABLE "Use flash simulator on microSd" OFF)
+option(STATUS_SPEAKER_ENABLE "Enable speaker" ON)
+option(AB_TEST "Airbrakes test" OFF)
 
 set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 
 find_program(PICOTOOL_INSTALL_LOC "picotool")
 if (NOT PICOTOOL_INSTALL_LOC)
     message(FATAL_ERROR "picotool installation not found, is it in your path?")
-else()
+else ()
     message("Using picotool installation at ${PICOTOOL_INSTALL_LOC}")
-endif()
+endif ()
 
 include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/lib/pico_extras_import.cmake)
@@ -79,13 +79,13 @@ function(create_elijah_target SRC_DIR_NAME)
         target_compile_definitions(${EXEC_NAME} PUBLIC PICO_ENTER_USB_BOOT_ON_EXIT)
     endif (ENTER_USB_BOOT_ON_EXIT)
 
-    if (STATUS_LED_ENABLE)
-        target_compile_definitions(${EXEC_NAME} PRIVATE STATUS_MANAGER_LED_ENABLE)
-    endif (STATUS_LED_ENABLE)
+    if (STATUS_SPEAKER_ENABLE)
+        target_compile_definitions(${EXEC_NAME} PRIVATE SPEAKER_ENABLE)
+    endif (STATUS_SPEAKER_ENABLE)
 
-    if (FLASH_SIM_ENABLE)
-        target_compile_definitions(${EXEC_NAME} PRIVATE W25Q64FV_FLASH_SIM)
-    endif (FLASH_SIM_ENABLE)
+    if (AB_TEST)
+        target_compile_definitions(${EXEC_NAME} PRIVATE AIRBRAKES_TEST)
+    endif (AB_TEST)
 
     target_compile_definitions(${EXEC_NAME}
             PUBLIC
@@ -93,7 +93,15 @@ function(create_elijah_target SRC_DIR_NAME)
             $<$<CONFIG:Release>:RELEASE>
     )
 
-    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=4096 SYS_CLK_KHZ=200000 PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=6)
+    if (PICO_RP2040)
+        target_compile_definitions(${EXEC_NAME} PRIVATE SYS_CLK_KHZ=200000)
+    endif (PICO_RP2040)
+
+    if (PICO_RP2350)
+        target_compile_definitions(${EXEC_NAME} PRIVATE SYS_CLK_KHZ=150000)
+    endif (PICO_RP2350)
+
+    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=4096 PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=6)
 
     target_link_libraries(${EXEC_NAME}
             aprs_pico
@@ -123,11 +131,11 @@ function(create_elijah_target SRC_DIR_NAME)
 
     if (USING_WINDOWS)
         set(INSTALL_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/tmp/install.bat")
-        file(WRITE ${INSTALL_FILE_NAME} "\"" ${PICOTOOL_INSTALL_LOC}  "\" reboot -f -u\ntimeout /NOBREAK /T 5\n\"" ${PICOTOOL_INSTALL_LOC} "\" load \"%1\" -fx")
-    else()
+        file(WRITE ${INSTALL_FILE_NAME} "\"" ${PICOTOOL_INSTALL_LOC} "\" reboot -f -u\ntimeout /NOBREAK /T 5\n\"" ${PICOTOOL_INSTALL_LOC} "\" load \"%1\" -fx")
+    else ()
         set(INSTALL_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/tmp/install.sh")
         file(WRITE ${INSTALL_FILE_NAME} "#!/bin/sh\n" ${PICOTOOL_INSTALL_LOC} " load \"$1\" -x")
-    endif()
+    endif ()
     file(COPY ${INSTALL_FILE_NAME} DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endfunction()
 

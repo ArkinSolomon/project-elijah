@@ -17,8 +17,6 @@
 #define I2C0_SDA_PIN 4
 #define I2C0_SCL_PIN 5
 
-#define MPU_6050_ADDR 0x68
-
 #define SPI0_SCK_PIN 18
 #define SPI0_TX_PIN 19
 #define SPI0_RX_PIN 16

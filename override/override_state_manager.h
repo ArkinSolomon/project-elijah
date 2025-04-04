@@ -47,31 +47,32 @@ public:
                                                 OverrideFaultKey::MicroSD, 100)
   {
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     get_persistent_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground pressure",
-                                                static_cast<int32_t>(0));
+                                           static_cast<int32_t>(0));
     get_persistent_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
-                                                0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0));
+                                           0.0);
+    get_persistent_storage()->register_key(OverridePersistentStateKey::IsCalibrated, "Is calibrated",
+                                           static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
     register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", "Sea level pressure (Pa)", [this](double sea_level_pressure)
+    register_command("Calibrate", [this]
     {
       mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
 
       int32_t pressure;
-      double temperature, altitude;
+      double temperature;
       bmp280->get_bmp280().read_press_temp(pressure, temperature);
 
       get_persistent_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);

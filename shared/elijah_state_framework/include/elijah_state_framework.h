@@ -13,8 +13,6 @@
 #include <pico/rand.h>
 #include <pico/stdio_usb.h>
 #include <hardware/gpio.h>
-#include <hardware/pwm.h>
-#include <hardware/clocks.h>
 
 #include "data_type.h"
 #include "fault_manager.h"
@@ -92,7 +90,6 @@ template <typename TStateData, \
 #define MAX_MICRO_SD_REMOUNT_ATTEMPTS 10
 
 constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
-const uint16_t fault_freq_list[5] = {100, 1600, 5000, 100, 7000};
 
 namespace elijah_state_framework
 {
@@ -191,8 +188,8 @@ namespace elijah_state_framework
     size_t state_history_size;
     std::deque<TStateData> state_history;
 
-    PersistentDataStorage<EPersistentStorageKey>* persistent_data_storage
-      = new PersistentDataStorage<EPersistentStorageKey>();
+    PersistentDataStorage<EPersistentStorageKey>* persistent_data_storage = new PersistentDataStorage<
+      EPersistentStorageKey>();
 
     StateFrameworkLogger* logger = nullptr;
     shared_mutex_t logger_smtx;
@@ -207,12 +204,19 @@ namespace elijah_state_framework
     EFlightPhase current_phase;
     mutex_t current_phase_mtx;
 
+    constexpr static size_t fault_freqs_len = 4;
+    constexpr static uint16_t fault_freqs[fault_freqs_len] = {500, 400, 1000, 0};
+    constexpr static uint16_t fault_timings[fault_freqs_len] = {75, 75, 10, 5000};
+
     void register_command(const std::string& command, const std::string& input_prompt, CommandInputType command_input,
                           command_callback_t callback);
 
     void send_framework_metadata(bool write_to_file, bool write_to_serial);
     void send_persistent_state(const void* data, size_t data_len);
     void set_fault(EFaultKey fault_key, bool fault_state, const std::string& message, bool write_to_logger);
+
+    void set_flight_phase(EFlightPhase new_phase, bool lock_curr_phase_mtx);
+    void set_curr_phase_speaker_pattern();
   };
 }
 
@@ -262,6 +266,23 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     log_message(std::format("New launch: {}", launch_name));
   });
 
+  register_command("Next flight phase", [this]
+  {
+    lock_state_history();
+    if (state_history.empty())
+    {
+      log_serial_message("No state history, can not go to next phase");
+      release_state_history();
+    }
+    const TStateData last_state = state_history.front();
+    release_state_history();
+
+    mutex_enter_blocking(&current_phase_mtx);
+    const EFlightPhase next_phase = flight_phase_controller->force_next_phase(current_phase, last_state);
+    set_flight_phase(next_phase, false);
+    mutex_exit(&current_phase_mtx);
+  });
+
   register_command("Restart", [this]
   {
     log_message("Restarting...", LogLevel::Warning);
@@ -272,8 +293,22 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     sleep_ms(500);
   });
 
+  register_command("Toggle speaker", [this]
+  {
+    if (speaker_controller::toggle_speaker())
+    {
+      log_serial_message("Speaker is muted");
+    }
+    else
+    {
+      log_serial_message("Speaker is unmuted");
+    }
+  });
+
   std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
   persistent_data_storage->register_key(launch_key, "Launch key", rand_launch_name);
+
+  set_curr_phase_speaker_pattern();
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -458,6 +493,15 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   shared_mutex_exit_shared(&logger_smtx);
 
   delete [] phase_change_packet;
+
+  if (fault_manager->get_all_faults() > 0)
+  {
+    speaker_controller::internal::play_status_freqs(fault_freqs, fault_timings, fault_freqs_len);
+  }
+  else
+  {
+    set_curr_phase_speaker_pattern();
+  }
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -498,34 +542,7 @@ EFlightPhase elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYP
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_flight_phase(EFlightPhase new_phase)
 {
-  mutex_enter_blocking(&current_phase_mtx);
-  current_phase = new_phase;
-
-  size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* new state */;
-  const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
-  phase_change_packet_size += phase_name.length() + 1;
-  uint8_t phase_change_packet[phase_change_packet_size] = {
-    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged)
-  };
-
-  phase_change_packet[1] = static_cast<uint8_t>(current_phase);
-  memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
-
-  mutex_exit(&current_phase_mtx);
-
-  if (stdio_usb_connected())
-  {
-    critical_section_enter_blocking(&internal::usb_cs);
-    internal::write_to_serial(phase_change_packet, phase_change_packet_size);
-    critical_section_exit(&internal::usb_cs);
-  }
-
-  shared_mutex_enter_blocking_shared(&logger_smtx);
-  if (logger && did_write_metadata)
-  {
-    logger->log_data(phase_change_packet, phase_change_packet_size);
-  }
-  shared_mutex_exit_shared(&logger_smtx);
+  set_flight_phase(new_phase, true);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -704,7 +721,7 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::send_framework_metadata(
   bool write_to_file, const bool write_to_serial)
 {
-  if (!(write_to_file || (write_to_serial && stdio_usb_connected())))
+  if (!write_to_file && !write_to_serial)
   {
     return;
   }
@@ -712,6 +729,10 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
   if (write_to_serial)
   {
     critical_section_enter_blocking(&internal::usb_cs);
+  }
+  else if (!write_to_file)
+  {
+    return;
   }
 
   shared_mutex_enter_blocking_shared(&logger_smtx);
@@ -1031,9 +1052,65 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
     }
     shared_mutex_exit_shared(&logger_smtx);
   }
+}
 
-  if (faults > 0)
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_flight_phase(
+  EFlightPhase new_phase, bool lock_curr_phase_mtx)
+{
+  if (lock_curr_phase_mtx)
   {
-    speaker_controller::internal::play_status_freqs(fault_freq_list, 5);
+    mutex_enter_blocking(&current_phase_mtx);
   }
+  if (current_phase == new_phase)
+  {
+    if (lock_curr_phase_mtx)
+    {
+      mutex_exit(&current_phase_mtx);
+    }
+    return;
+  }
+  current_phase = new_phase;
+
+  size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* new state */;
+  const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
+  phase_change_packet_size += phase_name.length() + 1;
+  uint8_t phase_change_packet[phase_change_packet_size] = {
+    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged)
+  };
+
+  phase_change_packet[1] = static_cast<uint8_t>(current_phase);
+  memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
+
+  if (lock_curr_phase_mtx)
+  {
+    mutex_exit(&current_phase_mtx);
+  }
+
+  if (stdio_usb_connected())
+  {
+    critical_section_enter_blocking(&internal::usb_cs);
+    internal::write_to_serial(phase_change_packet, phase_change_packet_size);
+    critical_section_exit(&internal::usb_cs);
+  }
+
+  shared_mutex_enter_blocking_shared(&logger_smtx);
+  if (logger && did_write_metadata)
+  {
+    logger->log_data(phase_change_packet, phase_change_packet_size);
+  }
+  shared_mutex_exit_shared(&logger_smtx);
+}
+
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_curr_phase_speaker_pattern()
+{
+  const uint16_t* pattern;
+  const uint16_t* pattern_timings;
+
+  mutex_enter_blocking(&current_phase_mtx);
+  const size_t pattern_len = flight_phase_controller->get_speaker_pattern(current_phase, pattern, pattern_timings);
+  mutex_exit(&current_phase_mtx);
+
+  speaker_controller::internal::play_status_freqs(pattern, pattern_timings, pattern_len);
 }

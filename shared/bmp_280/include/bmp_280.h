@@ -80,7 +80,7 @@ public:
 
   bool read_calibration_data();
   bool read_press_temp(int32_t& pressure, double& temperature) const;
-  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude, double ground_pressure, double ground_temperature) const;
+  bool read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude, int32_t ground_pressure, double ground_temperature) const;
 
 private:
   // 2-byte registers

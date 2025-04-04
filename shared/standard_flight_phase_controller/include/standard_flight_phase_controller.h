@@ -10,6 +10,8 @@
 #include "flight_phase_controller.h"
 #include "usb_comm.h"
 
+#define MOTOR_BURNOUT_TIME_MS 1200
+
 enum class StandardFlightPhase : uint8_t
 {
   // Before the rocket goes to the launch pad
@@ -36,14 +38,16 @@ public:
   StandardFlightPhaseController();
 
   [[nodiscard]] StandardFlightPhase initial_flight_phase() const override;
-  [[nodiscard]] bool should_log(StandardFlightPhase current_phase) const override;
 
-  [[nodiscard]] StandardFlightPhase update_phase(StandardFlightPhase current_phase,
-                                                 const std::deque<TStateData>& state_history) override;
-  [[nodiscard]] StandardFlightPhase predict_phase(StandardFlightPhase last_known_phase,
-                                                  const std::deque<TStateData>& states) override;
+  StandardFlightPhase force_next_phase(StandardFlightPhase current_phase, TStateData current_state) override;
+  StandardFlightPhase update_phase(StandardFlightPhase current_phase,
+                                   const std::deque<TStateData>& state_history) override;
+  StandardFlightPhase predict_phase(StandardFlightPhase last_known_phase,
+                                    const std::deque<TStateData>& states) override;
 
   [[nodiscard]] std::string get_phase_name(StandardFlightPhase phase) const override;
+  [[nodiscard]] size_t get_speaker_pattern(StandardFlightPhase phase, const uint16_t*& pattern_freqs,
+                                           const uint16_t*& pattern_timing_ms) const override;
 
   [[nodiscard]] double get_apogee() const;
 
@@ -53,7 +57,40 @@ protected:
 
   [[nodiscard]] virtual bool is_calibrated() const = 0;
 
-  double max_coast_alt = 0;
+  absolute_time_t burnout_time = nil_time;
+  absolute_time_t coast_enter_time = nil_time;
+  double max_coast_alt = std::numeric_limits<double>::min();
+
+  void reset_data();
+
+private:
+  static constexpr size_t preflight_audio_len = 2;
+  static constexpr uint16_t preflight_audio_freqs[preflight_audio_len] = {280, 0};
+  static constexpr uint16_t preflight_audio_timing_ms[preflight_audio_len] = {250, 10000};
+
+  static constexpr size_t launch_audio_len = 4;
+  static constexpr uint16_t launch_audio_freqs[launch_audio_len] = {333, 0};
+  static constexpr uint16_t launch_audio_timing_ms[launch_audio_len] = {15,0};
+
+  static constexpr size_t coast_audio_len = 5;
+  static constexpr uint16_t coast_audio_freqs[coast_audio_len] = {220, 800, 8500, 40, 0};
+  static constexpr uint16_t coast_audio_timing_ms[coast_audio_len] = {100, 100, 50, 130, 5000};
+
+  static constexpr size_t descent_audio_len = 12;
+  static constexpr uint16_t descent_audio_freqs[descent_audio_len] = {
+    1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 50, 0
+  };
+  static constexpr uint16_t descent_audio_timing_ms[descent_audio_len] = {
+    50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 7000
+  };
+
+  static constexpr size_t landed_audio_len = 9;
+  static constexpr uint16_t landed_audio_freqs[landed_audio_len] = {220, 98, 174, 146, 220, 196, 130, 65, 0};
+  static constexpr uint16_t landed_audio_timing_ms[landed_audio_len] = {500, 250, 500, 500, 250, 250, 250, 250, 15000};
+
+  static constexpr size_t bad_audio_len = 2;
+  static constexpr uint16_t bad_audio_freqs[bad_audio_len] = {220, 100};
+  static constexpr uint16_t bad_audio_timing_ms[bad_audio_len] = {250, 100};
 };
 
 template <typename TStateData>
@@ -61,7 +98,7 @@ StandardFlightPhaseController<
   TStateData>::StandardFlightPhaseController(): elijah_state_framework::FlightPhaseController<
   TStateData, StandardFlightPhase>()
 {
-  max_coast_alt = std::numeric_limits<double>::min();
+  reset_data();
 }
 
 template <typename TStateData>
@@ -71,10 +108,33 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::initial_flight_ph
 }
 
 template <typename TStateData>
-bool StandardFlightPhaseController<TStateData>::should_log(
-  const StandardFlightPhase current_phase) const
+StandardFlightPhase StandardFlightPhaseController<TStateData>::force_next_phase(
+  StandardFlightPhase current_phase, TStateData current_state)
 {
-  return current_phase != StandardFlightPhase::PREFLIGHT;
+  if (current_phase == StandardFlightPhase::LANDED)
+  {
+    reset_data();
+    return StandardFlightPhase::PREFLIGHT;
+  }
+
+  const auto next_phase = static_cast<StandardFlightPhase>(static_cast<std::underlying_type_t<StandardFlightPhase>>(
+    current_phase) + 1);
+
+  if (next_phase == StandardFlightPhase::LAUNCH)
+  {
+    burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);
+  }
+  if (next_phase == StandardFlightPhase::COAST)
+  {
+    coast_enter_time = get_absolute_time();
+  }
+  else if (next_phase == StandardFlightPhase::DESCENT)
+  {
+    double ignored_ax, ignored_ay, ignored_az, alt;
+    extract_state_data(current_state, ignored_ax, ignored_ay, ignored_az, alt);
+    max_coast_alt = alt;
+  }
+  return next_phase;
 }
 
 template <typename TStateData>
@@ -83,6 +143,7 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
 {
   if (!is_calibrated())
   {
+    reset_data();
     return StandardFlightPhase::PREFLIGHT;
   }
 
@@ -91,15 +152,15 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
 
   if (current_phase == StandardFlightPhase::PREFLIGHT)
   {
-    if (altitude > 300)
-    {
-      return StandardFlightPhase::PREFLIGHT;
-    }
-
     if (stdio_usb_connected() || state_history.size() < 50)
     {
       return StandardFlightPhase::PREFLIGHT;
     }
+
+    // if (altitude > 350)
+    // {
+    //   return StandardFlightPhase::COAST;
+    // }
 
     // Once altitude increases by 30m, and an acceleration is recently greater than 50m/s^2
     if (altitude > 30)
@@ -110,6 +171,7 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
         const double accel_mag = sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
         if (accel_mag > 50)
         {
+          burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);
           return StandardFlightPhase::LAUNCH;
         }
       }
@@ -119,41 +181,16 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
   }
   else if (current_phase == StandardFlightPhase::LAUNCH)
   {
-    if (state_history.size() < 25)
+    // if (altitude > 350)
+    // {
+    //   return StandardFlightPhase::COAST;
+    // }
+
+    if (get_absolute_time() >= burnout_time)
     {
-      return StandardFlightPhase::LAUNCH;
+      return StandardFlightPhase::COAST;
     }
-
-    uint8_t missCount = 0;
-    double last_accel = std::numeric_limits<double>::max();
-    auto begin = std::begin(state_history);
-    auto end = std::begin(state_history) + 25;
-    if (std::distance(begin, end) > state_history.size())
-      end = std::end(state_history);
-
-    for (auto it = begin; it != end; ++it)
-    {
-      double curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude;
-      extract_state_data(*it, curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude);
-      const double curr_accel = sqrt(
-        curr_accel_x * curr_accel_x + curr_accel_y * curr_accel_y + curr_accel_z * curr_accel_z);
-      if (curr_accel < last_accel)
-      {
-        last_accel = curr_accel;
-      }
-      else
-      {
-        missCount++;
-      }
-
-      // Once rocket has had consistently decreasing acceleration (no more than 2 non-decreasing)
-      if (missCount > 2)
-      {
-        return StandardFlightPhase::LAUNCH;
-      }
-    }
-
-    return StandardFlightPhase::COAST;
+    return StandardFlightPhase::LAUNCH;
   }
   else if (current_phase == StandardFlightPhase::COAST)
   {
@@ -215,29 +252,6 @@ template <typename TStateData>
 StandardFlightPhase StandardFlightPhaseController<TStateData>::predict_phase(const StandardFlightPhase last_known_phase,
                                                                              const std::deque<TStateData>& states)
 {
-  if (last_known_phase != StandardFlightPhase::PREFLIGHT && last_known_phase != StandardFlightPhase::LANDED)
-  {
-    double first_ax, first_ay, first_az, first_alt;
-    extract_state_data(states[0], first_ax, first_ay, first_az, first_alt);
-
-    double last_ax, last_ay, last_az, last_alt;
-    extract_state_data(states[states.size() - 1], last_ax, last_ay, last_az, last_alt);
-
-    // If there's a deviation of < 3m assume we landed
-    if (std::abs(first_alt - last_alt) < 3)
-    {
-      return StandardFlightPhase::LANDED;
-    }
-
-    if (first_alt > last_alt)
-    {
-      return StandardFlightPhase::COAST;
-    }
-    else
-    {
-      return StandardFlightPhase::DESCENT;
-    }
-  }
   return last_known_phase;
 }
 
@@ -261,7 +275,48 @@ std::string StandardFlightPhaseController<TStateData>::get_phase_name(const Stan
 }
 
 template <typename TStateData>
+size_t StandardFlightPhaseController<TStateData>::get_speaker_pattern(const StandardFlightPhase phase,
+                                                                      const uint16_t*& pattern_freqs,
+                                                                      const uint16_t*& pattern_timing_ms) const
+{
+  switch (phase)
+  {
+  case StandardFlightPhase::PREFLIGHT:
+    pattern_freqs = preflight_audio_freqs;
+    pattern_timing_ms = preflight_audio_timing_ms;
+    return preflight_audio_len;
+  case StandardFlightPhase::LAUNCH:
+    pattern_freqs = launch_audio_freqs;
+    pattern_timing_ms = launch_audio_timing_ms;
+    return launch_audio_len;
+  case StandardFlightPhase::COAST:
+    pattern_freqs = coast_audio_freqs;
+    pattern_timing_ms = coast_audio_timing_ms;
+    return coast_audio_len;
+  case StandardFlightPhase::DESCENT:
+    pattern_freqs = descent_audio_freqs;
+    pattern_timing_ms = descent_audio_timing_ms;
+    return descent_audio_len;
+  case StandardFlightPhase::LANDED:
+    pattern_freqs = landed_audio_freqs;
+    pattern_timing_ms = landed_audio_timing_ms;
+    return landed_audio_len;
+  }
+  pattern_freqs = bad_audio_freqs;
+  pattern_timing_ms = bad_audio_timing_ms;
+  return bad_audio_len;
+}
+
+template <typename TStateData>
 double StandardFlightPhaseController<TStateData>::get_apogee() const
 {
   return max_coast_alt;
+}
+
+template <typename TStateData>
+void StandardFlightPhaseController<TStateData>::reset_data()
+{
+  burnout_time = nil_time;
+  coast_enter_time = nil_time;
+  max_coast_alt = std::numeric_limits<double>::min();
 }

@@ -2,8 +2,11 @@
 
 #include <format>
 
+#include <hardware/gpio.h>
+#include <hardware/clocks.h>
+#include <hardware/pwm.h>
+
 #include "usb_comm.h"
-#include "reliable_sensors/reliable_clock/reliable_clock.h"
 
 void elijah_state_framework::speaker_controller::init(uint8_t speaker_gpio)
 {
@@ -12,73 +15,130 @@ void elijah_state_framework::speaker_controller::init(uint8_t speaker_gpio)
   internal::status_pwm_slice = pwm_gpio_to_slice_num(speaker_gpio);
   internal::status_pwm_chan = speaker_gpio & 0x01 > 0 ? PWM_CHAN_B : PWM_CHAN_A;
 
-  pwm_clear_irq(internal::status_pwm_slice);
-  pwm_set_irq_enabled(internal::status_pwm_slice, true);
-  irq_set_exclusive_handler(PWM_DEFAULT_IRQ_NUM(), &internal::on_pwm_wrap);
-  irq_set_enabled(PWM_DEFAULT_IRQ_NUM(), true);
+  critical_section_init(&internal::speaker_cs);
+  internal::alarm_pool = alarm_pool_create_with_unused_hardware_alarm(MAX_ALARM_TIMERS);
 
-  internal::play_status_freqs(nullptr, 0);
+  internal::play_status_freqs(nullptr, nullptr, 0);
 }
 
-void elijah_state_framework::speaker_controller::internal::play_status_freqs(const uint16_t* freqs, const size_t freq_len)
+void elijah_state_framework::speaker_controller::mute()
 {
-  bool has_changed = freq_list != freqs;
+  critical_section_enter_blocking(&internal::speaker_cs);
+  internal::is_audio_muted = true;
+  pwm_set_chan_level(internal::status_pwm_slice, internal::status_pwm_chan, 0);
+  critical_section_exit(&internal::speaker_cs);
+}
 
-  freq_list = freqs;
-  curr_freq_idx = 0;
-  freq_list_len = freq_len;
+void elijah_state_framework::speaker_controller::unmute()
+{
+  critical_section_enter_blocking(&internal::speaker_cs);
+  internal::is_audio_muted = false;
+  pwm_set_chan_level(internal::status_pwm_slice, internal::status_pwm_chan, internal::duty_cycle_top);
+  critical_section_exit(&internal::speaker_cs);
+}
 
-  if (freq_list == nullptr || freq_len == 0)
+bool elijah_state_framework::speaker_controller::toggle_speaker()
+{
+  critical_section_enter_blocking(&internal::speaker_cs);
+  if (internal::is_audio_muted)
   {
-    gpio_put(25, true);
-    // pwm_set_enabled(status_pwm_slice, false);
+    internal::is_audio_muted = false;
+    pwm_set_chan_level(internal::status_pwm_slice, internal::status_pwm_chan, internal::duty_cycle_top);
+  }
+  else
+  {
+    internal::is_audio_muted = true;
+    pwm_set_chan_level(internal::status_pwm_slice, internal::status_pwm_chan, 0);
+  }
+  const bool is_muted = internal::is_audio_muted;
+  critical_section_exit(&internal::speaker_cs);
+  return is_muted;
+}
+
+bool elijah_state_framework::speaker_controller::is_muted()
+{
+  critical_section_enter_blocking(&internal::speaker_cs);
+  const bool is_muted = internal::is_audio_muted;
+  critical_section_exit(&internal::speaker_cs);
+  return is_muted;
+}
+
+void elijah_state_framework::speaker_controller::internal::play_status_freqs(
+  const uint16_t* freqs, const uint16_t* timings_ms, const size_t freq_len)
+{
+  critical_section_enter_blocking(&speaker_cs);
+
+  if (freqs == nullptr || timings_ms == nullptr || freq_len == 0)
+  {
+    pwm_set_enabled(status_pwm_slice, false);
+    cancel_current_alarm();
+    critical_section_exit(&speaker_cs);
     return;
   }
-  //
-  // if (!has_changed)
-  // {
-  //   return;
-  // }
 
-  // pwm_set_enabled(status_pwm_slice, false);
-  play_current_status_freq();
+  const bool has_changed = freq_list != freqs;
+  if (!has_changed)
+  {
+    critical_section_exit(&speaker_cs);
+    return;
+  }
+
+  curr_freq_idx = 0;
+  freq_list = freqs;
+  timings_ms_list = timings_ms;
+  freq_list_len = freq_len;
+  duty_cycle_top = 0;
+
+  cancel_current_alarm();
+
+  const uint64_t next_freq_time_us = play_current_freq();
   pwm_set_enabled(status_pwm_slice, true);
+  alarm_pool_add_alarm_in_us(alarm_pool, next_freq_time_us, &on_next_freq, nullptr, false);
+  critical_section_exit(&speaker_cs);
 }
 
-float divider;
-uint32_t top;
-void elijah_state_framework::speaker_controller::internal::play_current_status_freq()
+uint64_t elijah_state_framework::speaker_controller::internal::play_current_freq()
 {
   const uint16_t target_freq = freq_list[curr_freq_idx];
+  const uint16_t required_timing_ms = timings_ms_list[curr_freq_idx];
 
   const uint32_t f_sys = clock_get_hz(clk_sys);
-  /*const float*/ divider = static_cast<float>(f_sys) / SPEAKER_PWM_FREQ_HZ;
+  const float divider = static_cast<float>(f_sys) / SPEAKER_PWM_FREQ_HZ;
   pwm_set_clkdiv(status_pwm_slice, divider);
-  /*const uint32_t*/ top = SPEAKER_PWM_FREQ_HZ / target_freq - 1;
+  const uint32_t top = SPEAKER_PWM_FREQ_HZ / target_freq - 1;
   pwm_set_wrap(status_pwm_slice, top);
-  pwm_set_chan_level(status_pwm_slice, status_pwm_chan, top / 2);
 
-  curr_wrap_cycles = 0;
-  const float ms_per_wrap = static_cast<float>(top) / SPEAKER_PWM_FREQ_HZ * 1000;
-  wrap_cycles_req = SPEAKER_SWITCH_LEN_MS / ms_per_wrap;
+#ifdef SPEAKER_ENABLE
+  duty_cycle_top = !is_audio_muted && target_freq ? top / 2 : 0;
+#else
+  constexpr uint32_t duty_cycle_top = 0;
+#endif
+  pwm_set_chan_level(status_pwm_slice, status_pwm_chan, duty_cycle_top);
 
-  log_serial_message(std::format("Updating PWM frequency to {}, top: {}, level: {}, div: {}, {}, {}ms",
-                                 target_freq, top, top / 2, divider, wrap_cycles_req, ms_per_wrap));
+  log_serial_message(std::format("Updating PWM frequency to {}, next: {}ms", target_freq, required_timing_ms));
+  return required_timing_ms * 1000;
 }
 
-void elijah_state_framework::speaker_controller::internal::on_pwm_wrap()
+int64_t elijah_state_framework::speaker_controller::internal::on_next_freq(alarm_id_t, void*)
 {
-  pwm_clear_irq(status_pwm_slice);
-  curr_wrap_cycles++;
-  if (curr_wrap_cycles >= wrap_cycles_req)
+  critical_section_enter_blocking(&speaker_cs);
+  curr_freq_idx++;
+  if (curr_freq_idx == freq_list_len)
   {
-    log_serial_message(std::format("wrap {} at freq {} at top {} div {}, {}/{}", to_us_since_boot(get_absolute_time()), freq_list[curr_freq_idx],top, divider, curr_wrap_cycles, wrap_cycles_req));
-    curr_wrap_cycles = 0;
-    curr_freq_idx++;
-    if (curr_freq_idx == freq_list_len)
-    {
-      curr_freq_idx = 0;
-    }
-    play_current_status_freq();
+    curr_freq_idx = 0;
+  }
+  // log_serial_message(std::format("Updating PWM frequency to idx {}", curr_freq_idx));
+
+  const auto next_freq_time = static_cast<int64_t>(play_current_freq());
+  critical_section_exit(&speaker_cs);
+  return next_freq_time;
+}
+
+void elijah_state_framework::speaker_controller::internal::cancel_current_alarm()
+{
+  if (next_freq_alarm > 0)
+  {
+    alarm_pool_cancel_alarm(alarm_pool, next_freq_alarm);
+    next_freq_alarm = std::numeric_limits<int32_t>::min();
   }
 }

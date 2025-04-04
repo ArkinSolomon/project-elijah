@@ -61,7 +61,7 @@ bool BMP280::change_settings(DeviceMode mode, StandbyTimeSetting standby_time, F
     static_cast<uint8_t>(mode);
   const uint8_t config_data = static_cast<uint8_t>(standby_time) << 5 | static_cast<uint8_t>(filter_setting) << 2;
 
-   uint8_t data_buff[2] = {ctrl_meas, config_data};
+  uint8_t data_buff[2] = {ctrl_meas, config_data};
   const bool data_write_success = write_bytes_to_device(REG_CTRL_MEAS, data_buff, 2);
   if (!data_write_success)
   {
@@ -157,13 +157,17 @@ bool BMP280::read_press_temp(int32_t& pressure, double& temperature) const
 }
 
 bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double& altitude,
-                                 const double ground_pressure, const double ground_temperature) const
+                                 const int32_t ground_pressure, double ground_temperature) const
 {
   if (!read_press_temp(pressure, temperature))
   {
     return false;
   }
-  altitude = (ground_temperature / 0.0065) * (1 - std::pow(pressure / ground_pressure, 1 / 5.255));
+
+  // degC to K
+  ground_temperature += 273.15;
+  altitude = ground_temperature / 0.0065 * (1 - std::pow(
+    static_cast<double>(pressure) / static_cast<double>(ground_pressure), 1 / 5.255));
 
   return true;
 }
