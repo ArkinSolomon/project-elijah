@@ -204,9 +204,9 @@ namespace elijah_state_framework
     EFlightPhase current_phase;
     mutex_t current_phase_mtx;
 
-    constexpr static size_t fault_freqs_len = 4;
-    constexpr static uint16_t fault_freqs[fault_freqs_len] = {500, 400, 1000, 0};
-    constexpr static uint16_t fault_timings[fault_freqs_len] = {75, 75, 10, 5000};
+    constexpr static size_t fault_freqs_len = 5;
+    constexpr static uint16_t fault_freqs[fault_freqs_len] = {7000, 200, 500, 1000, 0};
+    constexpr static uint16_t fault_timings[fault_freqs_len] = {100, 80, 200, 300, 3000};
 
     void register_command(const std::string& command, const std::string& input_prompt, CommandInputType command_input,
                           command_callback_t callback);
@@ -248,6 +248,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   // ReSharper disable once CppPassValueParameterByConstReference
   register_command("New launch", "Launch name", true, [this, launch_key](std::string launch_name)
   {
+    gpio_put(25, true);
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
 
     logger->flush_log();
@@ -778,7 +779,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
       set_fault(micro_sd_fault_key, false, "", false);
       constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
       logger->log_data(&packet_id, sizeof(packet_id));
-      gpio_put(25, true);
     }
     else if (!write_to_serial)
     {

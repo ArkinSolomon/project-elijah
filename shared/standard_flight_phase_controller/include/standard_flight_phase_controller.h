@@ -8,9 +8,12 @@
 
 #include "elijah_state_framework.h"
 #include "flight_phase_controller.h"
-#include "usb_comm.h"
 
-#define MOTOR_BURNOUT_TIME_MS 1200
+#define REQ_COAST_PHASE_ALT_M 350
+#define MOTOR_BURNOUT_TIME_MS 1400
+#define REQ_APOGEE_DROP_M 30
+
+#define MAX_LAND_ALT_DEVIATION_M 3
 
 enum class StandardFlightPhase : uint8_t
 {
@@ -56,6 +59,7 @@ protected:
                                   double& altitude) const = 0;
 
   [[nodiscard]] virtual bool is_calibrated() const = 0;
+  virtual void log_message(const std::string& msg) const = 0;
 
   absolute_time_t burnout_time = nil_time;
   absolute_time_t coast_enter_time = nil_time;
@@ -69,8 +73,8 @@ private:
   static constexpr uint16_t preflight_audio_timing_ms[preflight_audio_len] = {250, 10000};
 
   static constexpr size_t launch_audio_len = 4;
-  static constexpr uint16_t launch_audio_freqs[launch_audio_len] = {333, 0};
-  static constexpr uint16_t launch_audio_timing_ms[launch_audio_len] = {15,0};
+  static constexpr uint16_t launch_audio_freqs[launch_audio_len] = {333, 1000, 200, 0};
+  static constexpr uint16_t launch_audio_timing_ms[launch_audio_len] = {400, 50, 100, 400};
 
   static constexpr size_t coast_audio_len = 5;
   static constexpr uint16_t coast_audio_freqs[coast_audio_len] = {220, 800, 8500, 40, 0};
@@ -157,10 +161,14 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
       return StandardFlightPhase::PREFLIGHT;
     }
 
-    // if (altitude > 350)
-    // {
-    //   return StandardFlightPhase::COAST;
-    // }
+    if (altitude > REQ_COAST_PHASE_ALT_M)
+    {
+      coast_enter_time = get_absolute_time();
+      log_message(std::format("Coast phase entered from preflight phase due to minimum altitude, altitude ({}m) > {}m",
+                              altitude,
+                              REQ_COAST_PHASE_ALT_M));
+      return StandardFlightPhase::COAST;
+    }
 
     // Once altitude increases by 30m, and an acceleration is recently greater than 50m/s^2
     if (altitude > 30)
@@ -172,6 +180,9 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
         if (accel_mag > 50)
         {
           burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);
+          log_message(std::format(
+            "Launch detected! Entering launch phase (altitude: {}m, acceleration: {}m/s^2), burnout in {}ms",
+            altitude, accel_mag, MOTOR_BURNOUT_TIME_MS));
           return StandardFlightPhase::LAUNCH;
         }
       }
@@ -181,13 +192,20 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
   }
   else if (current_phase == StandardFlightPhase::LAUNCH)
   {
-    // if (altitude > 350)
-    // {
-    //   return StandardFlightPhase::COAST;
-    // }
+    if (altitude > REQ_COAST_PHASE_ALT_M)
+    {
+      coast_enter_time = get_absolute_time();
+      float time_diff_ms = static_cast<float>(absolute_time_diff_us(burnout_time, coast_enter_time)) / 1000;
+      log_message(std::format(
+        "Coast phase entered from launch phase due to minimum altitude, altitude ({}m) > {}m, {:.3f}ms left for motor burn",
+        altitude, REQ_COAST_PHASE_ALT_M, time_diff_ms));
+      return StandardFlightPhase::COAST;
+    }
 
     if (get_absolute_time() >= burnout_time)
     {
+      coast_enter_time = get_absolute_time();
+      log_message("Motor burnout, entering coast phase");
       return StandardFlightPhase::COAST;
     }
     return StandardFlightPhase::LAUNCH;
@@ -199,45 +217,46 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
       max_coast_alt = altitude;
     }
 
-    // Once rocket dropped 50m
-    const double diff_from_apogee = max_coast_alt - altitude;
-    if (diff_from_apogee > 50)
+    // Once rocket dropped from apogee
+    const double drop_from_apogee = max_coast_alt - altitude;
+    if (drop_from_apogee > REQ_APOGEE_DROP_M)
     {
-      elijah_state_framework::log_serial_message(std::format(
-        "Apogee reached! {}m, detected because of an altitude difference of {}m", max_coast_alt, diff_from_apogee));
+      log_message(std::format( "Apogee reached (entering descent phase)! Apogee {}m, detected because of an altitude drop of {}m (required {}m)", max_coast_alt, drop_from_apogee, REQ_APOGEE_DROP_M));
       return StandardFlightPhase::DESCENT;
     }
     return StandardFlightPhase::COAST;
   }
   else if (current_phase == StandardFlightPhase::DESCENT)
   {
-    double minRecentAlt = std::numeric_limits<double>::max();
-    double maxRecentAlt = std::numeric_limits<double>::min();;
+    double min_recent_alt = std::numeric_limits<double>::max();
+    double max_recent_alt = std::numeric_limits<double>::min();;
 
-    for (TStateData state : state_history)
+    for (const TStateData& state : state_history)
     {
-      double curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude;
-      extract_state_data(state, curr_accel_x, curr_accel_y, curr_accel_z, curr_altitude);
+      double ignored_ax, ignored_ay, ignored_az, curr_altitude;
+      extract_state_data(state, ignored_ax, ignored_ay, ignored_az, curr_altitude);
 
-      if (curr_altitude < minRecentAlt)
+      if (curr_altitude < min_recent_alt)
       {
-        minRecentAlt = curr_altitude;
+        min_recent_alt = curr_altitude;
       }
 
-      if (curr_altitude > maxRecentAlt)
+      if (curr_altitude > max_recent_alt)
       {
-        maxRecentAlt = curr_altitude;
+        max_recent_alt = curr_altitude;
       }
     }
 
-    // If recently there is a total deviation of less than 3m
-    double recent_deviation = std::abs(maxRecentAlt - minRecentAlt);
-    if (recent_deviation <= 3)
+    // If recently there is a small total deviation
+    double recent_deviation = std::abs(max_recent_alt - min_recent_alt);
+    if (recent_deviation <= MAX_LAND_ALT_DEVIATION_M)
     {
-      elijah_state_framework::log_serial_message(std::format("Landed because recent deviation = {}m ({} states)",
-                                                             recent_deviation, state_history.size()));
+      log_message(std::format("Landed! Recent deviation = {}m (min: {}m, max: {}m) (maximum deviation {}m) ({} states)",
+                                                             recent_deviation, min_recent_alt, max_recent_alt, MAX_LAND_ALT_DEVIATION_M, state_history.size()));
       return StandardFlightPhase::LANDED;
     }
+    log_message(std::format("NOT LANDED! Recent deviation = {}m min: {}m, max: {}m (maximum deviation {}m) ({} states)",
+                                                       recent_deviation, min_recent_alt, max_recent_alt, MAX_LAND_ALT_DEVIATION_M, state_history.size()));
     return StandardFlightPhase::DESCENT;
   }
   else if (current_phase == StandardFlightPhase::LANDED)

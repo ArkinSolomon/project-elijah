@@ -165,9 +165,6 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
   const double slope_drag = (y2_drag - y1_drag) / (x2_drag - x1_drag);
   const double desired_angle = y1_drag + slope_drag * (cd_area_req - x1_drag);
 
-  airbrakes_state_manager->log_message(std::format("cd_area_req: {}", cd_area_req),
-                                       elijah_state_framework::LogLevel::Debug);
-
   return std::clamp(desired_angle, 0.0, 55.0);
 }
 

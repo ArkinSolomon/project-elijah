@@ -36,20 +36,19 @@ void core1::core1_main()
   absolute_time_t land_time = 0;
   while (true)
   {
+    constexpr uint32_t disable_ms = OVERRIDE_DISABLE_TIME_MIN * 60000;
     if (override_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED)
     {
       if (!is_first_detection)
       {
         land_time = get_absolute_time();
+        override_state_manager->log_message(std::format("Land detected, will override PTT in {}ms", disable_ms));
         is_first_detection = true;
       }
-      else
+      else if (delayed_by_ms(land_time, disable_ms) < get_absolute_time())
       {
-        if (delayed_by_ms(land_time, 4.5 * 60 * 1000) < get_absolute_time())
-        {
-          gpio_put(PTT_ENABLE, false);
-          override_state_manager->log_message("DISABLING PTT");
-        }
+        override_state_manager->log_message("PTT disabled");
+        gpio_put(PTT_ENABLE, false);
       }
     }
 

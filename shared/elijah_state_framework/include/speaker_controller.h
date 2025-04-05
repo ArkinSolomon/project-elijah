@@ -2,7 +2,7 @@
 #include <pico/critical_section.h>
 
 #define SPEAKER_PWM_FREQ_HZ 1000000ul
-#define MAX_ALARM_TIMERS 1
+#define MAX_ALARM_TIMERS 4
 
 namespace elijah_state_framework::speaker_controller
 {

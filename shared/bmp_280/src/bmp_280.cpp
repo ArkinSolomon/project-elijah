@@ -168,7 +168,6 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
   ground_temperature += 273.15;
   altitude = ground_temperature / 0.0065 * (1 - std::pow(
     static_cast<double>(pressure) / static_cast<double>(ground_pressure), 1 / 5.255));
-
   return true;
 }
 

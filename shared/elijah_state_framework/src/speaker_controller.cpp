@@ -93,7 +93,11 @@ void elijah_state_framework::speaker_controller::internal::play_status_freqs(
 
   const uint64_t next_freq_time_us = play_current_freq();
   pwm_set_enabled(status_pwm_slice, true);
-  alarm_pool_add_alarm_in_us(alarm_pool, next_freq_time_us, &on_next_freq, nullptr, false);
+  next_freq_alarm = alarm_pool_add_alarm_in_us(alarm_pool, next_freq_time_us, &on_next_freq, nullptr, false);
+  if (next_freq_alarm < 0)
+  {
+    pwm_set_enabled(status_pwm_slice, false);
+  }
   critical_section_exit(&speaker_cs);
 }
 
@@ -115,7 +119,6 @@ uint64_t elijah_state_framework::speaker_controller::internal::play_current_freq
 #endif
   pwm_set_chan_level(status_pwm_slice, status_pwm_chan, duty_cycle_top);
 
-  log_serial_message(std::format("Updating PWM frequency to {}, next: {}ms", target_freq, required_timing_ms));
   return required_timing_ms * 1000;
 }
 
@@ -127,7 +130,6 @@ int64_t elijah_state_framework::speaker_controller::internal::on_next_freq(alarm
   {
     curr_freq_idx = 0;
   }
-  // log_serial_message(std::format("Updating PWM frequency to idx {}", curr_freq_idx));
 
   const auto next_freq_time = static_cast<int64_t>(play_current_freq());
   critical_section_exit(&speaker_cs);
@@ -136,9 +138,13 @@ int64_t elijah_state_framework::speaker_controller::internal::on_next_freq(alarm
 
 void elijah_state_framework::speaker_controller::internal::cancel_current_alarm()
 {
-  if (next_freq_alarm > 0)
+  if (next_freq_alarm <= 0)
   {
-    alarm_pool_cancel_alarm(alarm_pool, next_freq_alarm);
+    return;
+  }
+
+  if (alarm_pool_cancel_alarm(alarm_pool, next_freq_alarm))
+  {
     next_freq_alarm = std::numeric_limits<int32_t>::min();
   }
 }

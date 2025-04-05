@@ -22,6 +22,7 @@ class Device:
     framework_request_sent: bool
     current_reading_framework_tag: bytearray
     uses_state_framework: bool
+    waiting_for_new_framework: bool
     is_connected: bool
     state_framework: StateFramework | None
 
@@ -55,6 +56,7 @@ class Device:
     def disconnect(self):
         self.tty = None
         self.framework_request_sent = False
+        self.waiting_for_new_framework = False
         self.is_connected = False
         self.current_reading_framework_tag = bytearray()
         self.sys_log(f'Device disconnected from port {self.last_known_port}')
@@ -69,6 +71,7 @@ class Device:
                 self.tty.write(b'\01')
                 self.logs.append(LogMessage(LogLevel.SYSTEM, 'Requesting framework metadata...'))
                 self.framework_request_sent = True
+                self.waiting_for_new_framework = True
 
             if self.tty.bytes_avail() > 0:
                 self.current_reading_framework_tag.append(self.tty.read(1)[0])
@@ -84,6 +87,7 @@ class Device:
 
             self.state_framework = StateFramework.generate_framework_configuration(self.tty)
             self.uses_state_framework = True
+            self.waiting_for_new_framework = False
             self.sys_log(f'Parsed framework configuration for {self.state_framework.application_name}')
 
         except Exception as e:
@@ -122,7 +126,7 @@ class Device:
                 pass
 
     def update(self):
-        if not self.is_connected or not self.uses_state_framework:
+        if not self.is_connected or not self.uses_state_framework or self.waiting_for_new_framework:
             self.get_metadata()
             return
 

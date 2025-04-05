@@ -4,8 +4,8 @@
 #include "pin_outs.h"
 
 OverrideReliableBMP280::OverrideReliableBMP280(OverrideStateManager* override_state_manager): ReliableBMP280(
-override_state_manager, OverrideFaultKey::BMP280, spi0, BMP_CS_PIN, BMP280::FilterCoefficientSetting::Filter4x,
-BMP280::OssSettingPressure::PressureOss8, BMP280::OssSettingTemperature::TemperatureOss16,
+override_state_manager, OverrideFaultKey::BMP280, spi0, BMP_CS_PIN, BMP280::FilterCoefficientSetting::Filter16x,
+BMP280::OssSettingPressure::PressureOss16, BMP280::OssSettingTemperature::TemperatureOss16,
 OverridePersistentStateKey::GroundPressure, OverridePersistentStateKey::GroundTemperature)
 {
 }

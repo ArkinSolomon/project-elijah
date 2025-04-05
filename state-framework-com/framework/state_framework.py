@@ -139,9 +139,11 @@ class StateFramework:
                         # print('Device restarted!!')
                         pass
                     case OutputPacket.FAULTS_CHANGED:
-                        self._update_faults(readable)
+                        fault_msg = self._update_faults(readable)
+                        if fault_msg is not None:
+                            logs.append(fault_msg)
                     case OutputPacket.PHASE_CHANGED:
-                        self._update_phase(readable)
+                        logs.append(self._update_phase(readable))
                     case _:
                         print(f'Unknown output packet: {output_packet} ({hex(packet_id)})')
             except SerialException as e:
@@ -237,9 +239,10 @@ class StateFramework:
         # for entry in self.persistent_data_entries:
         #     print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
 
-    def _update_faults(self, readable: Readable) -> None:
+    def _update_faults(self, readable: Readable) -> LogMessage | None:
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))
         change_message = read_string(readable)
+        change_log: LogMessage | None = None
 
         for fault in self.fault_definitions:
             fault.is_faulted = ((all_faults >> fault.fault_bit) & 0x01) > 0
@@ -247,19 +250,24 @@ class StateFramework:
                 if self.last_updated_fault is None or self.last_updated_fault.fault_bit == changed_fault_bit or not self.last_updated_fault.is_faulted:
                     self.last_updated_fault = fault
                 fault.last_fault_message = change_message
+                change_log = LogMessage(LogLevel.SYSTEM,
+                                        f'Fault changed: {fault.fault_name} {'FAULT' if fault.is_faulted else 'OK'} (bit {fault.fault_bit}) [{hex(all_faults)}]: {'<no message>' if change_message == '' else change_message}')
             # if fault.fault_bit == changed_fault_bit:
             #     print(
             #         f'Fault {fault.fault_name} (bit: {changed_fault_bit}) is changed (now {fault.is_faulted}): {change_message}')
         self._update_last_fault()
+        return change_log
 
     def _update_last_fault(self):
         if self.last_updated_fault is None or not self.last_updated_fault.is_faulted:
-            faulted_devices = list(filter(lambda f: f.is_faulted and not f.is_communication_channel, self.fault_definitions))
+            faulted_devices = list(
+                filter(lambda f: f.is_faulted and not f.is_communication_channel, self.fault_definitions))
             if len(faulted_devices) > 0:
                 self.last_updated_fault = faulted_devices[0]
 
-    def _update_phase(self, readable: Readable):
+    def _update_phase(self, readable: Readable) -> LogMessage:
         old_phase_id = self.current_phase_id
         self.current_phase_id, = struct.unpack('<B', readable.read(1))
         self.current_phase = read_string(readable)
-        # print(f'Phase{'' if old_phase_id < 0 else ' changed'}: {self.current_phase} ({self.current_phase_id})')
+        return LogMessage(LogLevel.SYSTEM,
+                          f'Phase{'' if old_phase_id < 0 else ' changed'}: {self.current_phase} ({self.current_phase_id})')
