@@ -28,18 +28,31 @@ void elijah_state_framework::init_usb_comm()
 
 void elijah_state_framework::log_serial_message(const std::string& message)
 {
+  internal::log_serial_message_with_lock_opt(message, true);
+}
+
+void elijah_state_framework::internal::log_serial_message_with_lock_opt(const std::string& message, bool lock)
+{
   if (!stdio_usb_connected())
   {
     return;
   }
 
-  size_t encoded_len;
-  const std::unique_ptr<uint8_t[]> encoded_message = internal::encode_log_message(
-   message, LogLevel::SerialOnly, encoded_len);
 
-  critical_section_enter_blocking(&internal::usb_cs);
-  internal::write_to_serial(encoded_message.get(), encoded_len);
-  critical_section_exit(&internal::usb_cs);
+  size_t encoded_len;
+  const std::unique_ptr<uint8_t[]> encoded_message = encode_log_message(
+    message, LogLevel::SerialOnly, encoded_len);
+
+  if (lock)
+  {
+    critical_section_enter_blocking(&usb_cs);
+  }
+  write_to_serial(encoded_message.get(), encoded_len);
+
+  if (lock)
+  {
+    critical_section_exit(&usb_cs);
+  }
 }
 
 void elijah_state_framework::internal::write_to_serial(

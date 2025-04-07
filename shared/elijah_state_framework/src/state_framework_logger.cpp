@@ -16,10 +16,12 @@ elijah_state_framework::StateFrameworkLogger::StateFrameworkLogger(std::string f
   mutex_init(&log_buff_mtx);
   recursive_mutex_init(&write_buff_rmtx);
 
+  mutex_enter_blocking(&sd_card_mtx);
   if (mount_card())
   {
     load_old_data();
   }
+  mutex_exit(&sd_card_mtx);
 }
 
 elijah_state_framework::StateFrameworkLogger::~StateFrameworkLogger()
@@ -58,9 +60,10 @@ bool elijah_state_framework::StateFrameworkLogger::flush_log()
   recursive_mutex_enter_blocking(&write_buff_rmtx);
   mutex_enter_blocking(&log_buff_mtx);
 
-  bool did_flush = flush_write_buff();
+  bool _;
+  bool did_flush = flush_write_buff(_, _);
   move_to_write_buff();
-  did_flush = did_flush && flush_write_buff();
+  did_flush = did_flush && flush_write_buff(_, _);
 
   mutex_exit(&log_buff_mtx);
   recursive_mutex_exit(&write_buff_rmtx);
@@ -68,10 +71,12 @@ bool elijah_state_framework::StateFrameworkLogger::flush_log()
   return did_flush;
 }
 
-bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
+bool elijah_state_framework::StateFrameworkLogger::flush_write_buff(bool& did_try_remount, bool& did_mount)
 {
   recursive_mutex_enter_blocking(&write_buff_rmtx);
 
+  did_try_remount = false;
+  did_mount = false;
   if (write_size == 0)
   {
     recursive_mutex_exit(&write_buff_rmtx);
@@ -81,11 +86,16 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff()
   mutex_enter_blocking(&sd_card_mtx);
   if (!mounted)
   {
-    if (!mount_card())
+    did_try_remount = true;
+    if (mount_card())
     {
+      did_mount = true;
+    }
+    else
+    {
+      did_mount = false;
       mutex_exit(&sd_card_mtx);
       recursive_mutex_exit(&write_buff_rmtx);
-      log_serial_message("Will not flush write buffer, failed to mount file system");
       return false;
     }
   }
@@ -178,6 +188,10 @@ bool elijah_state_framework::StateFrameworkLogger::is_mounted() const
 bool elijah_state_framework::StateFrameworkLogger::mount_card()
 {
   const FRESULT fr = f_mount(&fs, "0:", 1);
+  if (construction_res == FR_OK)
+  {
+    construction_res = fr;
+  }
   if (fr != FR_OK)
   {
     mounted = false;

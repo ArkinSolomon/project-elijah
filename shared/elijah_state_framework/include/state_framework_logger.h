@@ -23,11 +23,12 @@ namespace elijah_state_framework
 
     void log_data(const uint8_t* data, size_t len);
     bool flush_log();
-    bool flush_write_buff();
+    bool flush_write_buff(bool& did_try_remount, bool& did_mount);
 
     [[nodiscard]] bool is_mounted() const;
     bool mount_card();
 
+    FRESULT construction_res = FR_OK;
   private:
     static inline mutex_t sd_card_mtx;
     mutex_t log_buff_mtx;

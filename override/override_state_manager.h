@@ -21,6 +21,7 @@ struct OverrideState
 enum class OverridePersistentStateKey : uint8_t
 {
   LaunchKey = 1,
+  FlightPhaseKey = 2,
   AccelCalibX = 3,
   AccelCalibY = 4,
   AccelCalibZ = 5,
@@ -44,6 +45,7 @@ class OverrideStateManager final : public elijah_state_framework::ElijahStateFra
 {
 public:
   OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
+                                                OverridePersistentStateKey::FlightPhaseKey,
                                                 OverrideFaultKey::MicroSD, 100)
   {
     get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",

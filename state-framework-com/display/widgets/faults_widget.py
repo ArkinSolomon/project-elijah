@@ -138,12 +138,8 @@ class FaultsWidget(Widget):
         self.screen.print_at(fault_label, self.offset_x, self.height, attr=Screen.A_BOLD, bg=self.background_color)
         rem_space = self.width - len(fault_label)
 
-        if fault.is_faulted:
-            fault_msg = fault.last_fault_message
-        else:
-            fault_msg = 'Fault resolved!'
-
-        if fault_msg is None:
+        fault_msg = fault.last_fault_message
+        if fault_msg is None or len(fault_msg) == 0:
             fault_msg = 'No fault message'
         elif len(fault_msg) > rem_space:
             fault_msg = fault_msg[:rem_space - 3] + '...'

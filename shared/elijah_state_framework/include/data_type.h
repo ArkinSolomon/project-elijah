@@ -20,7 +20,7 @@ enum class DataType : uint8_t
 
 namespace data_type_helpers
 {
-  inline size_t get_size_for_data_type(const DataType type)
+  constexpr size_t get_size_for_data_type(const DataType type)
   {
     switch (type)
     {

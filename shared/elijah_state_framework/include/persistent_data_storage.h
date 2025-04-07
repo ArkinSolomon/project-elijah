@@ -15,7 +15,7 @@
 #include "persistent_data_entry.h"
 #include "usb_comm.h"
 
-#define PERSISTENT_DATA_START_SECTOR_NUM 505
+#define PERSISTENT_DATA_START_SECTOR_NUM ((PICO_FLASH_SIZE_BYTES / 4096) - 1)
 
 #define CREATE_REGISTRATION_FOR_TYPE(TYPE_NAME, DATA_TYPE) \
   void register_key(PersistentKeyType key, const std::string& display_name, const TYPE_NAME default_value) \
@@ -46,8 +46,8 @@
     active_data_loc = malloc(get_total_byte_size()); \
     memcpy(active_data_loc, flash_data_loc, get_total_byte_size()); \
   } \
-  const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
-  *data_start = value; \
+  const auto data_start = reinterpret_cast<void*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
+  memcpy(data_start, &value, sizeof(TYPE_NAME)); \
   if (lock) { \
     shared_mutex_exit_exclusive(&persistent_storage_smtx); \
   } \
@@ -59,9 +59,10 @@
   { \
     assert(data_entries.contains(key)); \
     shared_mutex_enter_blocking_shared(&persistent_storage_smtx); \
-    const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries[key]; \
-    const auto data_start = reinterpret_cast<TYPE_NAME*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
-    const TYPE_NAME value = *data_start; \
+    const internal::PersistentDataEntry<PersistentKeyType>* entry = data_entries.at(key); \
+    const auto data_start = reinterpret_cast<void*>(static_cast<uint8_t*>(active_data_loc) + sizeof(tag) + entry->get_offset()); \
+    TYPE_NAME value; \
+    memcpy(&value, data_start, sizeof(TYPE_NAME)); \
     shared_mutex_exit_shared(&persistent_storage_smtx); \
     return value; \
   }
@@ -240,7 +241,7 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_strin
   for (uint i = 0; i < entry->get_offset(); i++)
   {
     const auto curr_c_str = reinterpret_cast<const char*>(static_cast<const uint8_t*>(str_data_loc) + str_byte_offset);
-    str_byte_offset += strlen(curr_c_str + 1);
+    str_byte_offset += strlen(curr_c_str) + 1;
   }
 
   const auto str_start = reinterpret_cast<const char*>(static_cast<const uint8_t*>(str_data_loc) + str_byte_offset);
@@ -252,7 +253,6 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::set_strin
   string_size -= old_str_bytes;
   string_size += value.length() + 1;
 
-  // this probably could've been a realloc but whatever
   void* new_data_loc = malloc(get_total_byte_size());
 
   if (prev_data_size > 0)

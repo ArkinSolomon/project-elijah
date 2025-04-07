@@ -9,10 +9,10 @@
 #include <format>
 #include <variant>
 #include <hardware/watchdog.h>
+#include <hardware/gpio.h>
 #include <pico/critical_section.h>
 #include <pico/rand.h>
 #include <pico/stdio_usb.h>
-#include <hardware/gpio.h>
 
 #include "data_type.h"
 #include "fault_manager.h"
@@ -32,7 +32,7 @@
   size_t data_len = 0; \
   size_t curr_data_size_len; \
   if (register_data) { \
-    assert(!is_size_calculated); \
+    assert(!is_state_size_calculated); \
   } \
   curr_data_size_len = data_type_helpers::get_size_for_data_type(DataType::UInt64); \
   if (register_data) { \
@@ -87,32 +87,18 @@ template <typename TStateData, \
   EFlightPhase, \
   TFlightPhaseController
 
-#define MAX_MICRO_SD_REMOUNT_ATTEMPTS 10
+#define MAX_MICRO_SD_REMOUNT_ATTEMPTS 100
 
 constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
 
 namespace elijah_state_framework
 {
-  namespace internal::framework_encoders
-  {
-    template <typename T>
-    std::enable_if_t<!std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, std::tm>, void>
-    encode_value(uint8_t* dest, const T& value, const size_t size)
-    {
-      memcpy(dest, &value, size);
-    }
-
-    inline void encode_value(uint8_t* dest, const std::tm& value, size_t)
-    {
-      encode_time(dest, value);
-    }
-  }
-
   FRAMEWORK_TEMPLATE_DECL
   class ElijahStateFramework
   {
   public:
-    ElijahStateFramework(std::string application_name, EPersistentStorageKey launch_key, EFaultKey micro_sd_fault_key,
+    ElijahStateFramework(std::string application_name, EPersistentStorageKey launch_key,
+                         EPersistentStorageKey flight_phase_key, EFaultKey micro_sd_fault_key,
                          size_t state_history_size);
     virtual ~ElijahStateFramework();
 
@@ -140,7 +126,7 @@ namespace elijah_state_framework
     [[nodiscard]] bool is_faulted(EFaultKey fault_key);
 
   protected:
-    bool is_size_calculated = false;
+    bool is_state_size_calculated = false;
 
     void register_command(const std::string& command, std::function<void()> callback);
     void register_command(const std::string& command, const std::string& input_prompt,
@@ -163,17 +149,8 @@ namespace elijah_state_framework
                               bool register_data) = 0;
 
   private:
-    template <class... Ts>
-    struct overloaded : Ts...
-    {
-      using Ts::operator()...;
-    };
-
-    template <class... Ts>
-    overloaded(Ts...) -> overloaded<Ts...>;
-
     std::string application_name;
-    EPersistentStorageKey launch_key;
+    EPersistentStorageKey launch_key, flight_phase_key;
 
     uint8_t command_id_counter = 1;
     uint8_t variable_id_counter = 1;
@@ -222,9 +199,10 @@ namespace elijah_state_framework
 
 FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahStateFramework(
-  std::string application_name, EPersistentStorageKey launch_key, EFaultKey micro_sd_fault_key,
-  const size_t state_history_size) :
-  application_name(std::move(application_name)), launch_key(launch_key), state_history_size(state_history_size),
+  std::string application_name, EPersistentStorageKey launch_key, EPersistentStorageKey flight_phase_key,
+  EFaultKey micro_sd_fault_key, const size_t state_history_size) :
+  application_name(std::move(application_name)), launch_key(launch_key), flight_phase_key(flight_phase_key),
+  state_history_size(state_history_size),
   micro_sd_fault_key(micro_sd_fault_key)
 {
   critical_section_init(&internal::usb_cs);
@@ -246,9 +224,8 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   });
 
   // ReSharper disable once CppPassValueParameterByConstReference
-  register_command("New launch", "Launch name", true, [this, launch_key](std::string launch_name)
+  register_command("New launch", "Launch name", true, [this](std::string launch_name)
   {
-    gpio_put(25, true);
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
 
     logger->flush_log();
@@ -261,8 +238,10 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
     send_framework_metadata(true, false);
 
-    persistent_data_storage->set_string(launch_key, launch_name);
+    log_serial_message(std::format("OLD: {}", persistent_data_storage->get_total_byte_size()));
+    persistent_data_storage->set_string(this->launch_key, launch_name);
     persistent_data_storage->commit_data();
+    log_serial_message(std::format("NEW: {}", persistent_data_storage->get_total_byte_size()));
 
     log_message(std::format("New launch: {}", launch_name));
   });
@@ -287,9 +266,12 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   register_command("Restart", [this]
   {
     log_message("Restarting...", LogLevel::Warning);
+
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
     logger->flush_log();
     delete logger;
+    shared_mutex_exit_exclusive(&logger_smtx);
+
     watchdog_enable(100, true);
     sleep_ms(500);
   });
@@ -305,11 +287,51 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
       log_serial_message("Speaker is unmuted");
     }
   });
+  std::string rand_launch_name = std::format("launch-{:016x}", get_rand_64());
 
-  std::string rand_launch_name = std::format("launch-{:08x}", get_rand_64());
   persistent_data_storage->register_key(launch_key, "Launch key", rand_launch_name);
+  persistent_data_storage->register_key(flight_phase_key, "Flight phase", static_cast<uint8_t>(current_phase));
 
   set_curr_phase_speaker_pattern();
+}
+
+FRAMEWORK_TEMPLATE_DECL
+void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::finish_construction()
+{
+  logger = new StateFrameworkLogger(persistent_data_storage->get_string(launch_key));
+
+  TStateData collection_data;
+  encode_state(nullptr, collection_data, 0, true);
+
+  if (!logger->is_mounted())
+  {
+    did_write_metadata = false;
+    set_fault(micro_sd_fault_key, true, "Failed to mount card when finishing state framework construction", false);
+  }
+
+  if (logger->is_new_file())
+  {
+    did_write_metadata = false;
+    send_framework_metadata(true, false);
+  }
+  else
+  {
+    did_write_metadata = true;
+    constexpr auto restart_marker = static_cast<uint8_t>(
+      internal::OutputPacket::DeviceRestartMarker);
+    logger->log_data(&restart_marker, sizeof(uint8_t));
+  }
+
+
+  const uint8_t stored_phase = persistent_data_storage->get_uint8(flight_phase_key);
+  if ((stored_phase & 0x80) > 0)
+  {
+    current_phase = static_cast<EFlightPhase>(stored_phase & 0x7F);
+  }
+
+  persistent_data_storage->lock_active_data();
+  send_persistent_state(persistent_data_storage->get_active_data_loc(), persistent_data_storage->get_total_byte_size());
+  persistent_data_storage->release_active_data();
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -351,6 +373,8 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
     return;
   }
 
+  internal::log_serial_message_with_lock_opt(std::format("Received command: 0x{:02X}", command_id), false);
+
   if (!registered_commands.contains(command_id))
   {
     critical_section_exit(&internal::usb_cs);
@@ -358,46 +382,65 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   }
   const RegisteredCommand* command = &registered_commands[command_id];
 
-  double double_arg;
-  std::string str_arg;
-  tm time_arg{};
-
   switch (command->get_input_type())
   {
   case CommandInputType::Double:
     {
+      double double_arg;
       bytes_read = stdio_get_until(reinterpret_cast<char*>(&double_arg), sizeof(double_arg),
                                    delayed_by_ms(get_absolute_time(), 50));
-      critical_section_exit(&internal::usb_cs);
       if (bytes_read != sizeof(double_arg))
       {
+        internal::log_serial_message_with_lock_opt(
+          std::format("Could not read double for command, only read {}/{} bytes", bytes_read, sizeof(double_arg)),
+          false);
+        critical_section_exit(&internal::usb_cs);
         return;
       }
+
+      internal::log_serial_message_with_lock_opt(
+        std::format("Executing double command \"{}\" (0x{:02X}) with argument: {:.5f}", command->get_command_name(),
+                    command->get_command_id(), double_arg),
+        false);
+      critical_section_exit(&internal::usb_cs);
+
+      const auto cb = std::get<std::function<void(double)>>(command->get_callback());
+      cb(double_arg);
       break;
     }
   case CommandInputType::AlphaNumeric:
   case CommandInputType::String:
     {
       uint8_t str_size_buf[2];
-      bytes_read = stdio_get_until(reinterpret_cast<char*>(str_size_buf), 2, delayed_by_ms(get_absolute_time(), 50));
+      bytes_read = stdio_get_until(reinterpret_cast<char*>(str_size_buf), 2, delayed_by_ms(get_absolute_time(), 250));
       if (bytes_read != 2)
       {
+        internal::log_serial_message_with_lock_opt(
+          std::format("Could not read string size for string command, only read {}/2 bytes", bytes_read), false);
         critical_section_exit(&internal::usb_cs);
         return;
       }
 
       const uint16_t str_size = *reinterpret_cast<uint16_t*>(str_size_buf);
       char str_buff[str_size + 1];
-      bytes_read = stdio_get_until(str_buff, str_size, delayed_by_ms(get_absolute_time(), str_size));
-      critical_section_exit(&internal::usb_cs);
+      bytes_read = stdio_get_until(str_buff, str_size, delayed_by_ms(get_absolute_time(), str_size * 100));
 
       if (bytes_read != str_size)
       {
+        internal::log_serial_message_with_lock_opt(
+          std::format("Could not read string after reading size, only read {}/{} bytes", bytes_read, str_size), false);
         return;
       }
       str_buff[str_size] = '\0';
-      str_arg = std::string(str_buff);
+      const auto str_arg = std::string(str_buff);
 
+      internal::log_serial_message_with_lock_opt(
+        std::format("Executing string command \"{}\" (0x{:02X}) with argument: {}", command->get_command_name(),
+                    command->get_command_id(), str_arg), false);
+      critical_section_exit(&internal::usb_cs);
+
+      const auto cb = std::get<std::function<void(std::string)>>(command->get_callback());
+      cb(str_arg);
       break;
     }
   case CommandInputType::Time:
@@ -406,27 +449,37 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
       bytes_read = stdio_get_until(reinterpret_cast<char*>(tm_buff),
                                    static_cast<int>(data_type_helpers::get_size_for_data_type(DataType::Time)),
                                    delayed_by_ms(get_absolute_time(), 80));
-      critical_section_exit(&internal::usb_cs);
       if (bytes_read != data_type_helpers::get_size_for_data_type(DataType::Time))
       {
+        internal::log_serial_message_with_lock_opt(
+          std::format("Failed to read data for time command, only read {}/{} bytes", bytes_read,
+                      data_type_helpers::get_size_for_data_type(DataType::Time)), false);
+        critical_section_exit(&internal::usb_cs);
         return;
       }
 
-      time_arg = internal::decode_time(tm_buff);
+      const tm time_arg = internal::decode_time(tm_buff);
+
+      internal::log_serial_message_with_lock_opt(std::format("Executing time command \"{}\" (0x{:02X})",
+                                                             command->get_command_name(), command->get_command_id()),
+                                                 false);
+      critical_section_exit(&internal::usb_cs);
+
+      const auto cb = std::get<std::function<void(tm)>>(command->get_callback());
+      cb(time_arg);
       break;
     }
   case CommandInputType::None:
   default:
+    internal::log_serial_message_with_lock_opt(std::format("Executing command \"{}\" (0x{:02X})",
+                                                           command->get_command_name(), command->get_command_id()),
+                                               false);
     critical_section_exit(&internal::usb_cs);
+
+    const auto cb = std::get<std::function<void()>>(command->get_callback());
+    cb();
     break;
   }
-
-  std::visit(overloaded{
-               [](const std::function<void()>& cb) { cb(); },
-               [&double_arg](const std::function<void(double)>& cb) { cb(double_arg); },
-               [&str_arg](const std::function<void(std::string)>& cb) { cb(str_arg); },
-               [&time_arg](const std::function<void(tm)>& cb) { cb(time_arg); },
-             }, command->get_callback());
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -460,10 +513,11 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   uint8_t* phase_change_packet = nullptr;
   if (new_phase != current_phase)
   {
+    phase_changed = true;
+
     mutex_enter_blocking(&current_phase_mtx);
     current_phase = new_phase;
     mutex_exit(&current_phase_mtx);
-    phase_changed = true;
 
     const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
     phase_change_packet_size += phase_name.length() + 1;
@@ -489,9 +543,18 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   if (logger && did_write_metadata)
   {
     logger->log_data(encoded_output_packet, total_encoded_packet_size);
-    logger->log_data(phase_change_packet, phase_change_packet_size);
+    if (phase_changed)
+    {
+      logger->log_data(phase_change_packet, phase_change_packet_size);
+    }
   }
   shared_mutex_exit_shared(&logger_smtx);
+
+  if (phase_changed)
+  {
+    persistent_data_storage->set_uint8(flight_phase_key, static_cast<uint8_t>(current_phase) | 0x80);
+    persistent_data_storage->commit_data();
+  }
 
   delete [] phase_change_packet;
 
@@ -613,10 +676,37 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_log_write()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
-  const bool did_succeed = logger->is_mounted() && logger->flush_write_buff();
-  shared_mutex_exit_shared(&logger_smtx);
+  bool did_succeed = false;
+  if (logger->is_mounted() || remount_attempts < MAX_MICRO_SD_REMOUNT_ATTEMPTS)
+  {
+    bool did_try_mount, did_mount;
+    did_succeed = logger->flush_write_buff(did_try_mount, did_mount);
 
-  set_fault(micro_sd_fault_key, !did_succeed, "Failed to write in check_for_log_write()", false);
+    if (did_try_mount)
+    {
+      remount_attempts++;
+      if (did_mount)
+      {
+        set_fault(micro_sd_fault_key, false, std::format("Logger mounted while checking for log write in {}/{}",
+                                                         remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS));
+        remount_attempts = 0;
+      }
+      else
+      {
+        log_message(
+          std::format(
+            "Logger failed to mount while checking for log write ({}/{} remount attempts)",
+            remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS),
+          LogLevel::Debug);
+        set_fault(micro_sd_fault_key, true, "Logger failed to mount while checking for log write", false);
+      }
+    }
+    else if (!did_succeed)
+    {
+      set_fault(micro_sd_fault_key, true, "Failed to write data to MicroSD while checking for log writing", false);
+    }
+  }
+  shared_mutex_exit_shared(&logger_smtx);
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -673,40 +763,8 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_encoded_state_size(
   const size_t encoded_data_size)
 {
-  is_size_calculated = true;
+  is_state_size_calculated = true;
   encoded_state_size = encoded_data_size;
-}
-
-FRAMEWORK_TEMPLATE_DECL
-void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::finish_construction()
-{
-  logger = new StateFrameworkLogger(persistent_data_storage->get_string(launch_key));
-
-  TStateData collection_data;
-  encode_state(nullptr, collection_data, 0, true);
-
-  if (!logger->is_mounted())
-  {
-    did_write_metadata = false;
-    set_fault(micro_sd_fault_key, true, "Failed to mount card", false);
-  }
-
-  if (logger->is_new_file())
-  {
-    did_write_metadata = false;
-    send_framework_metadata(true, false);
-  }
-  else
-  {
-    did_write_metadata = true;
-    constexpr auto restart_marker = static_cast<uint8_t>(
-      internal::OutputPacket::DeviceRestartMarker);
-    logger->log_data(&restart_marker, sizeof(uint8_t));
-  }
-
-  persistent_data_storage->lock_active_data();
-  send_persistent_state(persistent_data_storage->get_active_data_loc(), persistent_data_storage->get_total_byte_size());
-  persistent_data_storage->release_active_data();
 }
 
 FRAMEWORK_TEMPLATE_DECL
@@ -756,7 +814,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
         write_to_file = false;
         shared_mutex_exit_shared(&logger_smtx);
 
-        set_fault(micro_sd_fault_key, true, "Failed to mount card", false);
+        set_fault(micro_sd_fault_key, true, "Failed to mount card while sending framework metadata", false);
         if (!write_to_serial)
         {
           log_message(
@@ -776,12 +834,12 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
         log_message("Logger mounted (and not writing to serial), writing framework metadata", LogLevel::Debug);
       }
 
-      set_fault(micro_sd_fault_key, false, "", false);
       constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
       logger->log_data(&packet_id, sizeof(packet_id));
     }
     else if (!write_to_serial)
     {
+      shared_mutex_exit_shared(&logger_smtx);
       return;
     }
   }
@@ -946,14 +1004,15 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   segment_id = static_cast<uint8_t>(internal::MetadataSegment::MetadataEnd);
 
-  if (!write_to_serial)
-  {
-    log_message("Will flush before exiting send_framework_metadata()", LogLevel::Debug);
-  }
 
   if (write_to_file && logger)
   {
     logger->log_data(&segment_id, 1);
+
+    if (!write_to_serial)
+    {
+      log_message("Will flush before exiting send_framework_metadata()", LogLevel::Debug);
+    }
     did_write_metadata = logger->flush_log();
     shared_mutex_exit_shared(&logger_smtx);
   }
@@ -966,13 +1025,14 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   if (write_to_file)
   {
-    if (did_write_metadata)
+    set_fault(micro_sd_fault_key, !did_write_metadata,
+              did_write_metadata
+                ? "Successfully wrote state framework metadata"
+                : "Failed to write state framework metadata", did_write_metadata);
+
+    if (!write_to_serial)
     {
-      set_fault(micro_sd_fault_key, true, "Failed to write state framework metadata", false);
-    }
-    else
-    {
-      set_fault(micro_sd_fault_key, false, "Successfully wrote state framework metadata", false);
+      log_serial_message(std::format("Const res: {}", uint8_t(logger->construction_res)));
     }
   }
 }

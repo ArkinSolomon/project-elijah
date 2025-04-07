@@ -63,7 +63,7 @@ protected:
 
   absolute_time_t burnout_time = nil_time;
   absolute_time_t coast_enter_time = nil_time;
-  double max_coast_alt = std::numeric_limits<double>::min();
+  double max_coast_alt = std::numeric_limits<double>::lowest();
 
   void reset_data();
 
@@ -229,7 +229,7 @@ StandardFlightPhase StandardFlightPhaseController<TStateData>::update_phase(
   else if (current_phase == StandardFlightPhase::DESCENT)
   {
     double min_recent_alt = std::numeric_limits<double>::max();
-    double max_recent_alt = std::numeric_limits<double>::min();;
+    double max_recent_alt = std::numeric_limits<double>::lowest();
 
     for (const TStateData& state : state_history)
     {
@@ -337,5 +337,5 @@ void StandardFlightPhaseController<TStateData>::reset_data()
 {
   burnout_time = nil_time;
   coast_enter_time = nil_time;
-  max_coast_alt = std::numeric_limits<double>::min();
+  max_coast_alt = std::numeric_limits<double>::lowest();
 }

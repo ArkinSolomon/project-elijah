@@ -15,6 +15,7 @@ namespace elijah_state_framework
   {
     inline critical_section_t usb_cs;
 
+    void log_serial_message_with_lock_opt(const std::string& message, bool lock);
     void write_to_serial(const uint8_t* write_data, size_t write_len);
     void write_to_serial(const uint8_t* packet_data, size_t packet_len, bool flush);
 
