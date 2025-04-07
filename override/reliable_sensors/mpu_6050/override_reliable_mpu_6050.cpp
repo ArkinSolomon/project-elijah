@@ -3,8 +3,8 @@
 #include "override_state_manager.h"
 
 OverrideReliableMPU6050::OverrideReliableMPU6050(OverrideStateManager* override_state_manager) : ReliableMPU6050(
-    override_state_manager, OverrideFaultKey::MPU6050, i2c0, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range500,
-    MPU6050::AccelFullScaleRange::Range4g, OverridePersistentStateKey::AccelCalibX,
+    override_state_manager, OverrideFaultKey::MPU6050, i2c0, MPU_6050_ADDR, MPU6050::GyroFullScaleRange::Range2000,
+    MPU6050::AccelFullScaleRange::Range16g, OverridePersistentStateKey::AccelCalibX,
     OverridePersistentStateKey::AccelCalibY, OverridePersistentStateKey::AccelCalibZ,
     OverridePersistentStateKey::GyroCalibX, OverridePersistentStateKey::GyroCalibY,
     OverridePersistentStateKey::GyroCalibZ)
