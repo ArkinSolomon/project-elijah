@@ -18,4 +18,5 @@ protected:
                           double& altitude) const override;
 
   [[nodiscard]] bool is_calibrated() const override;
+  void log_message(const std::string& msg) const override;
 };

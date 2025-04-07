@@ -24,6 +24,7 @@ struct PayloadState
 enum class PayloadPersistentDataKey : uint8_t
 {
   LaunchKey = 1,
+  FlightPhaseKey = 2,
   AccelCalibX = 3,
   AccelCalibY = 4,
   AccelCalibZ = 5,
@@ -48,7 +49,8 @@ class PayloadStateManager final : public elijah_state_framework::ElijahStateFram
     PayloadState, PayloadPersistentDataKey, PayloadFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
 {
 public:
-  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey, PayloadFaultKey::MicroSD,
+  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey,
+                                              PayloadPersistentDataKey::FlightPhaseKey, PayloadFaultKey::MicroSD,
                                               100)
   {
     get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X",
