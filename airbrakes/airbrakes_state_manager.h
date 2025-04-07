@@ -25,6 +25,7 @@ struct AirbrakesState
 enum class AirbrakesPersistentStateKey : uint8_t
 {
   LaunchKey = 1,
+  FlightPhaseKey = 2,
   AccelCalibX = 3,
   AccelCalibY = 4,
   AccelCalibZ = 5,
@@ -49,14 +50,15 @@ class AirbrakesStateManager final : public elijah_state_framework::ElijahStateFr
 {
 public:
   AirbrakesStateManager() : ElijahStateFramework("Airbrakes", AirbrakesPersistentStateKey::LaunchKey,
+                                                 AirbrakesPersistentStateKey::FlightPhaseKey,
                                                  AirbrakesFaultKey::MicroSD, 100)
   {
     get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibX, "Accelerometer calibration X",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
-                                                0.0);
+                                           0.0);
     get_persistent_storage()->
       register_key(AirbrakesPersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
     get_persistent_storage()->
@@ -64,10 +66,11 @@ public:
     get_persistent_storage()->
       register_key(AirbrakesPersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
     get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundPressure, "Ground pressure",
-                                                static_cast<int32_t>(0));
+                                           static_cast<int32_t>(0));
     get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundTemperature, "Ground temperature",
-                                                0.0);
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0));
+                                           0.0);
+    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::IsCalibrated, "Is calibrated",
+                                           static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
