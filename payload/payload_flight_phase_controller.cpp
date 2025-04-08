@@ -37,3 +37,9 @@ void PayloadFlightPhaseController::log_message(const std::string& msg) const
 {
   payload_state_manager->log_message(msg);
 }
+
+void PayloadFlightPhaseController::set_apogee(double apogee) const
+{
+  payload_state_manager->get_persistent_storage()->set_double(PayloadPersistentKey::ApogeeReached, apogee);
+  payload_state_manager->get_persistent_storage()->commit_data();
+}

@@ -122,36 +122,11 @@ void core1::handle_int(const uint gpio, const uint32_t events)
   }
   else if (gpio == ZERO_BUTTON_PIN)
   {
-    if (events & GPIO_IRQ_EDGE_RISE)
+    if (gpio_get(ZERO_BUTTON_PIN))
     {
-      if (require_zero_threshold && current_encoder_pos > ZERO_BUTTON_THRESHOLD)
-      {
-        critical_section_exit(&encoder_pos_cs);
-        return;
-      }
-
-      bool can_sched = true;
-      if (ab_debounce_timer < 0)
-      {
-        can_sched = cancel_alarm(ab_debounce_timer);
-      }
-
-      if (can_sched)
-      {
-        ab_debounce_timer = alarm_pool_add_alarm_in_ms(ab_ctrl_pool, MIN_BUTTON_PRESS_MS, ab_debounce, nullptr, false);
-      }
-    }
-    else if ((events & GPIO_IRQ_EDGE_FALL) > 0 && ab_debounce_timer < 0 && cancel_alarm(ab_debounce_timer))
-    {
-      ab_debounce_timer = -99999;
+      current_encoder_pos = 0;
     }
   }
 
   critical_section_exit(&encoder_pos_cs);
-}
-
-int64_t core1::ab_debounce(alarm_id_t, void*)
-{
-  current_encoder_pos = 0;
-  return 0;
 }

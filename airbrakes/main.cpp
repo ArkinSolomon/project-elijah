@@ -111,10 +111,10 @@ int main()
       );
 
       airbrakes_state_manager->log_message(std::format(
-                                             "calculate_target_angle({}, {}, {}, {}, {}, {}, {}) = {}",
-                                             state.altitude, last_alt, initial_altitude, initial_velocity,
-                                             state.pressure, ground_temp, dt_s, new_target_angle
-                                           ), elijah_state_framework::LogLevel::Debug);
+        "calculate_target_angle({}, {}, {}, {}, {}, {}, {}) = {}",
+        state.altitude, last_alt, initial_altitude, initial_velocity,
+        state.pressure, ground_temp, dt_s, new_target_angle
+      ));
 
       new_target_pos = encoder_pos_from_angle(new_target_angle);
       if (abs(new_target_pos - state.calculated_encoder_pos) < 2)

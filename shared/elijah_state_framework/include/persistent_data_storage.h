@@ -79,7 +79,8 @@ GyroCalibY = 7, \
 GyroCalibZ = 8, \
 GroundPressure = 9, \
 GroundTemperature = 10, \
-IsCalibrated = 12
+IsCalibrated = 12, \
+ApogeeReached = 13
 
 #define REGISTER_STANDARD_KEYS(KEY_ENUM_NAME) \
 get_persistent_storage()->register_key(KEY_ENUM_NAME::AccelCalibX, "Accelerometer calibration X", 0.0); \
@@ -91,6 +92,7 @@ get_persistent_storage()->register_key(KEY_ENUM_NAME::GyroCalibZ, "Gyroscope cal
 get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundPressure, "Ground pressure", static_cast<int32_t>(0)); \
 get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundTemperature, "Ground temperature", 0.0); \
 get_persistent_storage()->register_key(KEY_ENUM_NAME::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0)); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::ApogeeReached, "Apogee reached", 0.0); \
 
 namespace elijah_state_framework
 {

@@ -54,5 +54,5 @@ void pin_init()
 
   gpio_init(RADIO_PTT_PIN);
   gpio_set_dir(RADIO_PTT_PIN, GPIO_OUT);
-  gpio_put(RADIO_PTT_PIN, false);
+  gpio_put(RADIO_PTT_PIN, true);
 }

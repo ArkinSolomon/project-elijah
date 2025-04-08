@@ -280,7 +280,6 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     shared_mutex_enter_blocking_exclusive(&logger_smtx);
     logger->flush_log();
     delete logger;
-    shared_mutex_exit_exclusive(&logger_smtx);
 
     watchdog_enable(100, true);
     sleep_ms(500);
@@ -449,7 +448,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
       uint8_t tm_buff[data_type_helpers::get_size_for_data_type(DataType::Time)];
       bytes_read = stdio_get_until(reinterpret_cast<char*>(tm_buff),
                                    static_cast<int>(data_type_helpers::get_size_for_data_type(DataType::Time)),
-                                   delayed_by_ms(get_absolute_time(), 500));
+                                   delayed_by_ms(get_absolute_time(), 1000));
       if (bytes_read != data_type_helpers::get_size_for_data_type(DataType::Time))
       {
         internal::log_serial_message_with_lock_opt(
@@ -540,6 +539,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
     critical_section_exit(&internal::usb_cs);
   }
 
+  gpio_put(25, true);
   shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger && did_write_metadata)
   {
@@ -557,6 +557,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
     }
   }
   shared_mutex_exit_shared(&logger_smtx);
+  gpio_put(25, false);
 
   if (phase_changed || persistent_data_storage->get_uint8(flight_phase_key) != get_saved_phase_value())
   {

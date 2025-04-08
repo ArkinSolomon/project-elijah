@@ -9,20 +9,20 @@
 #define MIN_TEST_DATA_IDX 1
 #define TEST_DATA_COUNT 1630
 
+#define OVERWRITE_STATE_WITH_TEST_DATA() \
+if (test_data::test_data_enable) \
+{ \
+  state.altitude = test_data::altitude[test_data::curr_idx]; \
+  state.pressure = test_data::pressure[test_data::curr_idx]; \
+  state.accel_x = state.accel_y = 0; \
+  state.accel_z = -test_data::acceleration[test_data::curr_idx]; \
+}
+
 #define INCREASE_TEST_DATA_IDX() \
   test_data::curr_idx++; \
   if (test_data::curr_idx == TEST_DATA_COUNT) \
   { \
     test_data::curr_idx = TEST_DATA_COUNT; \
-  }
-
-#define OVERWRITE_STATE_WITH_TEST_DATA() \
-  if (test_data::test_data_enable) \
-  { \
-    state.altitude = test_data::altitude[test_data::curr_idx]; \
-    state.pressure = test_data::pressure[test_data::curr_idx]; \
-    state.accel_x = state.accel_y = 0; \
-    state.accel_z = -test_data::acceleration[test_data::curr_idx]; \
   }
 
 namespace test_data

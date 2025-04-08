@@ -137,7 +137,6 @@ class StateFramework:
                         self._update_persistent_data(readable)
                     case OutputPacket.DEVICE_RESTART_MARKER:
                         logs.append(LogMessage(LogLevel.SYSTEM, "Encountered device restart marker!"))
-                        pass
                     case OutputPacket.FAULTS_CHANGED:
                         fault_msg = self._update_faults(readable)
                         if fault_msg is not None:
@@ -232,6 +231,8 @@ class StateFramework:
         for entry in self.persistent_entries:
             if entry.data_type == DataType.STRING:
                 entry.current_value = read_string(readable)
+            elif entry.data_type == DataType.TIME:
+                entry.current_value = time_helper.decode_time(readable.read(get_data_type_size(DataType.TIME)))
             else:
                 data = readable.read(get_data_type_size(entry.data_type))
                 entry.current_value, = struct.unpack(get_data_type_struct_str(entry.data_type), data)

@@ -57,5 +57,4 @@ def get_data_type_struct_str(data_type: DataType) -> str:
         case DataType.DOUBLE:
             return '<d'
         case DataType.TIME:
-            # TODO encoding times
-            raise Exception('Can not get a struct string of a time (yet)')
+            raise Exception('Can not get a struct string of a time')

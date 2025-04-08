@@ -11,3 +11,9 @@ void OverrideFlightPhaseController::log_message(const std::string& msg) const
 {
   override_state_manager->log_message(msg);
 }
+
+void OverrideFlightPhaseController::set_apogee(double apogee) const
+{
+  override_state_manager->get_persistent_storage()->set_double(OverridePersistentKey::ApogeeReached, apogee);
+  override_state_manager->get_persistent_storage()->commit_data();
+}

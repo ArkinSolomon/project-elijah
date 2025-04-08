@@ -16,7 +16,6 @@ namespace core1 {
     inline queue_t encoder_target_queue;
 
     inline alarm_pool_t* ab_ctrl_pool;
-    inline alarm_id_t ab_debounce_timer = -99999;
 
     inline critical_section_t target_access_cs, encoder_pos_cs;
     inline bool angle_override_active = false;
@@ -27,6 +26,4 @@ namespace core1 {
     void core1_main();
 
     void handle_int(uint gpio, uint32_t events);
-
-    int64_t ab_debounce(alarm_id_t, void*);
 }

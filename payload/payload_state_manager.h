@@ -27,7 +27,8 @@ struct PayloadState
 
 enum class PayloadPersistentKey : uint8_t
 {
-  STANDARD_PERSISTENT_KEYS
+  STANDARD_PERSISTENT_KEYS,
+  LandTime = 14,
 };
 
 enum class PayloadFaultKey : uint8_t
@@ -50,6 +51,7 @@ public:
   PayloadStateManager(): ElijahStateFramework("Payload", 100)
   {
     REGISTER_STANDARD_KEYS(PayloadPersistentKey)
+    get_persistent_storage()->register_key(PayloadPersistentKey::LandTime, "Land time", tm{0, 1, 1, 1, 1, 20, 1, 1, 0});
     get_persistent_storage()->finish_registration();
 
     register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_1);
@@ -60,6 +62,7 @@ public:
 
     StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, GRAVITY_CONSTANT, 0);
     StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
+    StdCommandRegistrationHelpers::register_test_data_command(this);
 
     register_command("Update clock", "Time", [this](tm time_inst)
     {
