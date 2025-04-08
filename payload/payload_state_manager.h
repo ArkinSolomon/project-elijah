@@ -70,7 +70,7 @@ public:
                                            static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
-    register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::I2C_0);
+    register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_1);
     register_fault(PayloadFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_1);
     register_fault(PayloadFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
@@ -91,6 +91,11 @@ public:
       get_persistent_storage()->commit_data();
     });
 
+    register_command("Reset persistent storage", [this]
+    {
+      get_persistent_storage()->load_default_data();
+      mpu6050->load_calibration_data();
+    });
 
     register_command("Update clock", "Time", [this](tm time_inst)
     {

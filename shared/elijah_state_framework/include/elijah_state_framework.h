@@ -87,19 +87,24 @@ template <typename TStateData, \
   EFlightPhase, \
   TFlightPhaseController
 
-#define MAX_MICRO_SD_REMOUNT_ATTEMPTS 100
+#define MAX_MICRO_SD_METADATA_REMOUNT_ATTEMPTS 10
+#define MAX_MICRO_SD_LOG_WRITE_REMOUNT_ATTEMPTS 100
 
 constexpr uint64_t FRAMEWORK_TAG = 0x11335577AAEEFF33;
 
 namespace elijah_state_framework
 {
+  namespace std_helpers
+  {
+    class StdCommandRegistrationHelpers;
+  }
+
   FRAMEWORK_TEMPLATE_DECL
   class ElijahStateFramework
   {
+    friend class std_helpers::StdCommandRegistrationHelpers;
   public:
-    ElijahStateFramework(std::string application_name, EPersistentStorageKey launch_key,
-                         EPersistentStorageKey flight_phase_key, EFaultKey micro_sd_fault_key,
-                         size_t state_history_size);
+    ElijahStateFramework(std::string application_name, size_t state_history_size);
     virtual ~ElijahStateFramework();
 
     PersistentDataStorage<EPersistentStorageKey>* get_persistent_storage() const;
@@ -126,6 +131,8 @@ namespace elijah_state_framework
     [[nodiscard]] bool is_faulted(EFaultKey fault_key);
 
   protected:
+    using StdCommandRegistrationHelpers = std_helpers::StdCommandRegistrationHelpers;
+
     bool is_state_size_calculated = false;
 
     void register_command(const std::string& command, std::function<void()> callback);
@@ -150,7 +157,8 @@ namespace elijah_state_framework
 
   private:
     std::string application_name;
-    EPersistentStorageKey launch_key, flight_phase_key;
+    static constexpr EPersistentStorageKey launch_key = EPersistentStorageKey::LaunchKey;
+    static constexpr EPersistentStorageKey flight_phase_key = EPersistentStorageKey::FlightPhaseKey;
 
     uint8_t command_id_counter = 1;
     uint8_t variable_id_counter = 1;
@@ -170,7 +178,7 @@ namespace elijah_state_framework
 
     StateFrameworkLogger* logger = nullptr;
     shared_mutex_t logger_smtx;
-    EFaultKey micro_sd_fault_key;
+    static constexpr EFaultKey micro_sd_fault_key = EFaultKey::MicroSD;
     bool did_write_metadata = false;
     absolute_time_t last_mount_attempt_time = nil_time;
     uint8_t remount_attempts = 0;
@@ -181,9 +189,13 @@ namespace elijah_state_framework
     EFlightPhase current_phase;
     mutex_t current_phase_mtx;
 
+    constexpr static size_t mount_fail_freq_len = 3;
+    constexpr static uint16_t mount_fail_freqs[mount_fail_freq_len] = {1000, 100, 300};
+    constexpr static uint16_t mount_fail_timings[mount_fail_freq_len] = {1000, 1000, 1000};
+
     constexpr static size_t fault_freqs_len = 5;
-    constexpr static uint16_t fault_freqs[fault_freqs_len] = {7000, 200, 500, 1000, 0};
-    constexpr static uint16_t fault_timings[fault_freqs_len] = {100, 80, 200, 300, 3000};
+    constexpr static uint16_t fault_freqs[fault_freqs_len] = {3000, 200, 500, 1000, 0};
+    constexpr static uint16_t fault_timings[fault_freqs_len] = {100, 190, 200, 300, 3000};
 
     void register_command(const std::string& command, const std::string& input_prompt, CommandInputType command_input,
                           command_callback_t callback);
@@ -193,17 +205,16 @@ namespace elijah_state_framework
     void set_fault(EFaultKey fault_key, bool fault_state, const std::string& message, bool write_to_logger);
 
     void set_flight_phase(EFlightPhase new_phase, bool lock_curr_phase_mtx);
+    [[nodiscard]] uint8_t get_saved_phase_value() const;
     void set_curr_phase_speaker_pattern();
   };
 }
 
 FRAMEWORK_TEMPLATE_DECL
 elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahStateFramework(
-  std::string application_name, EPersistentStorageKey launch_key, EPersistentStorageKey flight_phase_key,
-  EFaultKey micro_sd_fault_key, const size_t state_history_size) :
-  application_name(std::move(application_name)), launch_key(launch_key), flight_phase_key(flight_phase_key),
-  state_history_size(state_history_size),
-  micro_sd_fault_key(micro_sd_fault_key)
+  std::string application_name, const size_t state_history_size) :
+  application_name(std::move(application_name)),
+  state_history_size(state_history_size)
 {
   critical_section_init(&internal::usb_cs);
   shared_mutex_init(&logger_smtx);
@@ -298,35 +309,45 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::finish_construction()
 {
+  const uint8_t stored_phase = persistent_data_storage->get_uint8(flight_phase_key);
+  if ((stored_phase & 0x80) > 0)
+  {
+    current_phase = static_cast<EFlightPhase>(stored_phase & 0x3F);
+  }
+
+  if ((stored_phase & 0x40) > 0)
+  {
+    did_write_metadata = true;
+  }
+  else
+  {
+    did_write_metadata = false;
+  }
+
   logger = new StateFrameworkLogger(persistent_data_storage->get_string(launch_key));
 
   TStateData collection_data;
   encode_state(nullptr, collection_data, 0, true);
 
-  if (!logger->is_mounted())
+  if (current_phase == flight_phase_controller->initial_flight_phase())
   {
-    did_write_metadata = false;
-    set_fault(micro_sd_fault_key, true, "Failed to mount card when finishing state framework construction", false);
-  }
-
-  if (logger->is_new_file())
-  {
-    did_write_metadata = false;
-    send_framework_metadata(true, false);
+    speaker_controller::internal::play_status_freqs(mount_fail_freqs, mount_fail_timings, mount_fail_freq_len);
+    while (!logger->mount_card())
+    {
+      tight_loop_contents();
+    }
+    speaker_controller::internal::play_current_freq();
   }
   else
   {
-    did_write_metadata = true;
-    constexpr auto restart_marker = static_cast<uint8_t>(
-      internal::OutputPacket::DeviceRestartMarker);
-    logger->log_data(&restart_marker, sizeof(uint8_t));
-  }
-
-
-  const uint8_t stored_phase = persistent_data_storage->get_uint8(flight_phase_key);
-  if ((stored_phase & 0x80) > 0)
-  {
-    current_phase = static_cast<EFlightPhase>(stored_phase & 0x7F);
+    if (logger->is_mounted())
+    {
+      send_framework_metadata(true, false);
+    }
+    else
+    {
+      set_fault(micro_sd_fault_key, true, "Failed to mount card when finishing state framework construction", false);
+    }
   }
 
   persistent_data_storage->lock_active_data();
@@ -550,9 +571,9 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   }
   shared_mutex_exit_shared(&logger_smtx);
 
-  if (phase_changed)
+  if (phase_changed || persistent_data_storage->get_uint8(flight_phase_key) != get_saved_phase_value())
   {
-    persistent_data_storage->set_uint8(flight_phase_key, static_cast<uint8_t>(current_phase) | 0x80);
+    persistent_data_storage->set_uint8(flight_phase_key, get_saved_phase_value());
     persistent_data_storage->commit_data();
   }
 
@@ -676,11 +697,10 @@ FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::check_for_log_write()
 {
   shared_mutex_enter_blocking_shared(&logger_smtx);
-  bool did_succeed = false;
-  if (logger->is_mounted() || remount_attempts < MAX_MICRO_SD_REMOUNT_ATTEMPTS)
+  if (logger->is_mounted() || remount_attempts < MAX_MICRO_SD_LOG_WRITE_REMOUNT_ATTEMPTS)
   {
     bool did_try_mount, did_mount;
-    did_succeed = logger->flush_write_buff(did_try_mount, did_mount);
+    const bool did_succeed = logger->flush_write_buff(did_try_mount, did_mount);
 
     if (did_try_mount)
     {
@@ -688,7 +708,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
       if (did_mount)
       {
         set_fault(micro_sd_fault_key, false, std::format("Logger mounted while checking for log write in {}/{}",
-                                                         remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS));
+                                                         remount_attempts, MAX_MICRO_SD_LOG_WRITE_REMOUNT_ATTEMPTS));
         remount_attempts = 0;
       }
       else
@@ -696,7 +716,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
         log_message(
           std::format(
             "Logger failed to mount while checking for log write ({}/{} remount attempts)",
-            remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS),
+            remount_attempts, MAX_MICRO_SD_LOG_WRITE_REMOUNT_ATTEMPTS),
           LogLevel::Debug);
         set_fault(micro_sd_fault_key, true, "Logger failed to mount while checking for log write", false);
       }
@@ -798,7 +818,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
 
   if (write_to_file && logger)
   {
-    if (!logger->is_mounted() && remount_attempts < MAX_MICRO_SD_REMOUNT_ATTEMPTS && absolute_time_diff_us(
+    if (!logger->is_mounted() && remount_attempts < MAX_MICRO_SD_METADATA_REMOUNT_ATTEMPTS && absolute_time_diff_us(
       last_mount_attempt_time, get_absolute_time()) / 1000 > 1500)
     {
       // If it has been more than 1.5s since we last tried to mount, try again
@@ -820,7 +840,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
           log_message(
             std::format(
               "Logger failed to mount (and not writing to serial), can not write framework metadata ({}/{} remount attempts)",
-              remount_attempts, MAX_MICRO_SD_REMOUNT_ATTEMPTS),
+              remount_attempts, MAX_MICRO_SD_METADATA_REMOUNT_ATTEMPTS),
             LogLevel::Debug);
           return;
         }
@@ -1029,11 +1049,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
               did_write_metadata
                 ? "Successfully wrote state framework metadata"
                 : "Failed to write state framework metadata", did_write_metadata);
-
-    if (!write_to_serial)
-    {
-      log_serial_message(std::format("Const res: {}", uint8_t(logger->construction_res)));
-    }
   }
 }
 
@@ -1142,6 +1157,9 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   phase_change_packet[1] = static_cast<uint8_t>(current_phase);
   memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
 
+  persistent_data_storage->set_uint8(flight_phase_key, get_saved_phase_value());
+  persistent_data_storage->commit_data();
+
   if (lock_curr_phase_mtx)
   {
     mutex_exit(&current_phase_mtx);
@@ -1160,6 +1178,12 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
     logger->log_data(phase_change_packet, phase_change_packet_size);
   }
   shared_mutex_exit_shared(&logger_smtx);
+}
+
+FRAMEWORK_TEMPLATE_DECL
+uint8_t elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::get_saved_phase_value() const
+{
+  return (0x80 | (did_write_metadata ? 0x40 : 0x00) | static_cast<uint8_t>(current_phase));
 }
 
 FRAMEWORK_TEMPLATE_DECL

@@ -11,12 +11,9 @@ class ReliableMPU6050 : public elijah_state_framework::ReliableComponentHelper<F
 {
 public:
   ReliableMPU6050(elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
-                  EFaultKey fault_key, i2c_inst_t* i2c_inst, uint8_t i2c_addr,
+                  i2c_inst_t* i2c_inst, uint8_t i2c_addr,
                   MPU6050::GyroFullScaleRange default_gyro_range,
-                  MPU6050::AccelFullScaleRange default_accel_range, EPersistentStorageKey calib_xa_key,
-                  EPersistentStorageKey calib_ya_key, EPersistentStorageKey calib_za_key,
-                  EPersistentStorageKey calib_xg_key, EPersistentStorageKey calib_yg_key,
-                  EPersistentStorageKey calib_zg_key);
+                  MPU6050::AccelFullScaleRange default_accel_range);
 
   [[nodiscard]] MPU6050& get_mpu_6050();
 
@@ -26,30 +23,25 @@ public:
 protected:
   std::string on_init(TStateData& state) override;
   std::string on_update(TStateData& state) override;
-  virtual void update_state(TStateData& state, double xa, double ya, double za, double xg, double yg,
-                            double zg) const = 0;
 
 private:
-  EPersistentStorageKey calib_xa_key, calib_ya_key, calib_za_key;
-  EPersistentStorageKey calib_xg_key, calib_yg_key, calib_zg_key;
+  static constexpr EPersistentStorageKey calib_xa_key = EPersistentStorageKey::AccelCalibX;
+  static constexpr EPersistentStorageKey calib_ya_key = EPersistentStorageKey::AccelCalibY;
+  static constexpr EPersistentStorageKey calib_za_key = EPersistentStorageKey::AccelCalibZ;
+  static constexpr EPersistentStorageKey calib_xg_key = EPersistentStorageKey::GyroCalibX;
+  static constexpr EPersistentStorageKey calib_yg_key = EPersistentStorageKey::GyroCalibY;
+  static constexpr EPersistentStorageKey calib_zg_key = EPersistentStorageKey::GyroCalibZ;
 
   MPU6050 mpu;
 };
 
 FRAMEWORK_TEMPLATE_DECL
 ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::ReliableMPU6050(
-  elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework, EFaultKey fault_key,
+  elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
   i2c_inst_t* i2c_inst, const uint8_t i2c_addr, const MPU6050::GyroFullScaleRange default_gyro_range,
-  const MPU6050::AccelFullScaleRange default_accel_range, EPersistentStorageKey calib_xa_key,
-  EPersistentStorageKey calib_ya_key, EPersistentStorageKey calib_za_key,
-  EPersistentStorageKey calib_xg_key, EPersistentStorageKey calib_yg_key,
-  EPersistentStorageKey calib_zg_key) : elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(
-                                          framework, fault_key),
-                                        calib_xa_key(calib_xa_key),
-                                        calib_ya_key(calib_ya_key), calib_za_key(calib_za_key),
-                                        calib_xg_key(calib_xg_key), calib_yg_key(calib_yg_key),
-                                        calib_zg_key(calib_zg_key),
-                                        mpu(i2c_inst, i2c_addr, default_gyro_range, default_accel_range)
+  const MPU6050::AccelFullScaleRange default_accel_range) :
+  elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(framework, EFaultKey::MPU6050),
+  mpu(i2c_inst, i2c_addr, default_gyro_range, default_accel_range)
 {
 }
 
@@ -118,6 +110,12 @@ std::string ReliableMPU6050<FRAMEWORK_TEMPLATE_TYPES>::on_update(TStateData& sta
     return "Failed to get data";
   }
 
-  update_state(state, xa, ya, za, xg, yg, zg);
+  state.accel_x = xa;
+  state.accel_y = ya;
+  state.accel_z = za;
+  state.gyro_x = xg;
+  state.gyro_y = yg;
+  state.gyro_z = zg;
+
   return "";
 }

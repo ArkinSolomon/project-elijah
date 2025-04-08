@@ -16,17 +16,17 @@
 #define SPI0_SCK_PIN 18 // Pin 24
 #define SPI0_TX_PIN 19 // Pin 25
 #define SPI0_RX_PIN 16 // Pin 21
-#define SPI0_CSN_PIN 17 // Pin 22
+#define SD_CARD_CSN_PIN 17 // Pin 22
+#define BACKUP_BMP_280_CSN_PIN 5
 
 #define SPI1_SCK_PIN 10 // Pin 14
 #define SPI1_TX_PIN 11 // Pin 15
 #define SPI1_RX_PIN 12 // Pin 16
-#define SPI1_CSN_PIN 13 // Pin 17
+// #define SPI1_CSN_PIN 13 // Pin 17
 
 #define BAT_VOLTAGE_PIN 28 // Pin 34
 
-#define RADIO_PIN2 2
-#define RADIO_PTT_PIN 3
+#define RADIO_PTT_PIN 2
 #define RADIO_GND_PIN 6
 
 void pin_init();

@@ -26,9 +26,8 @@ bool BMP280::uses_i2c() const
   return is_i2c_interface;
 }
 
-bool BMP280::check_chip_id() const
+bool BMP280::check_chip_id(uint8_t& read_id) const
 {
-  uint8_t read_id;
   const bool success = read_byte(REG_CHIP_ID, read_id);
   return success && read_id == BMP_280_CHIP_ID;
 }

@@ -71,7 +71,7 @@ public:
   [[nodiscard]] const CalibrationData& get_calibration_data() const;
 
   [[nodiscard]] bool uses_i2c() const;
-  [[nodiscard]] bool check_chip_id() const;
+  [[nodiscard]] bool check_chip_id(uint8_t& read_id) const;
   bool soft_reset() const; // NOLINT(*-use-nodiscard)
 
   bool check_status(bool& is_measuring, bool& is_updating) const;

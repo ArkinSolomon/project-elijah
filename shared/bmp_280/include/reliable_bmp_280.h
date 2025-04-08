@@ -7,16 +7,12 @@
 #define RELIABLE_BMP_280_SETTINGS_ARG_STR \
   BMP280::FilterCoefficientSetting filter_coefficient, \
   BMP280::OssSettingPressure oss_press, \
-  BMP280::OssSettingTemperature oss_temp, \
-  EPersistentStorageKey ground_pressure_key, \
-  EPersistentStorageKey ground_temp_key
+  BMP280::OssSettingTemperature oss_temp
 
 #define RELIABLE_BMP_280_SETTINGS_ARG_INIT_LIST \
   filter_coefficient(filter_coefficient), \
   oss_press(oss_press), \
-  oss_temp(oss_temp), \
-  ground_pressure_key(ground_pressure_key), \
-  ground_temp_key(ground_temp_key)
+  oss_temp(oss_temp)
 
 #define MAX_EXPECTED_SPEED_M_PER_S 200
 
@@ -25,11 +21,11 @@ class ReliableBMP280 : public elijah_state_framework::ReliableComponentHelper<FR
 {
 public:
   ReliableBMP280(
-    elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework, const EFaultKey& fault_key,
+    elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
     i2c_inst_t* i2c, uint8_t addr, RELIABLE_BMP_280_SETTINGS_ARG_STR);
 
   ReliableBMP280(
-    elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework, const EFaultKey& fault_key,
+    elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
     spi_inst_t* spi, uint8_t csn_gpio, RELIABLE_BMP_280_SETTINGS_ARG_STR);
 
   [[nodiscard]] BMP280& get_bmp280();
@@ -37,9 +33,11 @@ public:
 protected:
   std::string on_init(TStateData& state) override;
   std::string on_update(TStateData& state) override;
-  virtual void update_state(TStateData& state, int32_t pressure, double temperature, double altitude) const = 0;
 
 private:
+  static constexpr EPersistentStorageKey ground_pressure_key = EPersistentStorageKey::GroundPressure;
+  static constexpr EPersistentStorageKey ground_temp_key = EPersistentStorageKey::GroundTemperature;
+
   BMP280 bmp;
 
   absolute_time_t last_collection_time = nil_time;
@@ -50,25 +48,22 @@ private:
   BMP280::FilterCoefficientSetting filter_coefficient;
   BMP280::OssSettingPressure oss_press;
   BMP280::OssSettingTemperature oss_temp;
-  EPersistentStorageKey ground_pressure_key, ground_temp_key;
 };
 
 FRAMEWORK_TEMPLATE_DECL
 ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::ReliableBMP280(
-  elijah_state_framework::ElijahStateFramework<TStateData, EPersistentStorageKey, EFaultKey, EFlightPhase,
-                                               TFlightPhaseController>* framework, const EFaultKey& fault_key,
+  elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
   i2c_inst_t* i2c, const uint8_t addr, RELIABLE_BMP_280_SETTINGS_ARG_STR) :
-  elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(framework, fault_key),
+  elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(framework, EFaultKey::BMP280),
   bmp(BMP280(i2c, addr)), RELIABLE_BMP_280_SETTINGS_ARG_INIT_LIST
 {
 }
 
 FRAMEWORK_TEMPLATE_DECL
 ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::ReliableBMP280(
-  elijah_state_framework::ElijahStateFramework<TStateData, EPersistentStorageKey, EFaultKey, EFlightPhase,
-                                               TFlightPhaseController>* framework, const EFaultKey& fault_key,
+  elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>* framework,
   spi_inst_t* spi, const uint8_t csn_gpio, RELIABLE_BMP_280_SETTINGS_ARG_STR) :
-  elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(framework, fault_key),
+  elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>(framework, EFaultKey::BMP280),
   bmp(BMP280(spi, csn_gpio)), RELIABLE_BMP_280_SETTINGS_ARG_INIT_LIST
 {
 }
@@ -83,9 +78,10 @@ FRAMEWORK_TEMPLATE_DECL
 std::string ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::
 on_init(TStateData& state)
 {
-  if (!bmp.check_chip_id())
+  uint8_t read_id = 0xBB;
+  if (!bmp.check_chip_id(read_id))
   {
-    return "Failed to read chip id";
+    return std::format("Failed to read chip id (read 0x{:02X})", read_id);
   }
 
   if (!bmp.read_calibration_data())
@@ -145,6 +141,8 @@ std::string ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::on_update(TStateData& stat
     last_alt = altitude;
   }
 
-  update_state(state, pressure, temperature, altitude);
+  state.pressure = pressure;
+  state.temperature = temperature;
+  state.altitude = altitude;
   return "";
 }

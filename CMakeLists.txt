@@ -13,6 +13,15 @@ option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_SPEAKER_ENABLE "Enable speaker" ON)
 option(AB_TEST "Airbrakes test" OFF)
 
+if (NOT USB_BUFF_SIZE)
+    set(USB_BUFF_SIZE 4096)
+endif()
+
+if (NOT LOG_BUFF_SIZE)
+    set(LOG_BUFF_SIZE 4096)
+endif()
+
+
 set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 
 find_program(PICOTOOL_INSTALL_LOC "picotool")
@@ -31,8 +40,8 @@ pico_sdk_init()
 
 include(FetchContent)
 FetchContent_Declare(aprs_pico
-        GIT_REPOSITORY "https://github.com/eleccoder/raspi-pico-aprs-tnc.git"
-        GIT_TAG main
+        GIT_REPOSITORY "https://github.com/ArkinSolomon/raspi-pico-aprs-tnc.git"
+        GIT_TAG dangling-ref-fix
         GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(aprs_pico)
@@ -43,7 +52,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/elijah_state_framework)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/bmp_280)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/mpu_6050)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/battery)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/standard_flight_phase_controller)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shared/standard_helpers)
 
 function(create_elijah_target SRC_DIR_NAME)
     SET(EXEC_NAME elijah-${SRC_DIR_NAME})
@@ -87,12 +96,6 @@ function(create_elijah_target SRC_DIR_NAME)
         target_compile_definitions(${EXEC_NAME} PRIVATE AIRBRAKES_TEST)
     endif (AB_TEST)
 
-    target_compile_definitions(${EXEC_NAME}
-            PUBLIC
-            $<$<CONFIG:Debug>:DEBUG>
-            $<$<CONFIG:Release>:RELEASE>
-    )
-
     if (PICO_RP2040)
         target_compile_definitions(${EXEC_NAME} PRIVATE SYS_CLK_KHZ=200000)
     endif (PICO_RP2040)
@@ -101,7 +104,14 @@ function(create_elijah_target SRC_DIR_NAME)
         target_compile_definitions(${EXEC_NAME} PRIVATE SYS_CLK_KHZ=150000)
     endif (PICO_RP2350)
 
-    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=4096 PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=6)
+    target_compile_definitions(${EXEC_NAME}
+            PUBLIC
+            $<$<CONFIG:Debug>:DEBUG>
+            $<$<CONFIG:Release>:RELEASE>
+    )
+
+    target_compile_definitions(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico INTERFACE FF_FS_NORTC=1)
+    target_compile_definitions(${EXEC_NAME} PRIVATE CFG_TUD_CDC_TX_BUFSIZE=${USB_BUFF_SIZE} STATE_FRAMEWORK_LOG_BUFF_SIZE=${LOG_BUFF_SIZE} PICO_STACK_SIZE=4096 PICO_AUDIO_PWM_MONO_DMA_CH=6)
 
     target_link_libraries(${EXEC_NAME}
             aprs_pico
@@ -139,6 +149,6 @@ function(create_elijah_target SRC_DIR_NAME)
     file(COPY ${INSTALL_FILE_NAME} DESTINATION ${CMAKE_CURRENT_BINARY_DIR} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endfunction()
 
-create_elijah_target(payload)
+create_elijah_target(payload 1024)
 create_elijah_target(override)
 create_elijah_target(airbrakes)

@@ -2,35 +2,29 @@
 
 #include <hardware/gpio.h>
 
+#include "battery.h"
 #include "elijah_state_framework.h"
 #include "override_flight_phase_controller.h"
-#include "sensors.h"
+#include "reliable_bmp_280.h"
+#include "reliable_mpu_6050.h"
+#include "standard_command_helpers.h"
 
-enum class StandardFlightPhase : uint8_t;
+#define OVERRIDE_STATE_TEMPLATE_TYPES \
+OverrideState, \
+OverridePersistentStateKey, \
+OverrideFaultKey, \
+elijah_state_framework::std_helpers::StandardFlightPhase, \
+OverrideFlightPhaseController
 
 struct OverrideState
 {
-  int32_t pressure;
-  double temperature;
-  double altitude;
-  double accel_x, accel_y, accel_z;
-  double gyro_x, gyro_y, gyro_z;
+  STANDARD_STATE_COLLECTION_DATA
   double bat_voltage, bat_percent;
 };
 
 enum class OverridePersistentStateKey : uint8_t
 {
-  LaunchKey = 1,
-  FlightPhaseKey = 2,
-  AccelCalibX = 3,
-  AccelCalibY = 4,
-  AccelCalibZ = 5,
-  GyroCalibX = 6,
-  GyroCalibY = 7,
-  GyroCalibZ = 8,
-  GroundPressure = 9,
-  GroundTemperature = 10,
-  IsCalibrated = 12,
+  STANDARD_PERSISTENT_KEYS
 };
 
 enum class OverrideFaultKey : uint8_t
@@ -40,50 +34,24 @@ enum class OverrideFaultKey : uint8_t
   MPU6050 = 3,
 };
 
-class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<
-    OverrideState, OverridePersistentStateKey, OverrideFaultKey, StandardFlightPhase, OverrideFlightPhaseController>
+extern ReliableBMP280<OVERRIDE_STATE_TEMPLATE_TYPES>* bmp280;
+extern ReliableMPU6050<OVERRIDE_STATE_TEMPLATE_TYPES>* mpu6050;
+extern Battery* battery;
+
+class OverrideStateManager final : public elijah_state_framework::ElijahStateFramework<OVERRIDE_STATE_TEMPLATE_TYPES>
 {
 public:
-  OverrideStateManager() : ElijahStateFramework("Override", OverridePersistentStateKey::LaunchKey,
-                                                OverridePersistentStateKey::FlightPhaseKey,
-                                                OverrideFaultKey::MicroSD, 100)
+  OverrideStateManager() : ElijahStateFramework("Override", 100)
   {
-    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibX, "Accelerometer calibration X",
-                                           0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
-                                           0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
-                                           0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundPressure, "Ground pressure",
-                                           static_cast<int32_t>(0));
-    get_persistent_storage()->register_key(OverridePersistentStateKey::GroundTemperature, "Ground temperature",
-                                           0.0);
-    get_persistent_storage()->register_key(OverridePersistentStateKey::IsCalibrated, "Is calibrated",
-                                           static_cast<uint8_t>(0));
+    REGISTER_STANDARD_KEYS(OverridePersistentStateKey)
     get_persistent_storage()->finish_registration();
 
     register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", [this]
-    {
-      mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
-
-      int32_t pressure;
-      double temperature;
-      bmp280->get_bmp280().read_press_temp(pressure, temperature);
-
-      get_persistent_storage()->set_int32(OverridePersistentStateKey::GroundPressure, pressure);
-      get_persistent_storage()->set_double(OverridePersistentStateKey::GroundTemperature, temperature);
-      get_persistent_storage()->set_uint8(OverridePersistentStateKey::IsCalibrated, 0xFF);
-
-      get_persistent_storage()->commit_data();
-    });
-
+    StdCommandRegistrationHelpers::register_calibration_command(this, bmp280, mpu6050);
+    StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, mpu6050);
     finish_construction();
   }
 

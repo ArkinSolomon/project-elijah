@@ -4,7 +4,7 @@
 
 #include "core1.h"
 #include "override_state_manager.h"
-#include "sensors.h"
+#include "override_sensors.h"
 
 int main()
 {

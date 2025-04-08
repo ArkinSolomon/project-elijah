@@ -53,7 +53,6 @@
   } \
 }
 
-
 #define CREATE_GETTER_FOR_TYPE(TYPE_NAME, HUMAN_NAME) \
   TYPE_NAME get_##HUMAN_NAME(PersistentKeyType key) \
   { \
@@ -66,6 +65,30 @@
     shared_mutex_exit_shared(&persistent_storage_smtx); \
     return value; \
   }
+
+#define STANDARD_PERSISTENT_KEYS \
+LaunchKey = 1, \
+FlightPhaseKey = 2, \
+AccelCalibX = 3, \
+AccelCalibY = 4, \
+AccelCalibZ = 5, \
+GyroCalibX = 6, \
+GyroCalibY = 7, \
+GyroCalibZ = 8, \
+GroundPressure = 9, \
+GroundTemperature = 10, \
+IsCalibrated = 12
+
+#define REGISTER_STANDARD_KEYS(KEY_ENUM_NAME) \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::AccelCalibX, "Accelerometer calibration X", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::AccelCalibY, "Accelerometer calibration Y", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::AccelCalibZ, "Accelerometer calibration Z", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::GyroCalibX, "Gyroscope calibration X", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::GyroCalibY, "Gyroscope calibration Y", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::GyroCalibZ, "Gyroscope calibration Z", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundPressure, "Ground pressure", static_cast<int32_t>(0)); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundTemperature, "Ground temperature", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0)); \
 
 namespace elijah_state_framework
 {

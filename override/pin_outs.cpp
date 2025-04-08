@@ -21,7 +21,8 @@ void pin_init()
 
   gpio_init(PTT_ENABLE);
   gpio_set_dir(PTT_ENABLE, GPIO_OUT);
-  gpio_put(PTT_ENABLE, true);
+  // gpio_put(PTT_ENABLE, true);
+  gpio_put(PTT_ENABLE, false);
 
   gpio_init(BMP_CS_PIN);
   gpio_set_dir(BMP_CS_PIN, GPIO_OUT);

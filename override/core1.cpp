@@ -5,7 +5,7 @@
 
 #include "override_state_manager.h"
 #include "pin_outs.h"
-#include "sensors.h"
+#include "override_sensors.h"
 #include "state_framework_logger.h"
 
 void core1::launch_core1()
@@ -37,18 +37,20 @@ void core1::core1_main()
   while (true)
   {
     constexpr uint32_t disable_ms = OVERRIDE_DISABLE_TIME_MIN * 60000;
-    if (override_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED)
+    if (override_state_manager->get_current_flight_phase() ==
+      elijah_state_framework::std_helpers::StandardFlightPhase::LANDED)
     {
       if (!is_first_detection)
       {
         land_time = get_absolute_time();
         override_state_manager->log_message(std::format("Land detected, will override PTT in {}ms", disable_ms));
         is_first_detection = true;
+        gpio_put(PTT_ENABLE, false);
       }
       else if (delayed_by_ms(land_time, disable_ms) < get_absolute_time())
       {
         override_state_manager->log_message("PTT disabled");
-        gpio_put(PTT_ENABLE, false);
+        // gpio_put(PTT_ENABLE, true);
       }
     }
 

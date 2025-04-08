@@ -17,7 +17,7 @@ elijah_state_framework::StateFrameworkLogger::StateFrameworkLogger(std::string f
   recursive_mutex_init(&write_buff_rmtx);
 
   mutex_enter_blocking(&sd_card_mtx);
-  if (mount_card())
+  if (mount_card(false))
   {
     load_old_data();
   }
@@ -34,17 +34,15 @@ bool elijah_state_framework::StateFrameworkLogger::init_driver_on_core()
   return sd_init_driver();
 }
 
-bool elijah_state_framework::StateFrameworkLogger::is_new_file() const
-{
-  return !was_file_existing;
-}
-
 void elijah_state_framework::StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
 {
-  assert(len <= LOG_BUFF_SIZE);
+  if (len < STATE_FRAMEWORK_LOG_BUFF_SIZE)
+  {
+    return;
+  }
 
   mutex_enter_blocking(&log_buff_mtx);
-  if (log_size + len > LOG_BUFF_SIZE)
+  if (log_size + len > STATE_FRAMEWORK_LOG_BUFF_SIZE)
   {
     move_to_write_buff();
   }
@@ -87,7 +85,7 @@ bool elijah_state_framework::StateFrameworkLogger::flush_write_buff(bool& did_tr
   if (!mounted)
   {
     did_try_remount = true;
-    if (mount_card())
+    if (mount_card(false))
     {
       did_mount = true;
     }
@@ -187,18 +185,40 @@ bool elijah_state_framework::StateFrameworkLogger::is_mounted() const
 
 bool elijah_state_framework::StateFrameworkLogger::mount_card()
 {
-  const FRESULT fr = f_mount(&fs, "0:", 1);
-  if (construction_res == FR_OK)
+  return mount_card(true);
+}
+
+bool elijah_state_framework::StateFrameworkLogger::mount_card(const bool lock)
+{
+  if (lock)
   {
-    construction_res = fr;
+    mutex_enter_blocking(&sd_card_mtx);
   }
+  const FRESULT fr = f_mount(&fs, "0:", 1);
   if (fr != FR_OK)
   {
+    if (lock)
+    {
+      mutex_exit(&sd_card_mtx);
+    }
     mounted = false;
     return false;
   }
 
   mounted = true;
+
+  if (!did_load_data)
+  {
+    load_old_data();
+    log_serial_message("Loaded old data");
+    did_load_data = true;
+  }
+
+  if (lock)
+  {
+    mutex_exit(&sd_card_mtx);
+  }
+
   return true;
 }
 
@@ -209,27 +229,22 @@ void elijah_state_framework::StateFrameworkLogger::move_to_write_buff()
   write_size = log_size;
   recursive_mutex_exit(&write_buff_rmtx);
 
-  log_buff = std::unique_ptr<uint8_t[]>(new uint8_t[LOG_BUFF_SIZE]);
+  log_buff = std::unique_ptr<uint8_t[]>(new uint8_t[STATE_FRAMEWORK_LOG_BUFF_SIZE]);
   log_size = 0;
 }
 
 void elijah_state_framework::StateFrameworkLogger::load_old_data()
 {
-  mutex_enter_blocking(&sd_card_mtx);
   if (!mounted)
   {
-    if (!mount_card())
-    {
-      return;
-    }
+    return;
   }
 
   FIL fil;
   FRESULT fr = f_stat(file_name.c_str(), nullptr);
-  was_file_existing = fr != FR_NO_FILE;
-  if (was_file_existing)
+  const bool was_file_existing = fr != FR_NO_FILE;
+  if (!was_file_existing)
   {
-    mutex_exit(&sd_card_mtx);
     return;
   }
 
@@ -238,7 +253,6 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   {
     f_unmount("");
     mounted = false;
-    mutex_exit(&sd_card_mtx);
     return;
   }
 
@@ -247,7 +261,6 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   {
     f_unmount("");
     mounted = false;
-    mutex_exit(&sd_card_mtx);
     f_close(&fil);
     return;
   }
@@ -257,7 +270,6 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
   fr = f_read(&fil, &read_log_pos, sizeof(next_log_pos), &bytes_read);
 
   f_close(&fil);
-  mutex_exit(&sd_card_mtx);
 
   if (fr == FR_OK)
   {

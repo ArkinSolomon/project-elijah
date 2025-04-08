@@ -14,6 +14,7 @@
       <file path="$PROJECT_DIR$/lib" />
     </libraryRoots>
     <excludeRoots>
+      <file path="$PROJECT_DIR$/build" />
       <file path="$PROJECT_DIR$/build-debug" />
       <file path="$PROJECT_DIR$/build-debug-ab" />
       <file path="$PROJECT_DIR$/build-release" />
