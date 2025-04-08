@@ -58,7 +58,7 @@ public:
     register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
     register_fault(PayloadFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
-    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050);
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, GRAVITY_CONSTANT, 0);
     StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
 
     register_command("Update clock", "Time", [this](tm time_inst)

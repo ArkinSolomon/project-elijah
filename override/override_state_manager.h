@@ -50,7 +50,8 @@ public:
     register_fault(OverrideFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_0);
     register_fault(OverrideFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
 
-    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050);
+    //TODO: CHANGE GRAVITY TO BE RIGHT!!!!
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, GRAVITY_CONSTANT, 0);
     StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
     finish_construction();
   }

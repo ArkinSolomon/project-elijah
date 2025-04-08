@@ -14,8 +14,7 @@ int32_t pressure; \
 double temperature; \
 double altitude; \
 double accel_x, accel_y, accel_z; \
-double gyro_x, gyro_y, gyro_z; \
-
+double gyro_x, gyro_y, gyro_z;
 #define REQ_COAST_PHASE_ALT_M 350
 #define MOTOR_BURNOUT_TIME_MS 1400
 #define REQ_APOGEE_DROP_M 30
@@ -63,7 +62,6 @@ namespace elijah_state_framework::std_helpers
     [[nodiscard]] double get_apogee() const;
 
   protected:
-
     [[nodiscard]] virtual bool is_calibrated() const = 0;
     virtual void log_message(const std::string& msg) const = 0;
 
@@ -164,7 +162,11 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   const double altitude = state_history.front().altitude;
   if (current_phase == StandardFlightPhase::PREFLIGHT)
   {
-    if (stdio_usb_connected() || state_history.size() < 50)
+    if (
+#ifndef USE_TEST_DATA
+      stdio_usb_connected() ||
+#endif
+      state_history.size() < 50)
     {
       return StandardFlightPhase::PREFLIGHT;
     }
@@ -183,7 +185,9 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
     {
       for (const auto& state : state_history)
       {
-        const double accel_mag = sqrt(state.accel_x * state.accel_x + state.accel_y * state.accel_y + state.accel_z * state.accel_z);
+        const double accel_mag = sqrt(
+          state.accel_x * state.accel_x + state.accel_y * state.accel_y + state.accel_z * state.accel_z);
+        log_message(std::to_string(accel_mag));
         if (accel_mag > 50)
         {
           burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);

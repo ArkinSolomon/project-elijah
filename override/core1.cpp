@@ -45,12 +45,12 @@ void core1::core1_main()
         land_time = get_absolute_time();
         override_state_manager->log_message(std::format("Land detected, will override PTT in {}ms", disable_ms));
         is_first_detection = true;
-        gpio_put(PTT_ENABLE, false);
+        gpio_put(PTT_ENABLE, true);
       }
       else if (delayed_by_ms(land_time, disable_ms) < get_absolute_time())
       {
         override_state_manager->log_message("PTT disabled");
-        // gpio_put(PTT_ENABLE, true);
+        gpio_put(PTT_ENABLE, false);
       }
     }
 

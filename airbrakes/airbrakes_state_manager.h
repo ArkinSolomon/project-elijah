@@ -50,7 +50,8 @@ public:
   AirbrakesStateManager() : ElijahStateFramework("Airbrakes", 100)
   {
     REGISTER_STANDARD_KEYS(AirbrakesPersistentKey)
-    get_persistent_storage()->register_key(AirbrakesPersistentKey::ChosenTrajectory, "Chosen trajectory", static_cast<uint8_t>(0));
+    get_persistent_storage()->register_key(AirbrakesPersistentKey::ChosenTrajectory, "Chosen trajectory",
+                                           static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
@@ -58,8 +59,9 @@ public:
     register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
     register_fault(AirbrakesFaultKey::Encoder, "Encoder", CommunicationChannel::None);
 
-    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050);
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, 0, -GRAVITY_CONSTANT);
     StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
+    StdCommandRegistrationHelpers::register_test_data_command(this);
 
     register_command("Manual target toggle", [this]
     {

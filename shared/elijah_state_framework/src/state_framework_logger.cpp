@@ -183,6 +183,11 @@ bool elijah_state_framework::StateFrameworkLogger::is_mounted() const
   return mounted;
 }
 
+bool elijah_state_framework::StateFrameworkLogger::did_load_file() const
+{
+  return did_load_data;
+}
+
 bool elijah_state_framework::StateFrameworkLogger::is_new_log_file() const
 {
   return is_new_file;

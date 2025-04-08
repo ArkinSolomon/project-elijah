@@ -26,6 +26,7 @@ namespace elijah_state_framework
     bool flush_write_buff(bool& did_try_remount, bool& did_mount);
 
     [[nodiscard]] bool is_mounted() const;
+    [[nodiscard]] bool did_load_file() const;
     [[nodiscard]] bool is_new_log_file() const;
     bool mount_card();
 

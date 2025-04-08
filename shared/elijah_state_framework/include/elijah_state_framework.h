@@ -328,48 +328,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
   TStateData collection_data;
   encode_state(nullptr, collection_data, 0, true);
 
-  if (current_phase == flight_phase_controller->initial_flight_phase())
-  {
-    speaker_controller::internal::play_status_freqs(mount_fail_freqs, mount_fail_timings, mount_fail_freq_len);
-    while (!logger->mount_card())
-    {
-      tight_loop_contents();
-    }
-
-    speaker_controller::internal::play_current_freq();
-
-    if (logger->is_new_log_file())
-    {
-      did_write_metadata = false;
-    }
-
-    if (did_write_metadata)
-    {
-      require_writing_restart_marker = true;
-    }
-    else
-    {
-      send_framework_metadata(true, false);
-    }
-  }
-  else
-  {
-    if (logger->is_mounted())
-    {
-      if (did_write_metadata)
-      {
-        require_writing_restart_marker = true;
-      }
-      else
-      {
-        send_framework_metadata(true, false);
-      }
-    }
-    else
-    {
-      set_fault(micro_sd_fault_key, true, "Failed to mount card when finishing state framework construction", false);
-    }
-  }
+  speaker_controller::internal::play_current_freq();
 
   persistent_data_storage->lock_active_data();
   send_persistent_state(persistent_data_storage->get_active_data_loc(), persistent_data_storage->get_total_byte_size());
@@ -882,8 +841,18 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
         log_message("Logger mounted (and not writing to serial), writing framework metadata", LogLevel::Debug);
       }
 
-      constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
-      logger->log_data(&packet_id, sizeof(packet_id));
+      if (logger->did_load_file() && !logger->is_new_log_file())
+      {
+        did_write_metadata = true;
+        shared_mutex_exit_shared(&logger_smtx);
+        write_to_file = false;
+      }
+
+      if (write_to_file)
+      {
+        constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::Metadata);
+        logger->log_data(&packet_id, sizeof(packet_id));
+      }
     }
     else if (!write_to_serial)
     {

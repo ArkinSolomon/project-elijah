@@ -12,7 +12,7 @@
 
 #include "pin_outs.h"
 
-void aprs::transmitAllData(const PayloadState state, int apogee)
+void aprs::transmitAllData(const PayloadState& state, int apogee)
 {
   if (!abp)
   {
@@ -38,7 +38,8 @@ void aprs::transmitAllData(const PayloadState state, int apogee)
                                       tmLand.tm_year + 1900));
   aprs::transmitData(abp, std::format("  Current Temperature: {} \370F ", state.temperature));
   aprs::transmitData(abp, std::format("  Apogee Reached: {} feet ", apogee));
-  aprs::transmitData(abp, std::format("  STEMnaut Orientation: {} ", orientation));
+  transmit_data =  std::format("  STEMnaut Orientation: {} ", orientation);
+  aprs::transmitData(abp,transmit_data);
   aprs::transmitData(abp, std::format("  Time of Landing: {}:{} ", tmLand.tm_hour, tmLand.tm_min));
   aprs::transmitData(abp, std::format("  Battery Level: {}% ", state.bat_percent));
   gpio_put(RADIO_PTT_PIN, true);
