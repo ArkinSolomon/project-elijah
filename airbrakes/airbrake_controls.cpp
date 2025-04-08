@@ -31,6 +31,13 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
   static size_t chosen_trajectory_idx = 0;
   if (!did_matrix_init)
   {
+    const uint8_t saved_trajectory = airbrakes_state_manager->get_persistent_storage()->get_uint8(
+      AirbrakesPersistentKey::ChosenTrajectory);
+    if ((saved_trajectory & 0x80) > 0)
+    {
+      chosen_trajectory_idx = saved_trajectory & 0x7F;
+    }
+
     std::vector<double> cost;
     cost.reserve(5);
 
@@ -65,6 +72,9 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
     }
 
     airbrakes_state_manager->log_message(std::format("Choosing airbrakes trajectory: {}", chosen_trajectory_idx));
+    airbrakes_state_manager->get_persistent_storage()->set_uint8(AirbrakesPersistentKey::ChosenTrajectory,
+                                                                 0x80 | static_cast<uint8_t>(chosen_trajectory_idx));
+    airbrakes_state_manager->get_persistent_storage()->commit_data();
     did_matrix_init = true;
   }
 

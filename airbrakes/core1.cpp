@@ -6,7 +6,7 @@
 #include "airbrakes_state_manager.h"
 #include "airbrake_controls.h"
 #include "pin_outs.h"
-#include "sensors.h"
+#include "airbrakes_sensors.h"
 #include "state_framework_logger.h"
 
 void core1::launch_core1()
@@ -35,6 +35,7 @@ void core1::core1_main()
   multicore_lockout_victim_init();
 
   elijah_state_framework::StateFrameworkLogger::init_driver_on_core();
+  ab_ctrl_pool = alarm_pool_create_with_unused_hardware_alarm(MAX_AIRBRAKES_CONTROL_TIMERS);
 
   uint8_t core_ready = 0xAA;
   queue_add_blocking(&core1_ready_queue, &core_ready);
@@ -49,7 +50,8 @@ void core1::core1_main()
   while (true)
   {
     critical_section_enter_blocking(&target_access_cs);
-    if (!angle_override_active && airbrakes_state_manager->get_current_flight_phase() == StandardFlightPhase::COAST)
+    if (!angle_override_active && airbrakes_state_manager->get_current_flight_phase() ==
+      elijah_state_framework::std_helpers::StandardFlightPhase::COAST)
     {
       if (!queue_is_empty(&encoder_target_queue))
       {
@@ -118,10 +120,38 @@ void core1::handle_int(const uint gpio, const uint32_t events)
     }
     last_clk = current_clk;
   }
-  else if (gpio_get(ZERO_BUTTON_PIN))
+  else if (gpio == ZERO_BUTTON_PIN)
   {
-    current_encoder_pos = 0;
+    if (events & GPIO_IRQ_EDGE_RISE)
+    {
+      if (require_zero_threshold && current_encoder_pos > ZERO_BUTTON_THRESHOLD)
+      {
+        critical_section_exit(&encoder_pos_cs);
+        return;
+      }
+
+      bool can_sched = true;
+      if (ab_debounce_timer < 0)
+      {
+        can_sched = cancel_alarm(ab_debounce_timer);
+      }
+
+      if (can_sched)
+      {
+        ab_debounce_timer = alarm_pool_add_alarm_in_ms(ab_ctrl_pool, MIN_BUTTON_PRESS_MS, ab_debounce, nullptr, false);
+      }
+    }
+    else if ((events & GPIO_IRQ_EDGE_FALL) > 0 && ab_debounce_timer < 0 && cancel_alarm(ab_debounce_timer))
+    {
+      ab_debounce_timer = -99999;
+    }
   }
 
   critical_section_exit(&encoder_pos_cs);
+}
+
+int64_t core1::ab_debounce(alarm_id_t, void*)
+{
+  current_encoder_pos = 0;
+  return 0;
 }

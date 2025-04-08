@@ -16,7 +16,7 @@ void elijah_state_framework::speaker_controller::init(uint8_t speaker_gpio)
   internal::status_pwm_chan = speaker_gpio & 0x01 > 0 ? PWM_CHAN_B : PWM_CHAN_A;
 
   critical_section_init(&internal::speaker_cs);
-  internal::alarm_pool = alarm_pool_create_with_unused_hardware_alarm(MAX_ALARM_TIMERS);
+  internal::alarm_pool = alarm_pool_create_with_unused_hardware_alarm(MAX_AIRBRAKES_CONTROL_TIMERS);
 
   internal::play_status_freqs(nullptr, nullptr, 0);
 }

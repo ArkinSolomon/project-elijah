@@ -1,40 +1,35 @@
 #pragma once
 
 #include "core1.h"
+#include "battery.h"
 #include "elijah_state_framework.h"
 #include "airbrakes_flight_phase_controller.h"
 #include "airbrake_controls.h"
-#include "sensors.h"
+#include "reliable_bmp_280.h"
+#include "reliable_mpu_6050.h"
+#include "standard_command_helpers.h"
 
-enum class StandardFlightPhase : uint8_t;
+#define AIRBRAKES_STATE_TEMPLATE_TYPES \
+  AirbrakesState, \
+  AirbrakesPersistentKey, \
+  AirbrakesFaultKey, \
+  elijah_state_framework::std_helpers::StandardFlightPhase, \
+  AirbrakesFlightPhaseController
 
 struct AirbrakesState
 {
   double ms_since_last;
-  int32_t pressure;
-  double temperature;
-  double altitude;
-  double accel_x, accel_y, accel_z;
-  double gyro_x, gyro_y, gyro_z;
+  STANDARD_STATE_COLLECTION_DATA
   double bat_voltage, bat_percent;
   int32_t curr_encoder_pos, target_encoder_pos;
   double calculated_angle;
   int32_t calculated_encoder_pos;
 };
 
-enum class AirbrakesPersistentStateKey : uint8_t
+enum class AirbrakesPersistentKey : uint8_t
 {
-  LaunchKey = 1,
-  FlightPhaseKey = 2,
-  AccelCalibX = 3,
-  AccelCalibY = 4,
-  AccelCalibZ = 5,
-  GyroCalibX = 6,
-  GyroCalibY = 7,
-  GyroCalibZ = 8,
-  GroundPressure = 9,
-  GroundTemperature = 10,
-  IsCalibrated = 12
+  STANDARD_PERSISTENT_KEYS,
+  ChosenTrajectory
 };
 
 enum class AirbrakesFaultKey : uint8_t
@@ -45,32 +40,17 @@ enum class AirbrakesFaultKey : uint8_t
   Encoder = 4
 };
 
-class AirbrakesStateManager final : public elijah_state_framework::ElijahStateFramework<
-    AirbrakesState, AirbrakesPersistentStateKey, AirbrakesFaultKey, StandardFlightPhase, AirbrakesFlightPhaseController>
+extern ReliableBMP280<AIRBRAKES_STATE_TEMPLATE_TYPES>* bmp280;
+extern ReliableMPU6050<AIRBRAKES_STATE_TEMPLATE_TYPES>* mpu6050;
+extern Battery* battery;
+
+class AirbrakesStateManager final : public elijah_state_framework::ElijahStateFramework<AIRBRAKES_STATE_TEMPLATE_TYPES>
 {
 public:
-  AirbrakesStateManager() : ElijahStateFramework("Airbrakes", AirbrakesPersistentStateKey::LaunchKey,
-                                                 AirbrakesPersistentStateKey::FlightPhaseKey,
-                                                 AirbrakesFaultKey::MicroSD, 100)
+  AirbrakesStateManager() : ElijahStateFramework("Airbrakes", 100)
   {
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibX, "Accelerometer calibration X",
-                                           0.0);
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibY, "Accelerometer calibration Y",
-                                           0.0);
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::AccelCalibZ, "Accelerometer calibration Z",
-                                           0.0);
-    get_persistent_storage()->
-      register_key(AirbrakesPersistentStateKey::GyroCalibX, "Gyroscope calibration X", 0.0);
-    get_persistent_storage()->
-      register_key(AirbrakesPersistentStateKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
-    get_persistent_storage()->
-      register_key(AirbrakesPersistentStateKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundPressure, "Ground pressure",
-                                           static_cast<int32_t>(0));
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::GroundTemperature, "Ground temperature",
-                                           0.0);
-    get_persistent_storage()->register_key(AirbrakesPersistentStateKey::IsCalibrated, "Is calibrated",
-                                           static_cast<uint8_t>(0));
+    REGISTER_STANDARD_KEYS(AirbrakesPersistentKey)
+    get_persistent_storage()->register_key(AirbrakesPersistentKey::ChosenTrajectory, "Chosen trajectory", static_cast<uint8_t>(0));
     get_persistent_storage()->finish_registration();
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
@@ -78,26 +58,8 @@ public:
     register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
     register_fault(AirbrakesFaultKey::Encoder, "Encoder", CommunicationChannel::None);
 
-    register_command("Calibrate", [this]
-    {
-      mpu6050->calibrate(100, 0, 0, -GRAVITY_CONSTANT, 0, 0, 0);
-
-      int32_t pressure;
-      double temperature;
-      bmp280->get_bmp280().read_press_temp(pressure, temperature);
-
-      get_persistent_storage()->set_int32(AirbrakesPersistentStateKey::GroundPressure, pressure);
-      get_persistent_storage()->set_double(AirbrakesPersistentStateKey::GroundTemperature, temperature);
-      get_persistent_storage()->set_uint8(AirbrakesPersistentStateKey::IsCalibrated, 0xFF);
-
-      get_persistent_storage()->commit_data();
-    });
-
-    register_command("Reset persistent storage", [this]
-    {
-      get_persistent_storage()->load_default_data();
-      mpu6050->load_calibration_data();
-    });
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050);
+    StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
 
     register_command("Manual target toggle", [this]
     {

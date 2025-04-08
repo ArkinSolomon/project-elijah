@@ -11,15 +11,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_SPEAKER_ENABLE "Enable speaker" ON)
-option(AB_TEST "Airbrakes test" OFF)
+option(TEST_DATA "Use test data" OFF)
+
+option(AIRBRAKES "Compiling for airbrakes" OFF)
+option(PAYLOAD "Compiling for payload" OFF)
+option(OVERRIDE "Compiling for override" OFF)
 
 if (NOT USB_BUFF_SIZE)
     set(USB_BUFF_SIZE 4096)
-endif()
+endif ()
 
 if (NOT LOG_BUFF_SIZE)
     set(LOG_BUFF_SIZE 4096)
-endif()
+endif ()
 
 
 set(PICO_EXTRAS_FETCH_FROM_GIT ON)
@@ -92,9 +96,21 @@ function(create_elijah_target SRC_DIR_NAME)
         target_compile_definitions(${EXEC_NAME} PRIVATE SPEAKER_ENABLE)
     endif (STATUS_SPEAKER_ENABLE)
 
-    if (AB_TEST)
-        target_compile_definitions(${EXEC_NAME} PRIVATE AIRBRAKES_TEST)
-    endif (AB_TEST)
+    if (TEST_DATA)
+        target_compile_definitions(${EXEC_NAME} PRIVATE USE_TEST_DATA)
+    endif (TEST_DATA)
+
+    if (AIRBRAKES)
+        target_compile_definitions(${EXEC_NAME} PRIVATE AIRBRAKES)
+    endif ()
+
+    if (PAYLOAD)
+        target_compile_definitions(${EXEC_NAME} PRIVATE PAYLOAD)
+    endif ()
+
+    if (OVERRIDE)
+        target_compile_definitions(${EXEC_NAME} PRIVATE OVERRIDE)
+    endif ()
 
     if (PICO_RP2040)
         target_compile_definitions(${EXEC_NAME} PRIVATE SYS_CLK_KHZ=200000)

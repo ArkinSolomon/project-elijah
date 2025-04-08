@@ -5,12 +5,8 @@
 #include "core1.h"
 #include "airbrakes_state_manager.h"
 #include "airbrake_controls.h"
-#include "sensors.h"
+#include "airbrakes_sensors.h"
 
-#define AIBRAKES_TEST
-#ifdef AIBRAKES_TEST
-#include "test_data.h"
-#endif
 
 int main()
 {
@@ -62,7 +58,7 @@ int main()
     state.ms_since_last = dt_ms;
 
     int32_t new_target_pos;
-    const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() == StandardFlightPhase::COAST;
+    const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() == elijah_state_framework::std_helpers::StandardFlightPhase::COAST;
     if (is_coast_phase)
     {
       double new_target_angle;
@@ -108,7 +104,7 @@ int main()
 
 #ifndef AIBRAKES_TEST
       const double ground_temp  =airbrakes_state_manager->get_persistent_storage()->get_double(
-              AirbrakesPersistentStateKey::GroundTemperature);
+              AirbrakesPersistentKey::GroundTemperature);
       const double dt_s = static_cast<double>(dt_ms) / 1000.0;
 #else
       constexpr double ground_temp = test_data::ground_temp;
