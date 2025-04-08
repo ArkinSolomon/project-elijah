@@ -34,19 +34,29 @@ void core1::core1_main()
   bool led_on = true;
 
   absolute_time_t next_transmission_time = nil_time;
+
+  bool did_land = false;
+  PayloadState land_state;
   while (true)
   {
     payload_state_manager->check_for_log_write();
 
-    if ((payload_state_manager->get_current_flight_phase() == StandardFlightPhase::LANDED ||
-      to_ms_since_boot(get_absolute_time()) > 5000) && (next_transmission_time == nil_time || next_transmission_time <=
-      get_absolute_time()))
+    if (payload_state_manager->get_current_flight_phase() ==
+      elijah_state_framework::std_helpers::StandardFlightPhase::LANDED && (next_transmission_time == nil_time ||
+        next_transmission_time <= get_absolute_time()))
     {
-      const PayloadState last_state = payload_state_manager->get_state_history()[0];
+      if (!did_land)
+      {
+        land_state = payload_state_manager->get_state_history()[0];
+        did_land = true;
+      }
+
       payload_state_manager->log_message("Transmit!");
+
       double apogee = payload_state_manager->get_flight_phase_controller()->get_apogee();
-      aprs::transmitAllData(last_state, 4200, last_state.time_inst);
+      aprs::transmitAllData(land_state, apogee);
       next_transmission_time = delayed_by_ms(get_absolute_time(), 5000);
+
       payload_state_manager->log_message("Transmission complete!");
     }
     gpio_put(LED_3_PIN, led_on = !led_on);

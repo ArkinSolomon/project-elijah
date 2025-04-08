@@ -1,39 +1,33 @@
 #pragma once
 
+#include "battery.h"
 #include "elijah_state_framework.h"
 #include "data_type.h"
 #include "mpu_6050.h"
 #include "payload_flight_phase_controller.h"
-#include "sensors.h"
+#include "standard_command_helpers.h"
+#include "reliable_clock/reliable_clock.h"
 #include "sensors/ds_1307/ds_1307.h"
-#include "pin_outs.h"
+
+#define PAYLOAD_STATE_TEMPLATE_TYPES \
+PayloadState, \
+PayloadPersistentKey, \
+PayloadFaultKey, \
+elijah_state_framework::std_helpers::StandardFlightPhase, \
+PayloadFlightPhaseController
 
 #define DS_1307_TEST_REG 0x37
 
 struct PayloadState
 {
   tm time_inst;
-  int32_t pressure;
-  double temperature;
-  double altitude;
-  double accel_x, accel_y, accel_z;
-  double gyro_x, gyro_y, gyro_z;
+  STANDARD_STATE_COLLECTION_DATA
   double bat_voltage, bat_percent;
 };
 
-enum class PayloadPersistentDataKey : uint8_t
+enum class PayloadPersistentKey : uint8_t
 {
-  LaunchKey = 1,
-  FlightPhaseKey = 2,
-  AccelCalibX = 3,
-  AccelCalibY = 4,
-  AccelCalibZ = 5,
-  GyroCalibX = 6,
-  GyroCalibY = 7,
-  GyroCalibZ = 8,
-  GroundPressure = 9,
-  GroundTemperature = 10,
-  IsCalibrated = 12
+  STANDARD_PERSISTENT_KEYS
 };
 
 enum class PayloadFaultKey : uint8_t
@@ -45,29 +39,17 @@ enum class PayloadFaultKey : uint8_t
   DS1307 = 5
 };
 
-class PayloadStateManager final : public elijah_state_framework::ElijahStateFramework<
-    PayloadState, PayloadPersistentDataKey, PayloadFaultKey, StandardFlightPhase, PayloadFlightPhaseController>
+extern ReliableBMP280<PAYLOAD_STATE_TEMPLATE_TYPES>* bmp280;
+extern ReliableMPU6050<PAYLOAD_STATE_TEMPLATE_TYPES>* mpu6050;
+extern Battery* battery;
+extern ReliableClock* reliable_clock;
+
+class PayloadStateManager final : public elijah_state_framework::ElijahStateFramework<PAYLOAD_STATE_TEMPLATE_TYPES>
 {
 public:
-  PayloadStateManager(): ElijahStateFramework("Payload", PayloadPersistentDataKey::LaunchKey,
-                                              PayloadPersistentDataKey::FlightPhaseKey, PayloadFaultKey::MicroSD,
-                                              100)
+  PayloadStateManager(): ElijahStateFramework("Payload", 100)
   {
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibX, "Accelerometer calibration X",
-                                           0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibY, "Accelerometer calibration Y",
-                                           0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::AccelCalibZ, "Accelerometer calibration Z",
-                                           0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibX, "Gyroscope calibration X", 0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibY, "Gyroscope calibration Y", 0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GyroCalibZ, "Gyroscope calibration Z", 0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundPressure, "Ground altitude",
-                                           static_cast<int32_t>(0));
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::GroundTemperature, "Ground temperature",
-                                           0.0);
-    get_persistent_storage()->register_key(PayloadPersistentDataKey::IsCalibrated, "Ground altitude",
-                                           static_cast<uint8_t>(0));
+    REGISTER_STANDARD_KEYS(PayloadPersistentKey)
     get_persistent_storage()->finish_registration();
 
     register_fault(PayloadFaultKey::BMP280, "BMP 280", CommunicationChannel::SPI_1);
@@ -76,26 +58,8 @@ public:
     register_fault(PayloadFaultKey::OnboardClock, "Onboard Clock", CommunicationChannel::None);
     register_fault(PayloadFaultKey::DS1307, "DS 1307", CommunicationChannel::I2C_0);
 
-    register_command("Calibrate", [this]
-    {
-      mpu6050->calibrate(100, 0, -GRAVITY_CONSTANT, 0, 0, 0, 0);
-
-      int32_t pressure;
-      double temperature;
-      bmp280->get_bmp280().read_press_temp(pressure, temperature);
-
-      get_persistent_storage()->set_int32(PayloadPersistentDataKey::GroundPressure, pressure);
-      get_persistent_storage()->set_double(PayloadPersistentDataKey::GroundTemperature, temperature);
-      get_persistent_storage()->set_uint8(PayloadPersistentDataKey::IsCalibrated, 0xFF);
-
-      get_persistent_storage()->commit_data();
-    });
-
-    register_command("Reset persistent storage", [this]
-    {
-      get_persistent_storage()->load_default_data();
-      mpu6050->load_calibration_data();
-    });
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050);
+    StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
 
     register_command("Update clock", "Time", [this](tm time_inst)
     {

@@ -4,7 +4,7 @@
 
 bool OverrideFlightPhaseController::is_calibrated() const
 {
-  return override_state_manager->get_persistent_storage()->get_double(OverridePersistentStateKey::IsCalibrated) > 0;
+  return override_state_manager->get_persistent_storage()->get_double(OverridePersistentKey::IsCalibrated) > 0;
 }
 
 void OverrideFlightPhaseController::log_message(const std::string& msg) const

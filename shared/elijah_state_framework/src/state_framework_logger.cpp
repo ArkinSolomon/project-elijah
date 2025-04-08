@@ -36,7 +36,7 @@ bool elijah_state_framework::StateFrameworkLogger::init_driver_on_core()
 
 void elijah_state_framework::StateFrameworkLogger::log_data(const uint8_t* data, const size_t len)
 {
-  if (len < STATE_FRAMEWORK_LOG_BUFF_SIZE)
+  if (len > STATE_FRAMEWORK_LOG_BUFF_SIZE)
   {
     return;
   }
@@ -183,6 +183,11 @@ bool elijah_state_framework::StateFrameworkLogger::is_mounted() const
   return mounted;
 }
 
+bool elijah_state_framework::StateFrameworkLogger::is_new_log_file() const
+{
+  return is_new_file;
+}
+
 bool elijah_state_framework::StateFrameworkLogger::mount_card()
 {
   return mount_card(true);
@@ -242,8 +247,8 @@ void elijah_state_framework::StateFrameworkLogger::load_old_data()
 
   FIL fil;
   FRESULT fr = f_stat(file_name.c_str(), nullptr);
-  const bool was_file_existing = fr != FR_NO_FILE;
-  if (!was_file_existing)
+  is_new_file = fr == FR_NO_FILE;
+  if (is_new_file)
   {
     return;
   }

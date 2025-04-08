@@ -12,7 +12,7 @@
 
 #include "pin_outs.h"
 
-void aprs::transmitAllData(PayloadState state, int apogee, tm tmLand)
+void aprs::transmitAllData(const PayloadState state, int apogee)
 {
   if (!abp)
   {
@@ -20,6 +20,7 @@ void aprs::transmitAllData(PayloadState state, int apogee, tm tmLand)
     abp = aprs_pico_init();
   }
 
+  const tm& tmLand = state.time_inst;
   std::string orientation = "Not Available";
   int x = state.accel_x;
   int y = state.accel_y;

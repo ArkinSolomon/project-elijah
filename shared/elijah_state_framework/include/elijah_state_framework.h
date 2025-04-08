@@ -103,6 +103,7 @@ namespace elijah_state_framework
   class ElijahStateFramework
   {
     friend class std_helpers::StdCommandRegistrationHelpers;
+
   public:
     ElijahStateFramework(std::string application_name, size_t state_history_size);
     virtual ~ElijahStateFramework();
@@ -179,7 +180,7 @@ namespace elijah_state_framework
     StateFrameworkLogger* logger = nullptr;
     shared_mutex_t logger_smtx;
     static constexpr EFaultKey micro_sd_fault_key = EFaultKey::MicroSD;
-    bool did_write_metadata = false;
+    bool did_write_metadata = false, require_writing_restart_marker = false;
     absolute_time_t last_mount_attempt_time = nil_time;
     uint8_t remount_attempts = 0;
 
@@ -249,10 +250,8 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
     send_framework_metadata(true, false);
 
-    log_serial_message(std::format("OLD: {}", persistent_data_storage->get_total_byte_size()));
     persistent_data_storage->set_string(this->launch_key, launch_name);
     persistent_data_storage->commit_data();
-    log_serial_message(std::format("NEW: {}", persistent_data_storage->get_total_byte_size()));
 
     log_message(std::format("New launch: {}", launch_name));
   });
@@ -336,13 +335,35 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::fin
     {
       tight_loop_contents();
     }
+
     speaker_controller::internal::play_current_freq();
+
+    if (logger->is_new_log_file())
+    {
+      did_write_metadata = false;
+    }
+
+    if (did_write_metadata)
+    {
+      require_writing_restart_marker = true;
+    }
+    else
+    {
+      send_framework_metadata(true, false);
+    }
   }
   else
   {
     if (logger->is_mounted())
     {
-      send_framework_metadata(true, false);
+      if (did_write_metadata)
+      {
+        require_writing_restart_marker = true;
+      }
+      else
+      {
+        send_framework_metadata(true, false);
+      }
     }
     else
     {
@@ -469,7 +490,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
       uint8_t tm_buff[data_type_helpers::get_size_for_data_type(DataType::Time)];
       bytes_read = stdio_get_until(reinterpret_cast<char*>(tm_buff),
                                    static_cast<int>(data_type_helpers::get_size_for_data_type(DataType::Time)),
-                                   delayed_by_ms(get_absolute_time(), 80));
+                                   delayed_by_ms(get_absolute_time(), 500));
       if (bytes_read != data_type_helpers::get_size_for_data_type(DataType::Time))
       {
         internal::log_serial_message_with_lock_opt(
@@ -563,6 +584,13 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sta
   shared_mutex_enter_blocking_shared(&logger_smtx);
   if (logger && did_write_metadata)
   {
+    if (require_writing_restart_marker)
+    {
+      require_writing_restart_marker = false;
+      constexpr auto device_restart_marker = static_cast<uint8_t>(internal::OutputPacket::DeviceRestartMarker);
+      logger->log_data(&device_restart_marker, 1);
+    }
+
     logger->log_data(encoded_output_packet, total_encoded_packet_size);
     if (phase_changed)
     {

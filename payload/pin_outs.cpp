@@ -27,7 +27,7 @@ void pin_init()
   gpio_set_function(SPI1_TX_PIN, GPIO_FUNC_SPI);
   gpio_init(SPI1_RX_PIN);
   gpio_set_function(SPI1_RX_PIN, GPIO_FUNC_SPI);
-  spi_init(spi1, 10 * 1000 * 1000);
+  spi_init(spi1, 10 * 1000 *    1000);
 
   gpio_init(SPEAKER_GND_PIN);
   gpio_set_dir(SPEAKER_GND_PIN, GPIO_OUT);

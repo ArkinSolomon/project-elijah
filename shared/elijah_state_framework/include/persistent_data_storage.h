@@ -17,6 +17,8 @@
 
 #define PERSISTENT_DATA_START_SECTOR_NUM ((PICO_FLASH_SIZE_BYTES / 4096) - 1)
 
+#define PERSISTENT_DATA_TAG_BASE 577
+
 #define CREATE_REGISTRATION_FOR_TYPE(TYPE_NAME, DATA_TYPE) \
   void register_key(PersistentKeyType key, const std::string& display_name, const TYPE_NAME default_value) \
   { \
@@ -375,7 +377,7 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::finish_re
 {
   shared_mutex_enter_blocking_exclusive(&persistent_storage_smtx);
   done_registering_keys = true;
-  tag = static_size * 8409 + data_entries.size() + string_registrations.size() * 48;
+  tag = static_size * 8409 + data_entries.size() + string_registrations.size() * 48 + PERSISTENT_DATA_TAG_BASE;
   for (internal::PersistentDataEntry<PersistentKeyType>* entry : std::views::values(data_entries))
   {
     for (auto& n : entry->get_display_value())

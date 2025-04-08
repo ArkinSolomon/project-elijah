@@ -136,7 +136,7 @@ class StateFramework:
                     case OutputPacket.PERSISTENT_STATE_UPDATE:
                         self._update_persistent_data(readable)
                     case OutputPacket.DEVICE_RESTART_MARKER:
-                        # print('Device restarted!!')
+                        logs.append(LogMessage(LogLevel.SYSTEM, "Encountered device restart marker!"))
                         pass
                     case OutputPacket.FAULTS_CHANGED:
                         fault_msg = self._update_faults(readable)

@@ -1,9 +1,9 @@
 #pragma once
+
 #include <hardware/i2c.h>
+#include <ctime>
 
-#include "payload_flight_phase_controller.h"
-
-enum class PayloadPersistentDataKey : uint8_t;
+enum class PayloadPersistentKey : uint8_t;
 struct PayloadState;
 class PayloadStateManager;
 enum class PayloadFaultKey : uint8_t;

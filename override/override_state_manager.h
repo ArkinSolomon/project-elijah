@@ -11,7 +11,7 @@
 
 #define OVERRIDE_STATE_TEMPLATE_TYPES \
 OverrideState, \
-OverridePersistentStateKey, \
+OverridePersistentKey, \
 OverrideFaultKey, \
 elijah_state_framework::std_helpers::StandardFlightPhase, \
 OverrideFlightPhaseController
@@ -22,7 +22,7 @@ struct OverrideState
   double bat_voltage, bat_percent;
 };
 
-enum class OverridePersistentStateKey : uint8_t
+enum class OverridePersistentKey : uint8_t
 {
   STANDARD_PERSISTENT_KEYS
 };
@@ -43,7 +43,7 @@ class OverrideStateManager final : public elijah_state_framework::ElijahStateFra
 public:
   OverrideStateManager() : ElijahStateFramework("Override", 100)
   {
-    REGISTER_STANDARD_KEYS(OverridePersistentStateKey)
+    REGISTER_STANDARD_KEYS(OverridePersistentKey)
     get_persistent_storage()->finish_registration();
 
     register_fault(OverrideFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);

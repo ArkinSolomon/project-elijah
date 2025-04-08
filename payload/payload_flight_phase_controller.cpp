@@ -1,11 +1,11 @@
 #include "payload_flight_phase_controller.h"
 
+#include "payload_sensors.h"
 #include "payload_state_manager.h"
 
-StandardFlightPhase PayloadFlightPhaseController::update_phase(StandardFlightPhase current_phase,
-                                                               const std::deque<PayloadState>& state_history)
+elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::update_phase(const StandardFlightPhase current_phase, const std::deque<PayloadState>& state_history)
 {
-  double last_coast_alt = max_coast_alt;
+  const double last_coast_alt = max_coast_alt;
   const StandardFlightPhase new_phase = StandardFlightPhaseController::update_phase(current_phase, state_history);
 
   if (max_coast_alt != last_coast_alt)
@@ -17,8 +17,8 @@ StandardFlightPhase PayloadFlightPhaseController::update_phase(StandardFlightPha
   return new_phase;
 }
 
-StandardFlightPhase PayloadFlightPhaseController::predict_phase(StandardFlightPhase last_known_phase,
-                                                                const std::deque<PayloadState>& state_history)
+elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::predict_phase(const StandardFlightPhase last_known_phase,
+                                                                                                     const std::deque<PayloadState>& state_history)
 {
   if (last_known_phase != StandardFlightPhase::PREFLIGHT)
   {
@@ -28,19 +28,9 @@ StandardFlightPhase PayloadFlightPhaseController::predict_phase(StandardFlightPh
   return StandardFlightPhaseController::predict_phase(last_known_phase, state_history);
 }
 
-void PayloadFlightPhaseController::extract_state_data(const PayloadState state, double& accel_x, double& accel_y,
-                                                      double& accel_z,
-                                                      double& altitude) const
-{
-  accel_x = state.accel_x;
-  accel_y = state.accel_y;
-  accel_z = state.accel_z;
-  altitude = state.altitude;
-}
-
 bool PayloadFlightPhaseController::is_calibrated() const
 {
-  return payload_state_manager->get_persistent_storage()->get_uint8(PayloadPersistentDataKey::IsCalibrated) > 0;
+  return payload_state_manager->get_persistent_storage()->get_uint8(PayloadPersistentKey::IsCalibrated) > 0;
 }
 
 void PayloadFlightPhaseController::log_message(const std::string& msg) const

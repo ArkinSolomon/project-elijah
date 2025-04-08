@@ -4,7 +4,7 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Desktop/sick launch'
+file = '/Users/arkinsolomon/Desktop/2'
 csv_path = '/Users/arkinsolomon/Downloads/launch-data.csv'
 
 with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
@@ -25,7 +25,7 @@ with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
 
         if len(logs) > 0:
             for log in logs:
-                print(log)
+                print(f'[After seq {last_seq}]{log}')
 
         if sf.state[1] == last_seq:
             continue
