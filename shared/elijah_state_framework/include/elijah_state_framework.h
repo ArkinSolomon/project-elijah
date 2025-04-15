@@ -365,14 +365,20 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
 
   critical_section_enter_blocking(&internal::usb_cs);
 
-  uint8_t command_id = 0xFF;
-  int bytes_read = stdio_get_until(reinterpret_cast<char*>(&command_id), 1, delayed_by_ms(get_absolute_time(), 10));
-  if (bytes_read != 1)
+  uint8_t command_input[3];
+  int bytes_read = stdio_get_until(reinterpret_cast<char*>(command_input), 3, delayed_by_ms(get_absolute_time(), 50));
+  if (bytes_read != 3)
   {
     critical_section_exit(&internal::usb_cs);
     return;
   }
 
+  if (command_input[0] != 0xAA || command_input[1] != 0x8E)
+  {
+    return;
+  }
+
+  uint8_t command_id = command_input[2];
   internal::log_serial_message_with_lock_opt(std::format("Received command: 0x{:02X}", command_id), false);
 
   if (!registered_commands.contains(command_id))
