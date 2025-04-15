@@ -163,10 +163,9 @@ bool BMP280::read_press_temp_alt(int32_t& pressure, double& temperature, double&
     return false;
   }
 
-  // degC to K
-  ground_temperature += 273.15;
-  altitude = ground_temperature / 0.0065 * (1 - std::pow(
-    static_cast<double>(pressure) / static_cast<double>(ground_pressure), 1 / 5.255));
+  altitude = (15 + 273.15) / 0.0065 * (1 - std::pow(static_cast<double>(pressure) / 101325.0,
+                                                    1 / 5.255)) - (15 + 273.15) /
+    0.0065 * (1 - std::pow(static_cast<double>(ground_pressure) / (101325.0), 1 / 5.255));
   return true;
 }
 

@@ -96,6 +96,13 @@ public:
       }
     });
 
+    register_command("Set encoder pos", "Encoder position", [this](const double encoder_pos)
+    {
+      critical_section_enter_blocking(&core1::encoder_pos_cs);
+      core1::current_encoder_pos = static_cast<int32_t>(std::round(encoder_pos));
+      critical_section_exit(&core1::encoder_pos_cs);
+    });
+
     finish_construction();
   }
 

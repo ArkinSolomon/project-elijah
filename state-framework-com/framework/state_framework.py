@@ -226,7 +226,7 @@ class StateFramework:
             self.fault_definitions.append(FaultDefinition.read_definition(readable, all_faults))
         self._update_last_fault()
 
-    def _update_persistent_data(self, readable: Readable):
+    def _update_persistent_data(self, readable: Readable) -> list[LogMessage]:
         tag, = struct.unpack('<I', readable.read(4))
         for entry in self.persistent_entries:
             if entry.data_type == DataType.STRING:
@@ -237,8 +237,9 @@ class StateFramework:
                 data = readable.read(get_data_type_size(entry.data_type))
                 entry.current_value, = struct.unpack(get_data_type_struct_str(entry.data_type), data)
 
-        # for entry in self.persistent_data_entries:
-        #     print(f'{entry.display_name} = {entry.current_value} ({entry.offset})')
+        log_messages = [LogMessage(LogLevel.SYSTEM, "Persistent state changed!")]
+        for entry in self.persistent_entries:
+            log_messages.append(LogMessage(LogLevel.SYSTEM, f'{entry.display_name} = {entry.current_value} ({entry.offset})'))
 
     def _update_faults(self, readable: Readable) -> LogMessage | None:
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))

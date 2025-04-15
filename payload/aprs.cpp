@@ -35,16 +35,27 @@ void aprs::transmitAllData(const PayloadState& state, int apogee)
   gpio_put(RADIO_PTT_PIN, false);
   transmit_data = std::format("  Test transmission on {}/{}/{}. ", tmLand.tm_mon, tmLand.tm_mday,
                               tmLand.tm_year + 1980);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
+
   transmit_data = std::format("  Current Temperature: {} degC ", state.temperature);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
+
   transmit_data = std::format("  Apogee Reached: {} meters ", apogee);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
+
   transmit_data = std::format("  STEMnaut Orientation: {} ", orientation);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
+
   transmit_data = std::format("  Time of Landing: {}:{} ", tmLand.tm_hour, tmLand.tm_min);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
+
   transmit_data = std::format("  Battery Level: {}% ", state.bat_percent);
+  elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
   gpio_put(RADIO_PTT_PIN, true);

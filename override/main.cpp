@@ -32,7 +32,6 @@ int main()
 
   OverrideState state{};
 
-  uint i = 0;
   while (true)
   {
     override_state_manager->check_for_commands();
