@@ -130,6 +130,7 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   if (current_phase == StandardFlightPhase::LANDED)
   {
     reset_data();
+    set_apogee(std::numeric_limits<double>::lowest());
     return StandardFlightPhase::PREFLIGHT;
   }
 

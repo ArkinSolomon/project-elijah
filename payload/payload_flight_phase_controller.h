@@ -17,8 +17,9 @@ public:
   [[nodiscard]] StandardFlightPhase predict_phase(StandardFlightPhase last_known_phase,
                                                   const std::deque<PayloadState>& state_history) override;
 
+  void set_apogee(double apogee) const override;
+
 protected:
   [[nodiscard]] bool is_calibrated() const override;
   void log_message(const std::string& msg) const override;
-  void set_apogee(double apogee) const override;
 };

@@ -34,16 +34,17 @@ void core1::core1_main()
   absolute_time_t next_transmission_time = nil_time;
 
   bool did_land = false;
-  PayloadState land_state{};
+  PayloadState land_state{.time_inst = {}};
 
-  // const double stored_apogee = payload_state_manager->get_persistent_storage()->get_double(
-  //   PayloadPersistentKey::ApogeeReached);
-  // const bool did_hit_apogee = static_cast<uint8_t>(payload_state_manager->get_current_flight_phase()) >= static_cast<
-  //   uint8_t>(
-  //   elijah_state_framework::std_helpers::StandardFlightPhase::DESCENT) && stored_apogee > 100;
-  //
+  const double stored_apogee = payload_state_manager->get_persistent_storage()->get_double(
+    PayloadPersistentKey::ApogeeReached);
+  if (stored_apogee > 0)
+  {
+    payload_state_manager->get_flight_phase_controller()->set_apogee(stored_apogee);
+  }
+
   // land_state.time_inst = payload_state_manager->get_persistent_storage()->get_time(PayloadPersistentKey::LandTime);
-  // const bool did_land_previously = land_state.time_inst.tm_year > 10;
+  // const bool did_land_previously = land_state.time_inst.tm_year > 10 && stored_apogee > 0;
 
   while (true)
   {
@@ -53,27 +54,34 @@ void core1::core1_main()
     {
       if (!did_land)
       {
-        // tm original_land_time_inst = land_state.time_inst;
+        const tm original_land_time_inst = land_state.time_inst;
         land_state = payload_state_manager->get_state_history().front();
-        // if (did_hit_apogee)
-        // {
-        //   land_state.altitude = stored_apogee;
-        // }
+
         // if (did_land_previously)
         // {
+        //   elijah_state_framework::log_serial_message("Using previous land time");
         //   land_state.time_inst = original_land_time_inst;
         // }
+        payload_state_manager->get_persistent_storage()->set_time(PayloadPersistentKey::LandTime, land_state.time_inst);
+        payload_state_manager->get_persistent_storage()->commit_data();
         did_land = true;
       }
 
       payload_state_manager->log_message("Transmit!");
 
       const double apogee = payload_state_manager->get_flight_phase_controller()->get_apogee();
-      aprs::transmitAllData(land_state, apogee);
+      aprs::transmitAllData(land_state, static_cast<int32_t>(apogee));
       next_transmission_time = delayed_by_ms(get_absolute_time(), TRANSMISSION_DELAY_MS);
 
       payload_state_manager->log_message("Transmission complete!");
+    } else if (payload_state_manager->get_current_flight_phase() ==
+      elijah_state_framework::std_helpers::StandardFlightPhase::PREFLIGHT)
+    {
+      did_land = false;
+      next_transmission_time = nil_time;
     }
+
+
     gpio_put(LED_3_PIN, led_on = !led_on);
     sleep_ms(50);
   }

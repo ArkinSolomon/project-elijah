@@ -3,7 +3,8 @@
 #include "payload_sensors.h"
 #include "payload_state_manager.h"
 
-elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::update_phase(const StandardFlightPhase current_phase, const std::deque<PayloadState>& state_history)
+elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::update_phase(
+  const StandardFlightPhase current_phase, const std::deque<PayloadState>& state_history)
 {
   const double last_coast_alt = max_coast_alt;
   const StandardFlightPhase new_phase = StandardFlightPhaseController::update_phase(current_phase, state_history);
@@ -17,8 +18,9 @@ elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseContr
   return new_phase;
 }
 
-elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::predict_phase(const StandardFlightPhase last_known_phase,
-                                                                                                     const std::deque<PayloadState>& state_history)
+elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseController::predict_phase(
+  const StandardFlightPhase last_known_phase,
+  const std::deque<PayloadState>& state_history)
 {
   if (last_known_phase != StandardFlightPhase::PREFLIGHT)
   {
@@ -38,7 +40,7 @@ void PayloadFlightPhaseController::log_message(const std::string& msg) const
   payload_state_manager->log_message(msg);
 }
 
-void PayloadFlightPhaseController::set_apogee(double apogee) const
+void PayloadFlightPhaseController::set_apogee(const double apogee) const
 {
   payload_state_manager->get_persistent_storage()->set_double(PayloadPersistentKey::ApogeeReached, apogee);
   payload_state_manager->get_persistent_storage()->commit_data();
