@@ -12,7 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ENTER_USB_BOOT_ON_EXIT "Enter USB boot on exit" OFF)
 option(STATUS_SPEAKER_ENABLE "Enable speaker" ON)
 option(TEST_DATA "Use test data" OFF)
-option(AIRBRAKES_NO_ACTUATE "Disable airbrakes actuation" )
+option(AIRBRAKES_NO_ACTUATE "Disable airbrakes actuation" OFF)
 
 option(AIRBRAKES "Compiling for airbrakes" OFF)
 option(PAYLOAD "Compiling for payload" OFF)

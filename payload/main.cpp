@@ -21,7 +21,7 @@ int main()
   multicore_lockout_victim_init();
   elijah_state_framework::init_usb_comm();
 
-  watchdog_enable(10000, true);
+  watchdog_enable(30000, true);
 
   pin_init();
 

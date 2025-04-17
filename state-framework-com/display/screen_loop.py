@@ -1,5 +1,6 @@
 import re
 from typing import Callable
+import platform
 
 from asciimatics.screen import Screen
 
@@ -118,6 +119,8 @@ def screen_loop(screen: Screen, screen_state: ScreenState, devices: list[Device]
 
     char_handled = False
     ev = screen.get_key()
+    if ev == 13 and platform.system() == 'Windows':
+        ev = 10
 
     header_selected = screen_state.focused_widget == ScreenWidget.HEADER and screen_state.input_mode != CommandInputType.NONE
     header_background = color_defs.selected_widget_background if header_selected else Screen.COLOUR_BLACK

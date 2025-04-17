@@ -68,7 +68,7 @@ class Device:
         try:
             # TODO write again after a while
             if not self.framework_request_sent:
-                self.tty.write(b'\01')
+                self.tty.write(b'\xAA\x8E\01')
                 self.logs.append(LogMessage(LogLevel.SYSTEM, 'Requesting framework metadata...'))
                 self.framework_request_sent = True
                 self.waiting_for_new_framework = True
@@ -102,7 +102,7 @@ class Device:
         self.sys_log(f"Sending command {command_id}, data: {data}")
         assert self.tty
         assert self.state_framework
-        self.tty.write(struct.pack('<3B', 0xAA, 0x8A, command_id))
+        self.tty.write(struct.pack('<3B', 0xAA, 0x8E, command_id))
 
         matching_commands = list(filter(lambda c: c.command_id == command_id, self.state_framework.commands))
         if len(matching_commands) == 0:

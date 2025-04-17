@@ -375,6 +375,8 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
 
   if (command_input[0] != 0xAA || command_input[1] != 0x8E)
   {
+    internal::log_serial_message_with_lock_opt(std::format("Invalid command prefix bytes received: 0x{:02X} and 0x{:02X}", command_input[0], command_input[1]), false);
+    critical_section_exit(&internal::usb_cs);
     return;
   }
 
