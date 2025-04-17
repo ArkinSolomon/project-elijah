@@ -54,7 +54,7 @@ void core1::core1_main()
       if (!did_land)
       {
         // tm original_land_time_inst = land_state.time_inst;
-        land_state = payload_state_manager->get_state_history()[0];
+        land_state = payload_state_manager->get_state_history().front();
         // if (did_hit_apogee)
         // {
         //   land_state.altitude = stored_apogee;

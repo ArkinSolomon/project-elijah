@@ -420,7 +420,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   case CommandInputType::String:
     {
       uint8_t str_size_buf[2];
-      bytes_read = stdio_get_until(reinterpret_cast<char*>(str_size_buf), 2, delayed_by_ms(get_absolute_time(), 250));
+      bytes_read = stdio_get_until(reinterpret_cast<char*>(str_size_buf), 2, delayed_by_ms(get_absolute_time(), 5000));
       if (bytes_read != 2)
       {
         internal::log_serial_message_with_lock_opt(
@@ -431,12 +431,13 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
 
       const uint16_t str_size = *reinterpret_cast<uint16_t*>(str_size_buf);
       char str_buff[str_size + 1];
-      bytes_read = stdio_get_until(str_buff, str_size, delayed_by_ms(get_absolute_time(), str_size * 100));
+      bytes_read = stdio_get_until(str_buff, str_size, delayed_by_ms(get_absolute_time(), str_size * 1000));
 
       if (bytes_read != str_size)
       {
         internal::log_serial_message_with_lock_opt(
           std::format("Could not read string after reading size, only read {}/{} bytes", bytes_read, str_size), false);
+        critical_section_exit(&internal::usb_cs);
         return;
       }
       str_buff[str_size] = '\0';
