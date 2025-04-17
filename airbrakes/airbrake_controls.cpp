@@ -180,24 +180,28 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
 
 int32_t encoder_pos_from_angle(const double angle)
 {
-  return static_cast<int32_t>(3.3387 * angle - 9.3383);
+  return static_cast<int32_t>(3.3387 * angle);
 }
 
 double angle_from_encoder_pos(const int32_t encoderPos)
 {
-  return (encoderPos + 9.3383) / 3.3387;
+  return encoderPos / 3.3387;
 }
 
 void airbrakes_open()
 {
+#ifndef AIRBRAKES_NO_ACTUATE
   gpio_put(MOTOR_PIN_1, true);
   gpio_put(MOTOR_PIN_2, false);
+#endif
 }
 
 void airbrakes_close()
 {
+#ifndef AIRBRAKES_NO_ACTUATE
   gpio_put(MOTOR_PIN_1, false);
   gpio_put(MOTOR_PIN_2, true);
+#endif
 }
 
 void airbrakes_freeze()

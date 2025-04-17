@@ -84,18 +84,6 @@ public:
       critical_section_exit(&core1::target_access_cs);
     });
 
-    register_command("Reconfigure MPU 6050", [this]
-    {
-      if (!mpu6050->get_mpu_6050().configure_default())
-      {
-        set_fault(AirbrakesFaultKey::MPU6050, true, "Failed to reconfigure from command input");
-      }
-      else
-      {
-        set_fault(AirbrakesFaultKey::MPU6050, false);
-      }
-    });
-
     register_command("Set encoder pos", "Encoder position", [this](const double encoder_pos)
     {
       critical_section_enter_blocking(&core1::encoder_pos_cs);

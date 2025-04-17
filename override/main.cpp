@@ -6,6 +6,10 @@
 #include "override_state_manager.h"
 #include "override_sensors.h"
 
+#ifdef USE_TEST_DATA
+#include "test_data.h"
+#endif
+
 int main()
 {
   flash_safe_execute_core_init();
@@ -39,6 +43,10 @@ int main()
     bmp280->update(state);
     mpu6050->update(state);
 
+#ifdef USE_TEST_DATA
+    OVERWRITE_STATE_WITH_TEST_DATA()
+#endif
+
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
 
@@ -46,6 +54,11 @@ int main()
     override_state_manager->check_for_log_write();
 
     gpio_put(LED_2_PIN, led_on = !led_on);
+
+#ifdef USE_TEST_DATA
+    INCREASE_TEST_DATA_IDX()
+#endif
+
     sleep_ms(50);
   }
 }

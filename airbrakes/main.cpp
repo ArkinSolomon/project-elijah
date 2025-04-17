@@ -48,6 +48,7 @@ int main()
     airbrakes_state_manager->check_for_commands();
 
     double last_alt = state.altitude;
+    const double last_pressure = state.pressure;
 
     bmp280->update(state);
     mpu6050->update(state);
@@ -58,14 +59,24 @@ int main()
     const absolute_time_t current_time = get_absolute_time();
     const int64_t dt_us = absolute_time_diff_us(last_calculated, current_time);
     const double dt_ms = static_cast<double>(dt_us) / 1000.0;
-    state.ms_since_last = dt_ms;
+   double ms_since_last = dt_ms;
+
 #ifdef USE_TEST_DATA
     OVERWRITE_STATE_WITH_TEST_DATA();
     if (test_data::test_data_enable)
     {
-      state.ms_since_last = test_data::dt[test_data::curr_idx] * 1000.0f;
+      ms_since_last = test_data::dt[test_data::curr_idx] * 1000.0f;
     }
 #endif
+
+    if (last_pressure == state.pressure)
+    {
+      state.ms_since_last += ms_since_last;
+    }
+    else
+    {
+      state.ms_since_last = ms_since_last;
+    }
 
     int32_t new_target_pos;
     const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() ==
@@ -121,10 +132,12 @@ int main()
       {
         new_target_pos = state.calculated_encoder_pos;
       }
+      state.calculated_encoder_pos = new_target_pos;;
     }
     else
     {
       state.calculated_angle = 0;
+      state.calculated_encoder_pos = 0;
       new_target_pos = 0;
     }
 
