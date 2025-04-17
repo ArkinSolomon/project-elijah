@@ -116,10 +116,10 @@ class Device:
                 encoded_time = encode_time(curr_time)
                 self.tty.write(encoded_time)
             case CommandInputType.DOUBLE:
-                encoded_data = struct.pack('<3Bd', float(data))
+                encoded_data = struct.pack('<d', float(data))
                 self.tty.write(encoded_data)
             case CommandInputType.STRING | CommandInputType.ALPHANUMERIC:
-                self.tty.write(struct.pack('<3BH', len(data)))
+                self.tty.write(struct.pack('<H', len(data)))
                 encoded_str = str.encode(data, encoding='utf-8')
                 self.tty.write(encoded_str)
             case _:
