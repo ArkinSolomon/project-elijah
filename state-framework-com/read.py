@@ -4,13 +4,16 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Downloads/pdf-override'
-csv_path = '/Users/arkinsolomon/Downloads/launch-data-pdf-ab.csv'
+file = '/Users/arkinsolomon/Downloads/Payload - Primary/pdf'
+csv_path = '/Users/arkinsolomon/Downloads/dump.csv'
 
 with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
     readable = ReadableFile(f)
     f.read(9)
     sf = StateFramework.generate_framework_configuration(readable)
+
+    print(f'Reading data for {sf.application_name}')
+
     writer = csv.writer(csv_file)
 
     var_defs = [(var_def.display_name, var_def.display_unit, var_def.variable_id) for var_def in sf.variable_definitions]
@@ -35,5 +38,5 @@ with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
         for var_def in var_defs:
             data.append(sf.state[var_def[2]])
 
-        # writer.writerow(data)
+        writer.writerow(data)
     pass

@@ -21,7 +21,7 @@ int main()
   multicore_lockout_victim_init();
   elijah_state_framework::init_usb_comm();
 
-  watchdog_enable(30000, true);
+  watchdog_enable(10000, true);
 
   pin_init();
 
@@ -41,8 +41,10 @@ int main()
   bool led_on = true;
 
   PayloadState state{{}};
+    absolute_time_t next_update_time = nil_time;
   while (true)
   {
+    next_update_time = delayed_by_ms(get_absolute_time(), 30);
     payload_state_manager->check_for_commands();
 
     bmp280->update(state);
@@ -66,6 +68,9 @@ int main()
 #endif
 
     watchdog_update();
-    sleep_ms(50);
+    while (get_absolute_time() < next_update_time)
+    {
+      tight_loop_contents();
+    }
   }
 }

@@ -29,3 +29,6 @@ class PersistentDataEntry:
         entry.display_name = read_string(readable)
 
         return entry
+
+    def __str__(self) -> str:
+        return f'{self.display_name}: {self.current_value}'

@@ -102,7 +102,6 @@ class Device:
         self.sys_log(f"Sending command {command_id}, data: {data}")
         assert self.tty
         assert self.state_framework
-        self.tty.write(struct.pack('<3B', 0xAA, 0x8E, command_id))
 
         matching_commands = list(filter(lambda c: c.command_id == command_id, self.state_framework.commands))
         if len(matching_commands) == 0:
@@ -114,15 +113,17 @@ class Device:
             case CommandInputType.TIME:
                 curr_time = time.localtime()
                 encoded_time = encode_time(curr_time)
+                self.tty.write(struct.pack('<3B', 0xAA, 0x8E, command_id))
                 self.tty.write(encoded_time)
             case CommandInputType.DOUBLE:
-                encoded_data = struct.pack('<d', float(data))
+                encoded_data = struct.pack('<3Bd', 0xAA, 0x8E, command_id, float(data))
                 self.tty.write(encoded_data)
             case CommandInputType.STRING | CommandInputType.ALPHANUMERIC:
-                self.tty.write(struct.pack('<H', len(data)))
                 encoded_str = str.encode(data, encoding='utf-8')
+                self.tty.write(struct.pack('<3BH', 0xAA, 0x8E, command_id, len(data)))
                 self.tty.write(encoded_str)
             case _:
+                self.tty.write(struct.pack('<3B', 0xAA, 0x8E, command_id))
                 pass
 
     def update(self):

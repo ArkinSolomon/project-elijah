@@ -16,11 +16,13 @@ double altitude; \
 double accel_x, accel_y, accel_z; \
 double gyro_x, gyro_y, gyro_z;
 
+#define REQ_LAUNCH_ALT_M 30
+
+// Note that we require the acceleration to drop below this value to detect coast
+#define REQ_LAUNCH_ACCEL_MS_2 45
 #define RECENT_ALT_MEDIAN_COUNT 5
 #define REQ_COAST_PHASE_ALT_M 350
-#define MOTOR_BURNOUT_TIME_MS 1400
 #define REQ_APOGEE_DROP_M 30
-
 #define MAX_LAND_ALT_DEVIATION_M 3
 
 namespace elijah_state_framework::std_helpers
@@ -68,7 +70,6 @@ namespace elijah_state_framework::std_helpers
     virtual void log_message(const std::string& msg) const = 0;
     virtual void set_apogee(double apogee) const = 0;
 
-    absolute_time_t burnout_time = nil_time;
     absolute_time_t coast_enter_time = nil_time;
     double max_coast_alt = std::numeric_limits<double>::lowest();
 
@@ -137,10 +138,6 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   const auto next_phase = static_cast<StandardFlightPhase>(static_cast<std::underlying_type_t<StandardFlightPhase>>(
     current_phase) + 1);
 
-  if (next_phase == StandardFlightPhase::LAUNCH)
-  {
-    burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);
-  }
   if (next_phase == StandardFlightPhase::COAST)
   {
     coast_enter_time = get_absolute_time();
@@ -148,6 +145,7 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   else if (next_phase == StandardFlightPhase::DESCENT)
   {
     max_coast_alt = current_state.altitude;
+    set_apogee(max_coast_alt);
   }
   return next_phase;
 }
@@ -198,19 +196,18 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
       return StandardFlightPhase::COAST;
     }
 
-    // Once altitude increases by 30m, and an acceleration is recently greater than 50m/s^2
-    if (median_alt > 30)
+    // Once altitude increases by REQ_LAUNCH_ALT_M, and an acceleration is recently greater than REQ_LAUNCH_ACCEL_MS_2
+    if (median_alt > REQ_LAUNCH_ALT_M)
     {
       for (const auto& state : state_history)
       {
         const double accel_mag = sqrt(
           state.accel_x * state.accel_x + state.accel_y * state.accel_y + state.accel_z * state.accel_z);
-        if (accel_mag > 50)
+        if (accel_mag > REQ_LAUNCH_ACCEL_MS_2)
         {
-          burnout_time = delayed_by_ms(get_absolute_time(), MOTOR_BURNOUT_TIME_MS);
           log_message(std::format(
-            "Launch detected! Entering launch phase (recent median altitude: {}m, acceleration: {}m/s^2), burnout in {}ms",
-            median_alt, accel_mag, MOTOR_BURNOUT_TIME_MS));
+            "Launch detected! Entering launch phase (recent median altitude: {}m, acceleration: {}m/s^2)",
+            median_alt, accel_mag));
           return StandardFlightPhase::LAUNCH;
         }
       }
@@ -223,17 +220,21 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
     if (median_alt > REQ_COAST_PHASE_ALT_M)
     {
       coast_enter_time = get_absolute_time();
-      float time_diff_ms = static_cast<float>(absolute_time_diff_us(burnout_time, coast_enter_time)) / 1000;
       log_message(std::format(
-        "Coast phase entered from launch phase due to median altitude, altitude ({}m) > {}m, {:.3f}ms left for motor burn",
-        median_alt, REQ_COAST_PHASE_ALT_M, time_diff_ms));
+        "Coast phase entered from launch phase due to median altitude raise, altitude ({}m > {}m)",
+        median_alt, REQ_COAST_PHASE_ALT_M));
       return StandardFlightPhase::COAST;
     }
 
-    if (get_absolute_time() >= burnout_time)
+    TStateData curr_state = state_history.front();
+    const double accel_mag = sqrt(
+      curr_state.accel_x * curr_state.accel_x + curr_state.accel_y * curr_state.accel_y + curr_state.accel_z *
+      curr_state.accel_z);
+    if (accel_mag < REQ_LAUNCH_ACCEL_MS_2)
     {
-      coast_enter_time = get_absolute_time();
-      log_message("Motor burnout, entering coast phase");
+      log_message(std::format(
+        "Coast phase entered from launch phase after acceleration drop was detected, acceleration ({}m/s^2 < {}m/s^2)",
+        accel_mag, REQ_LAUNCH_ACCEL_MS_2));
       return StandardFlightPhase::COAST;
     }
     return StandardFlightPhase::LAUNCH;
@@ -371,7 +372,6 @@ double elijah_state_framework::std_helpers::StandardFlightPhaseController<TState
 template <typename TStateData>
 void elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::reset_data()
 {
-  burnout_time = nil_time;
   coast_enter_time = nil_time;
   max_coast_alt = std::numeric_limits<double>::lowest();
 }

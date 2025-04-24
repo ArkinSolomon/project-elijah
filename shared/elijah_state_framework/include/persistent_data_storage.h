@@ -92,7 +92,7 @@ get_persistent_storage()->register_key(KEY_ENUM_NAME::GyroCalibZ, "Gyroscope cal
 get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundPressure, "Ground pressure", static_cast<int32_t>(0)); \
 get_persistent_storage()->register_key(KEY_ENUM_NAME::GroundTemperature, "Ground temperature", 0.0); \
 get_persistent_storage()->register_key(KEY_ENUM_NAME::IsCalibrated, "Is calibrated", static_cast<uint8_t>(0)); \
-get_persistent_storage()->register_key(KEY_ENUM_NAME::ApogeeReached, "Apogee reached", 0.0); \
+get_persistent_storage()->register_key(KEY_ENUM_NAME::ApogeeReached, "Apogee reached", 0.0);
 
 namespace elijah_state_framework
 {
@@ -392,6 +392,16 @@ void elijah_state_framework::PersistentDataStorage<PersistentKeyType>::finish_re
   if (tag == saved_tag)
   {
     active_data_loc = const_cast<void*>(flash_data_loc);
+
+    // Recompute string size because it originally holds size of default values
+    string_size = 0;
+    for (uint8_t i = 0; i < string_registrations.size(); i++)
+    {
+      const uint8_t* str_start_ptr = static_cast<const uint8_t*>(active_data_loc) + sizeof(tag) + static_size +
+        string_size;
+      string_size += strlen(reinterpret_cast<const char*>(str_start_ptr)) + 1;
+    }
+
     shared_mutex_exit_exclusive(&persistent_storage_smtx);
     return;
   }

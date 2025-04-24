@@ -106,7 +106,7 @@ void elijah_state_framework::internal::FaultDefinition<FaultKeyType>::encode_def
 
   if (is_com_channel)
   {
-    dest[0] |= 0x01 << 7;
+    dest[0] |= 0x80;
   }
 
   dest[1] = static_cast<uint8_t>(communication_channel);

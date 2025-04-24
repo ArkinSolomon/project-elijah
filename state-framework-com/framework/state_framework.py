@@ -134,7 +134,7 @@ class StateFramework:
                         state_changed = True
                         self.state_updated(readable)
                     case OutputPacket.PERSISTENT_STATE_UPDATE:
-                        self._update_persistent_data(readable)
+                        logs += self._update_persistent_data(readable)
                     case OutputPacket.DEVICE_RESTART_MARKER:
                         logs.append(LogMessage(LogLevel.SYSTEM, "Encountered device restart marker!"))
                     case OutputPacket.FAULTS_CHANGED:
@@ -228,18 +228,24 @@ class StateFramework:
 
     def _update_persistent_data(self, readable: Readable) -> list[LogMessage]:
         tag, = struct.unpack('<I', readable.read(4))
+        total_size = 0
+        log_messages = []
         for entry in self.persistent_entries:
             if entry.data_type == DataType.STRING:
                 entry.current_value = read_string(readable)
+                total_size += len(entry.current_value) + 1
             elif entry.data_type == DataType.TIME:
                 entry.current_value = time_helper.decode_time(readable.read(get_data_type_size(DataType.TIME)))
+                total_size += get_data_type_size(DataType.TIME)
             else:
                 data = readable.read(get_data_type_size(entry.data_type))
                 entry.current_value, = struct.unpack(get_data_type_struct_str(entry.data_type), data)
+                total_size += get_data_type_size(entry.data_type)
 
-        log_messages = [LogMessage(LogLevel.SYSTEM, "Persistent state changed!")]
-        for entry in self.persistent_entries:
-            log_messages.append(LogMessage(LogLevel.SYSTEM, f'{entry.display_name} = {entry.current_value} ({entry.offset})'))
+        log_messages.append(LogMessage(LogLevel.SYSTEM, f"Persistent state changed! (read {total_size} bytes + 4 tag bytes)"))
+        # for entry in self.persistent_entries:
+        #     log_messages.append(LogMessage(LogLevel.SYSTEM, f'{entry.display_name} = {entry.current_value} (offset: {entry.offset})'))
+        return log_messages
 
     def _update_faults(self, readable: Readable) -> LogMessage | None:
         changed_fault_bit, all_faults = struct.unpack('<BI', readable.read(5))

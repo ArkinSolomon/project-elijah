@@ -227,6 +227,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
   persistent_data_storage->on_commit([this](const void* data, const size_t data_len)
   {
+    log_message(std::format("Persistent data location: 0x{:08X}, {} bytes", reinterpret_cast<intptr_t>(data), data_len), LogLevel::Debug);
     send_persistent_state(data, data_len);
   });
 
@@ -250,7 +251,7 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
 
     send_framework_metadata(true, false);
 
-    persistent_data_storage->set_string(this->launch_key, launch_name);
+    persistent_data_storage->set_string(launch_key, launch_name);
     persistent_data_storage->commit_data();
 
     log_message(std::format("New launch: {}", launch_name));
@@ -1138,7 +1139,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
 
 FRAMEWORK_TEMPLATE_DECL
 void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set_flight_phase(
-  EFlightPhase new_phase, bool lock_curr_phase_mtx)
+  EFlightPhase new_phase, const bool lock_curr_phase_mtx)
 {
   if (lock_curr_phase_mtx)
   {
@@ -1154,15 +1155,15 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   }
   current_phase = new_phase;
 
-  size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* new state */;
+  size_t phase_change_packet_size = sizeof(uint8_t) /* output packet */ + sizeof(uint8_t) /* phase id */;
   const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
   phase_change_packet_size += phase_name.length() + 1;
+
   uint8_t phase_change_packet[phase_change_packet_size] = {
-    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged)
+    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged), static_cast<uint8_t>(current_phase)
   };
 
-  phase_change_packet[1] = static_cast<uint8_t>(current_phase);
-  memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.size() + 1);
+  memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.length() + 1);
 
   persistent_data_storage->set_uint8(flight_phase_key, get_saved_phase_value());
   persistent_data_storage->commit_data();
