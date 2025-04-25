@@ -30,9 +30,19 @@ elijah_state_framework::std_helpers::StandardFlightPhase PayloadFlightPhaseContr
   return StandardFlightPhaseController::predict_phase(last_known_phase, state_history);
 }
 
+void PayloadFlightPhaseController::restore_apogee(const double apogee)
+{
+  max_coast_alt = apogee;
+}
+
 bool PayloadFlightPhaseController::is_calibrated() const
 {
   return payload_state_manager->get_persistent_storage()->get_uint8(PayloadPersistentKey::IsCalibrated) > 0;
+}
+
+bool PayloadFlightPhaseController::is_altimeter_faulted() const
+{
+  return payload_state_manager->is_faulted(PayloadFaultKey::BMP280);
 }
 
 void PayloadFlightPhaseController::log_message(const std::string& msg) const

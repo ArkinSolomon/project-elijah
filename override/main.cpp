@@ -35,13 +35,18 @@ int main()
   bool led_on = true;
 
   OverrideState state{};
-
+  absolute_time_t next_update_time = nil_time;
   while (true)
   {
+    next_update_time = delayed_by_ms(get_absolute_time(), 30);
     override_state_manager->check_for_commands();
 
-    bmp280->update(state);
-    mpu6050->update(state);
+    if (override_state_manager->get_current_flight_phase() !=
+      elijah_state_framework::std_helpers::StandardFlightPhase::LANDED)
+    {
+      bmp280->update(state);
+      mpu6050->update(state);
+    }
 
 #ifdef USE_TEST_DATA
     OVERWRITE_STATE_WITH_TEST_DATA()
@@ -59,6 +64,9 @@ int main()
     INCREASE_TEST_DATA_IDX()
 #endif
 
-    sleep_ms(50);
+    while (get_absolute_time() < next_update_time)
+    {
+      tight_loop_contents();
+    }
   }
 }

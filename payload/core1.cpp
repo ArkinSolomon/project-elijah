@@ -40,15 +40,15 @@ void core1::core1_main()
     PayloadPersistentKey::ApogeeReached);
   if (stored_apogee > 0)
   {
-    payload_state_manager->get_flight_phase_controller()->set_apogee(stored_apogee);
+    payload_state_manager->get_flight_phase_controller()->restore_apogee(stored_apogee);
   }
 
   land_state.time_inst = payload_state_manager->get_persistent_storage()->get_time(PayloadPersistentKey::LandTime);
-  const bool did_land_previously = land_state.time_inst.tm_year > 10 && stored_apogee > 0;
+  bool did_land_previously = land_state.time_inst.tm_year > 10 && stored_apogee > 0;
 
   while (true)
   {
-    if (payload_state_manager->get_current_flight_phase() ==
+    if (payload_state_manager->get_state_history().size() > 0 && payload_state_manager->get_current_flight_phase() ==
       elijah_state_framework::std_helpers::StandardFlightPhase::LANDED && (next_transmission_time == nil_time ||
         next_transmission_time <= get_absolute_time()))
     {
@@ -81,6 +81,13 @@ void core1::core1_main()
       did_land = false;
       next_transmission_time = nil_time;
       land_state = {{}};
+      if (did_land_previously)
+      {
+        payload_state_manager->get_persistent_storage()->set_time(PayloadPersistentKey::LandTime, land_state.time_inst);
+        payload_state_manager->get_persistent_storage()->set_double(PayloadPersistentKey::ApogeeReached, 0);
+        payload_state_manager->get_persistent_storage()->commit_data();
+        did_land_previously = false;
+      }
     }
 
 

@@ -220,10 +220,10 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
   critical_section_init(&internal::usb_cs);
   shared_mutex_init(&logger_smtx);
   shared_mutex_init(&state_history_smtx);
+  mutex_init(&current_phase_mtx);
 
   flight_phase_controller = new TFlightPhaseController();
   current_phase = flight_phase_controller->initial_flight_phase();
-  mutex_init(&current_phase_mtx);
 
   persistent_data_storage->on_commit([this](const void* data, const size_t data_len)
   {
@@ -268,10 +268,10 @@ elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::ElijahSt
     const TStateData last_state = state_history.front();
     release_state_history();
 
-    mutex_enter_blocking(&current_phase_mtx);
+    // mutex_enter_blocking(&current_phase_mtx);
     const EFlightPhase next_phase = flight_phase_controller->force_next_phase(current_phase, last_state);
-    set_flight_phase(next_phase, false);
-    mutex_exit(&current_phase_mtx);
+    set_flight_phase(next_phase, true);
+    // mutex_exit(&current_phase_mtx);
   });
 
   register_command("Restart", [this]
@@ -367,7 +367,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::che
   critical_section_enter_blocking(&internal::usb_cs);
 
   uint8_t command_input[3];
-  int bytes_read = stdio_get_until(reinterpret_cast<char*>(command_input), 3, delayed_by_ms(get_absolute_time(), 50));
+  int bytes_read = stdio_get_until(reinterpret_cast<char*>(command_input), 3, delayed_by_ms(get_absolute_time(), 10));
   if (bytes_read != 3)
   {
     critical_section_exit(&internal::usb_cs);
@@ -803,12 +803,15 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     return;
   }
 
+  persistent_data_storage->lock_active_data();
+
   if (write_to_serial)
   {
     critical_section_enter_blocking(&internal::usb_cs);
   }
   else if (!write_to_file)
   {
+    persistent_data_storage->release_active_data();
     return;
   }
 
@@ -840,6 +843,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
               "Logger failed to mount (and not writing to serial), can not write framework metadata ({}/{} remount attempts)",
               remount_attempts, MAX_MICRO_SD_METADATA_REMOUNT_ATTEMPTS),
             LogLevel::Debug);
+          persistent_data_storage->release_active_data();
           return;
         }
       }
@@ -868,6 +872,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     else if (!write_to_serial)
     {
       shared_mutex_exit_shared(&logger_smtx);
+      persistent_data_storage->release_active_data();
       return;
     }
   }
@@ -878,6 +883,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     if (!write_to_serial)
     {
       critical_section_enter_blocking(&internal::usb_cs);
+      persistent_data_storage->release_active_data();
       return;
     }
   }
@@ -972,7 +978,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     logger->flush_log();
   }
 
-  persistent_data_storage->lock_active_data();
   if (write_to_serial)
   {
     internal::write_to_serial(
@@ -984,7 +989,6 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     logger->log_data(static_cast<uint8_t*>(persistent_data_storage->get_active_data_loc()),
                      persistent_data_storage->get_total_byte_size());
   }
-  persistent_data_storage->release_active_data();
 
   // Always has communication channels, so we can skip size checks
   segment_id = static_cast<uint8_t>(internal::MetadataSegment::FaultInformation);
@@ -1050,6 +1054,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::sen
     internal::write_to_serial(&segment_id, 1);
     critical_section_exit(&internal::usb_cs);
   }
+  persistent_data_storage->release_active_data();
 
   if (write_to_file)
   {
@@ -1145,6 +1150,7 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   {
     mutex_enter_blocking(&current_phase_mtx);
   }
+
   if (current_phase == new_phase)
   {
     if (lock_curr_phase_mtx)
@@ -1159,10 +1165,12 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
   const std::string phase_name = flight_phase_controller->get_phase_name(current_phase);
   phase_change_packet_size += phase_name.length() + 1;
 
-  uint8_t phase_change_packet[phase_change_packet_size] = {
-    static_cast<uint8_t>(internal::OutputPacket::PhaseChanged), static_cast<uint8_t>(current_phase)
-  };
+  auto* phase_change_packet = static_cast<uint8_t*>(malloc(phase_change_packet_size));
+  constexpr auto packet_id = static_cast<uint8_t>(internal::OutputPacket::PhaseChanged);
+  const auto curr_phase_id = static_cast<uint8_t>(current_phase);
 
+  memcpy(phase_change_packet, &packet_id, sizeof(uint8_t));
+  memcpy(phase_change_packet + 1, &curr_phase_id, sizeof(uint8_t));
   memcpy(phase_change_packet + 2, phase_name.c_str(), phase_name.length() + 1);
 
   persistent_data_storage->set_uint8(flight_phase_key, get_saved_phase_value());
@@ -1186,6 +1194,8 @@ void elijah_state_framework::ElijahStateFramework<FRAMEWORK_TEMPLATE_TYPES>::set
     logger->log_data(phase_change_packet, phase_change_packet_size);
   }
   shared_mutex_exit_shared(&logger_smtx);
+
+  free(phase_change_packet);
 }
 
 FRAMEWORK_TEMPLATE_DECL

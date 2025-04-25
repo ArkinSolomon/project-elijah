@@ -21,7 +21,7 @@ int main()
   multicore_lockout_victim_init();
   elijah_state_framework::init_usb_comm();
 
-  watchdog_enable(10000, true);
+  watchdog_enable(30000, true);
 
   pin_init();
 
@@ -41,15 +41,18 @@ int main()
   bool led_on = true;
 
   PayloadState state{{}};
-    absolute_time_t next_update_time = nil_time;
+  absolute_time_t next_update_time = nil_time;
   while (true)
   {
     next_update_time = delayed_by_ms(get_absolute_time(), 30);
     payload_state_manager->check_for_commands();
 
-    bmp280->update(state);
-    mpu6050->update(state);
-    reliable_clock->update(state);
+    if (payload_state_manager->get_current_flight_phase() != elijah_state_framework::std_helpers::StandardFlightPhase::LANDED)
+    {
+      bmp280->update(state);
+      mpu6050->update(state);
+      reliable_clock->update(state);
+    }
 
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;

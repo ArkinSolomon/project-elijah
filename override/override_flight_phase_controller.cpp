@@ -7,6 +7,11 @@ bool OverrideFlightPhaseController::is_calibrated() const
   return override_state_manager->get_persistent_storage()->get_uint8(OverridePersistentKey::IsCalibrated) > 0;
 }
 
+bool OverrideFlightPhaseController::is_altimeter_faulted() const
+{
+  return override_state_manager->is_faulted(OverrideFaultKey::BMP280);
+}
+
 void OverrideFlightPhaseController::log_message(const std::string& msg) const
 {
   override_state_manager->log_message(msg);

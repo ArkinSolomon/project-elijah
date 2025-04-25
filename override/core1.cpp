@@ -33,6 +33,7 @@ void core1::core1_main()
   bool led_on = true;
 
   bool is_first_detection = false;
+  bool has_disabled = false;
   absolute_time_t land_time = 0;
   while (true)
   {
@@ -44,14 +45,21 @@ void core1::core1_main()
       {
         land_time = get_absolute_time();
         override_state_manager->log_message(std::format("Land detected, will override PTT in {}ms", disable_ms));
-        is_first_detection = true;
         gpio_put(PTT_ENABLE, true);
+        is_first_detection = true;
       }
-      else if (delayed_by_ms(land_time, disable_ms) < get_absolute_time())
+      else if (delayed_by_ms(land_time, disable_ms) < get_absolute_time() && !has_disabled)
       {
         override_state_manager->log_message("PTT disabled");
         gpio_put(PTT_ENABLE, false);
+        has_disabled = true;
       }
+    }
+    else
+    {
+      has_disabled = false;
+      is_first_detection = false;
+      gpio_put(PTT_ENABLE, false);
     }
 
     gpio_put(LED_3_PIN, led_on = !led_on);

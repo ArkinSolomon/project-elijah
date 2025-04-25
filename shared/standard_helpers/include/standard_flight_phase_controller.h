@@ -67,6 +67,7 @@ namespace elijah_state_framework::std_helpers
 
   protected:
     [[nodiscard]] virtual bool is_calibrated() const = 0;
+    [[nodiscard]] virtual bool is_altimeter_faulted() const = 0;
     virtual void log_message(const std::string& msg) const = 0;
     virtual void set_apogee(double apogee) const = 0;
 
@@ -186,7 +187,7 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
       return StandardFlightPhase::PREFLIGHT;
     }
 
-    if (median_alt > REQ_COAST_PHASE_ALT_M)
+    if (median_alt > REQ_COAST_PHASE_ALT_M && !is_altimeter_faulted())
     {
       coast_enter_time = get_absolute_time();
       log_message(std::format(
@@ -217,7 +218,7 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   }
   else if (current_phase == StandardFlightPhase::LAUNCH)
   {
-    if (median_alt > REQ_COAST_PHASE_ALT_M)
+    if (median_alt > REQ_COAST_PHASE_ALT_M && !is_altimeter_faulted())
     {
       coast_enter_time = get_absolute_time();
       log_message(std::format(

@@ -24,12 +24,17 @@ struct AirbrakesState
   int32_t curr_encoder_pos, target_encoder_pos;
   double calculated_angle;
   int32_t calculated_encoder_pos;
+  double modified_accel_x, modified_accel_y, modified_accel_z;
+  double velocity;
 };
 
 enum class AirbrakesPersistentKey : uint8_t
 {
   STANDARD_PERSISTENT_KEYS,
-  ChosenTrajectory
+  ChosenTrajectory,
+  AdditionalAccelXCalib,
+  AdditionalAccelYCalib,
+  AdditionalAccelZCalib,
 };
 
 enum class AirbrakesFaultKey : uint8_t
@@ -52,6 +57,9 @@ public:
     REGISTER_STANDARD_KEYS(AirbrakesPersistentKey)
     get_persistent_storage()->register_key(AirbrakesPersistentKey::ChosenTrajectory, "Chosen trajectory",
                                            static_cast<uint8_t>(0));
+    get_persistent_storage()->register_key(AirbrakesPersistentKey::AdditionalAccelXCalib, "Accel calib+ X", 0.0);
+    get_persistent_storage()->register_key(AirbrakesPersistentKey::AdditionalAccelYCalib, "Accel calib+ Y", 0.0);
+    get_persistent_storage()->register_key(AirbrakesPersistentKey::AdditionalAccelZCalib, "Accel calib+ Z", 0.0);
     get_persistent_storage()->finish_registration();
 
     register_fault(AirbrakesFaultKey::MicroSD, "MicroSD", CommunicationChannel::SPI_0);
@@ -59,7 +67,7 @@ public:
     register_fault(AirbrakesFaultKey::MPU6050, "MPU 6050", CommunicationChannel::I2C_0);
     register_fault(AirbrakesFaultKey::Encoder, "Encoder", CommunicationChannel::None);
 
-    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, 0, -GRAVITY_CONSTANT);
+    StdCommandRegistrationHelpers::register_calibration_command(this, &bmp280, &mpu6050, 0, 0, GRAVITY_CONSTANT);
     StdCommandRegistrationHelpers::register_persistent_storage_reset_helper(this, &mpu6050);
     StdCommandRegistrationHelpers::register_test_data_command(this);
 
@@ -112,6 +120,10 @@ protected:
     ENCODE_STATE(curr_encoder_pos, DataType::Int32, "Current encoder", "")
     ENCODE_STATE(calculated_angle, DataType::Double, "Calculated angle", "deg")
     ENCODE_STATE(calculated_encoder_pos, DataType::Int32, "Calculated encoder", "")
+    ENCODE_STATE(modified_accel_x, DataType::Double, "Modified acceleration X", "m/s^2")
+    ENCODE_STATE(modified_accel_y, DataType::Double, "Modified acceleration Y", "m/s^2")
+    ENCODE_STATE(modified_accel_z, DataType::Double, "Modified acceleration Z", "m/s^2")
+    ENCODE_STATE(velocity, DataType::Double, "Velocity", "m/s")
   END_STATE_ENCODER()
 };
 

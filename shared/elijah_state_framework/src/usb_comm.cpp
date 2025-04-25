@@ -111,7 +111,7 @@ void elijah_state_framework::internal::encode_time(uint8_t* dest, const tm& time
   dest[4] = time_inst.tm_mday;
   dest[5] = time_inst.tm_mon;
 
-  const uint16_t full_year = time_inst.tm_year + 1980;
+  const uint16_t full_year = time_inst.tm_year;
   memcpy(dest + 6, &full_year, sizeof(full_year));
 }
 

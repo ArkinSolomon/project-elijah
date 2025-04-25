@@ -12,7 +12,7 @@
 
 #include "pin_outs.h"
 
-void aprs::transmitAllData(const PayloadState& state, int apogee)
+void aprs::transmitAllData(const PayloadState& state, double apogee)
 {
   if (!abp)
   {
@@ -22,13 +22,13 @@ void aprs::transmitAllData(const PayloadState& state, int apogee)
 
   const tm& tmLand = state.time_inst;
   std::string orientation = "Not Available";
-  const int x = state.accel_x;
-  const int y = state.accel_y;
-  const int z = state.accel_z;
+  const double x = state.accel_x;
+  const double y = state.accel_y;
+  const double z = state.accel_z;
   if (abs(x) > abs(y) && abs(x) > abs(z) && x > 0) orientation = "Port-Facing";
   if (abs(x) > abs(y) && abs(x) > abs(z) && x < 0) orientation = "Starboard-Facing";
-  if (abs(y) > abs(x) && abs(y) > abs(z) && y > 0) orientation = "Upright";
-  if (abs(y) > abs(x) && abs(y) > abs(z) && y < 0) orientation = "Inverted";
+  if (abs(y) > abs(x) && abs(y) > abs(z) && y > 0) orientation = "Inverted";
+  if (abs(y) > abs(x) && abs(y) > abs(z) && y < 0) orientation = "Upright";
   if (abs(z) > abs(x) && abs(z) > abs(y) && z > 0) orientation = "Sky-Facing";
   if (abs(z) > abs(x) && abs(z) > abs(y) && z < 0) orientation = "Ground-Facing";
 
@@ -38,15 +38,15 @@ void aprs::transmitAllData(const PayloadState& state, int apogee)
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
-  transmit_data = std::format("  Current Temperature: {} degC ", state.temperature);
+  transmit_data = std::format("  Current Temperature: {:.1f} degC ", state.temperature);
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
-  transmit_data = std::format("  Apogee Reached: {} meters ", apogee);
+  transmit_data = std::format("  Apogee Reached: {:.1f} meters ", apogee);
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
-  transmit_data = std::format("  STEMnaut Orientation: {} ", orientation);
+  transmit_data = std::format("  STEMnaut Orientation: {} ({:.3f}, {:.3f}, {:.3f})", orientation, x, y, z);
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
@@ -54,10 +54,10 @@ void aprs::transmitAllData(const PayloadState& state, int apogee)
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
 
-  transmit_data = std::format("  Battery Level: {}% ", state.bat_percent);
+  transmit_data = std::format("  Battery Level: {:.1f}% ", state.bat_percent);
   elijah_state_framework::log_serial_message(transmit_data);
   transmitData(abp, transmit_data);
-
+  sleep_ms(50);
   gpio_put(RADIO_PTT_PIN, true);
 }
 
