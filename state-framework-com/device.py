@@ -49,7 +49,7 @@ class Device:
 
         self.sys_log(f'Device connected to port {port_path}')
         self.last_known_port = port_path
-        self.tty = ReadableSerial(serial.Serial(port_path), out_file='/Users/arkinsolomon/Downloads/test.bin')
+        self.tty = ReadableSerial(serial.Serial(port_path))#, out_file='/Users/arkinsolomon/Downloads/test.bin')
         self.is_connected = True
         self.get_metadata()
 

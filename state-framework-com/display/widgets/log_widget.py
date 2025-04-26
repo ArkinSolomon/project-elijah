@@ -1,4 +1,5 @@
 import textwrap
+from functools import reduce
 from typing import Callable, Tuple
 
 from asciimatics.screen import Screen
@@ -84,15 +85,15 @@ class LogWidget(Widget):
 
             color = self._get_level_color(log.log_level)
 
-            wrapped = ['\n'.join(textwrap.wrap(line, self.width, initial_indent=header, break_long_words=False,
-                                               replace_whitespace=False))
+            wrapped_lists: list[list[str]] = [textwrap.wrap(line, self.width, initial_indent=header, subsequent_indent=(" " * (header_len - 2)) + ': ', break_long_words=False,
+                                     replace_whitespace=False)
                        for line in log.message.splitlines()]
-
+            wrapped = reduce(list.__add__, wrapped_lists, [])  # type: ignore
             if len(wrapped) == 0:
                 continue
             self.log_lines.append((wrapped[0], color))
             for i in range(1, len(wrapped)):
-                self.log_lines.append(((" " * (header_len - 2)) + ': ' + wrapped[i][header_len:], color))
+                self.log_lines.append((wrapped[i], color))
 
     def _get_level_color(self, level: LogLevel) -> int:
         match level:
