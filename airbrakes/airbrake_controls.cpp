@@ -25,17 +25,20 @@ double calculate_target_angle(double current_alt, const double current_vel, doub
   init_vel = init_vel * 3.28084; // ft/s
   double vel = current_vel * 3.28084; // ft/s
 
-  static bool did_matrix_init = false;
   static size_t chosen_trajectory_idx = 0;
-  if (!did_matrix_init)
+  if (!did_choose_trajectory)
   {
     const uint8_t saved_trajectory = airbrakes_state_manager->get_persistent_storage()->get_uint8(
-      AirbrakesPersistentKey::ChosenTrajectory);
+   AirbrakesPersistentKey::ChosenTrajectory);
     if ((saved_trajectory & 0x80) > 0)
     {
       chosen_trajectory_idx = saved_trajectory & 0x7F;
+      did_choose_trajectory = true;
     }
+  }
 
+  if (!did_choose_trajectory)
+  {
     std::vector<double> cost;
     cost.reserve(5);
 
@@ -73,7 +76,7 @@ double calculate_target_angle(double current_alt, const double current_vel, doub
     airbrakes_state_manager->get_persistent_storage()->set_uint8(AirbrakesPersistentKey::ChosenTrajectory,
                                                                  0x80 | static_cast<uint8_t>(chosen_trajectory_idx));
     airbrakes_state_manager->get_persistent_storage()->commit_data();
-    did_matrix_init = true;
+    did_choose_trajectory = true;
   }
 
   const std::vector<float>* alt_ideal = &H[chosen_trajectory_idx];
@@ -116,7 +119,7 @@ double calculate_target_angle(double current_alt, const double current_vel, doub
   static bool did_ranges_init = false;
   if (!did_ranges_init)
   {
-    // We want this on the heap because pico only has 4kb of stack, and we don't use them again
+    // We want this on the heap because pico only has 4kb of stack
     const std::unique_ptr<std::vector<double>> cd_range(new std::vector<double>(angle_range.size()));
     const std::unique_ptr<std::vector<double>> area_range(new std::vector<double>(angle_range.size()));
 

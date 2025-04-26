@@ -1,6 +1,8 @@
 #pragma once
+
 #include <cstdint>
 #include <vector>
+
 const std::vector<std::vector<float>> H = {
   {
     700, 709.385114113269, 718.770228226537, 728.155342258252, 737.540456353075, 746.925570466343, 756.310684579612,
@@ -546,6 +548,8 @@ const std::vector<std::vector<float>> V = {
     3.65523699876299, 2.15524462050214, 0.655320034517996, -0.844569695836500
   }
 };
+
+inline bool did_choose_trajectory = false;
 
 double calculate_target_angle(double current_alt, double current_vel, double init_alt, double init_vel,
                               double curr_press, double t0, double dt);

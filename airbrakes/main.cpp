@@ -61,7 +61,6 @@ int main()
     next_update_time = delayed_by_ms(get_absolute_time(), 30);
     airbrakes_state_manager->check_for_commands();
 
-    const double last_alt = state.altitude;
     double last_modified_az = state.modified_accel_z;
 
     const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() ==
@@ -109,6 +108,11 @@ int main()
       elijah_state_framework::std_helpers::StandardFlightPhase::LAUNCH;
     const bool is_preflight_phase = airbrakes_state_manager->get_current_flight_phase() ==
       elijah_state_framework::std_helpers::StandardFlightPhase::PREFLIGHT;
+
+    if (is_preflight_phase)
+    {
+      did_choose_trajectory = false;
+    }
 
     if (is_launch_phase && !has_additional_calib)
     {
