@@ -17,11 +17,14 @@ double accel_x, accel_y, accel_z; \
 double gyro_x, gyro_y, gyro_z;
 
 #define REQ_LAUNCH_ALT_M 30
-
-// Note that we require the acceleration to drop below this value to detect coast
 #define REQ_LAUNCH_ACCEL_MS_2 45
 #define RECENT_ALT_MEDIAN_COUNT 5
 #define REQ_COAST_PHASE_ALT_M 350
+#ifndef AIRBRAKES
+#define MAX_COAST_ACCEL_MS_2 REQ_LAUNCH_ACCEL_MS_2
+#else
+#define MAX_COAST_ACCEL_MS_2 0
+#endif
 #define REQ_APOGEE_DROP_M 30
 #define MAX_LAND_ALT_DEVIATION_M 3
 
@@ -179,6 +182,7 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
   if (current_phase == StandardFlightPhase::PREFLIGHT)
   {
     if (
+      // Todo? check for test data enabled or usb conn?
 #ifndef USE_TEST_DATA
       stdio_usb_connected() ||
 #endif
@@ -228,16 +232,26 @@ elijah_state_framework::std_helpers::StandardFlightPhaseController<TStateData>::
     }
 
     TStateData curr_state = state_history.front();
+#ifndef AIRBRAKES
     const double accel_mag = sqrt(
       curr_state.accel_x * curr_state.accel_x + curr_state.accel_y * curr_state.accel_y + curr_state.accel_z *
       curr_state.accel_z);
-    if (accel_mag < REQ_LAUNCH_ACCEL_MS_2)
+    if (accel_mag < MAX_COAST_ACCEL_MS_2)
     {
       log_message(std::format(
         "Coast phase entered from launch phase after acceleration drop was detected, acceleration ({}m/s^2 < {}m/s^2)",
-        accel_mag, REQ_LAUNCH_ACCEL_MS_2));
+        accel_mag, MAX_COAST_ACCEL_MS_2));
       return StandardFlightPhase::COAST;
     }
+#else
+    if (curr_state.accel_z < MAX_COAST_ACCEL_MS_2)
+    {
+      log_message(std::format(
+        "Coast phase entered from launch phase after acceleration drop was detected (uncorrected acceleration on Z), acceleration ({}m/s^2 < {}m/s^2)",
+        curr_state.accel_z, MAX_COAST_ACCEL_MS_2));
+      return StandardFlightPhase::COAST;
+    }
+#endif
     return StandardFlightPhase::LAUNCH;
   }
   else if (current_phase == StandardFlightPhase::COAST)
