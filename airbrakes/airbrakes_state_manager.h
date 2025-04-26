@@ -80,9 +80,10 @@ public:
         core1::target_encoder_pos = 0;
       }
       critical_section_exit(&core1::target_access_cs);
+      log_message(std::format("Override active: {}", core1::angle_override_active));
     });
 
-    register_command("Set angle", "Target angle (degrees)", [this](double target_angle)
+    register_command("Set target angle", "Target angle (degrees)", [this](double target_angle)
     {
       critical_section_enter_blocking(&core1::target_access_cs);
       if (core1::angle_override_active)
@@ -92,11 +93,14 @@ public:
       critical_section_exit(&core1::target_access_cs);
     });
 
-    register_command("Set encoder pos", "Encoder position", [this](const double encoder_pos)
+    register_command("Set target encoder", "Encoder position", [this](const double target_enc)
     {
-      critical_section_enter_blocking(&core1::encoder_pos_cs);
-      core1::current_encoder_pos = static_cast<int32_t>(std::round(encoder_pos));
-      critical_section_exit(&core1::encoder_pos_cs);
+      critical_section_enter_blocking(&core1::target_access_cs);
+      if (core1::angle_override_active)
+      {
+        core1::target_encoder_pos = target_enc;
+      }
+      critical_section_exit(&core1::target_access_cs);
     });
 
     finish_construction();

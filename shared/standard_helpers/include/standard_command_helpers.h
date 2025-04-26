@@ -69,7 +69,7 @@ void elijah_state_framework::std_helpers::StdCommandRegistrationHelpers::registe
   {
     test_data::curr_idx = MIN_TEST_DATA_IDX;
     test_data::test_data_enable = !test_data::test_data_enable;
-    // test_data::curr_hold_cycles = 0;
+    test_data::curr_hold_cycles = 0;
     framework->log_message(std::format("Test data enabled? {}", test_data::test_data_enable));
   });
 #endif

@@ -64,16 +64,21 @@ int main()
     const double last_alt = state.altitude;
     double last_modified_az = state.modified_accel_z;
 
-    bmp280->update(state);
-    mpu6050->update(state);
+    const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() ==
+      elijah_state_framework::std_helpers::StandardFlightPhase::COAST;
 
-    state.bat_voltage = battery->get_voltage();
-    state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
+    bmp280->update(state);
 
     const absolute_time_t current_time = get_absolute_time();
     const int64_t dt_us = absolute_time_diff_us(last_calculated, current_time);
     const double dt_ms = static_cast<double>(dt_us) / 1000.0;
     double ms_since_last = dt_ms;
+
+    const double last_ax = state.accel_x;
+    const double last_ay = state.accel_y;
+    const double last_az = state.accel_z;
+    const double last_accel_mag = std::sqrt(last_ax * last_ax + last_ay * last_ay + last_az * last_az);
+    mpu6050->update(state);
 
 #ifdef USE_TEST_DATA
     OVERWRITE_STATE_WITH_TEST_DATA();
@@ -82,6 +87,23 @@ int main()
       ms_since_last = test_data::dt[test_data::curr_idx] * 1000.0f;
     }
 #endif
+    state.ms_since_last = ms_since_last;
+
+    const double accel_mag = std::sqrt(
+      state.accel_x * state.accel_x + state.accel_y * state.accel_y + state.accel_z * state.accel_z);
+
+    if (is_coast_phase && last_accel_mag > 100 && accel_mag > 2 * last_accel_mag)
+    {
+      airbrakes_state_manager->log_message(
+        std::format("Acceleration doubled in one time step from last {}m/s^2 to {}m/s^2 (and last acceleration magnitude was > 100m/s^2)", last_accel_mag, accel_mag),
+        elijah_state_framework::LogLevel::Warning);
+      state.accel_x = last_ax;
+      state.accel_y = last_ay;
+      state.accel_z = last_az;
+    }
+
+    state.bat_voltage = battery->get_voltage();
+    state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;
 
     const bool is_launch_phase = airbrakes_state_manager->get_current_flight_phase() ==
       elijah_state_framework::std_helpers::StandardFlightPhase::LAUNCH;
@@ -156,12 +178,13 @@ int main()
           std::format("Integrating {} += ({} + {} + 2 * {}) * {} / 2", state.velocity, curr_state.accel_z,
                       prev_state.accel_z, additional_az_calib, curr_state.ms_since_last / 1000),
           elijah_state_framework::LogLevel::Debug);
-        state.velocity += (curr_state.accel_z + prev_state.accel_z + 2 * additional_az_calib) * (curr_state.ms_since_last / 1000)
+        state.velocity += (curr_state.accel_z + prev_state.accel_z + 2 * additional_az_calib) * (curr_state.
+            ms_since_last / 1000)
           / 2;
       }
 
       airbrakes_state_manager->log_message(std::format(
-        "Initial velocity from integration: {} m/s (without current state), by integrating {} states", state.velocity,
+        "Retroactivly calculated velocity from integration: {} m/s (without current state), by integrating {} states", state.velocity,
         airbrakes_state_manager->get_state_history().size() - launch_point_off));
 
       airbrakes_state_manager->release_state_history();
@@ -181,27 +204,15 @@ int main()
       has_additional_calib = false;
     }
 
-#ifdef USE_TEST_DATA
-    if (test_data::test_data_enable)
-    {
-#endif
-      state.ms_since_last = ms_since_last;
-#ifdef USE_TEST_DATA
-    }
-#endif
-
     int32_t new_target_pos;
-    const bool is_coast_phase = airbrakes_state_manager->get_current_flight_phase() ==
-      elijah_state_framework::std_helpers::StandardFlightPhase::COAST;
-
     state.modified_accel_x = state.accel_x + additional_ax_calib;
     state.modified_accel_y = state.accel_y + additional_ay_calib;
     state.modified_accel_z = state.accel_z + additional_az_calib;
     if (is_launch_phase || is_coast_phase)
     {
-      state.velocity += (state.modified_accel_x + last_modified_az) * (state.ms_since_last / 1000) / 2;
-      airbrakes_state_manager->log_message(std::format("vel: {}, expect: {}", state.velocity,
-                                                       test_data::vel_expect[test_data::curr_idx]));
+      state.velocity += (state.modified_accel_z + last_modified_az) * (state.ms_since_last / 1000) / 2;
+      airbrakes_state_manager->log_message(std::format("az {} m/s^2, az+: {} m/s^2, vel: {} m/s, expect: {} m/s, dt: {} s",test_data::accel_z[test_data::curr_idx], state.modified_accel_z, state.velocity,
+                                                       test_data::vel_expect[test_data::curr_idx], state.ms_since_last / 1000));
     }
 
     if (is_coast_phase)
@@ -209,22 +220,11 @@ int main()
       double new_target_angle;
       if (!entered_coast_phase)
       {
-        airbrakes_state_manager->log_message("Performing coast phase entrance calculations",
-                                             elijah_state_framework::LogLevel::Debug);
-        airbrakes_state_manager->lock_state_history();
-        const std::deque<AirbrakesState>* history = &airbrakes_state_manager->get_state_history();
+        initial_velocity = state.velocity;
         initial_altitude = state.altitude;
 
-        double tot_vel = 0;
-        for (size_t i = 1; i < history->size(); ++i)
-        {
-          const AirbrakesState curr_state = history->at(i);
-          const AirbrakesState prev_state = history->at(i - 1);
-
-          tot_vel += (curr_state.altitude - prev_state.altitude) / curr_state.ms_since_last;
-        }
-        initial_velocity = tot_vel / history->size();
-        airbrakes_state_manager->release_state_history();
+        airbrakes_state_manager->get_persistent_storage()->set_uint8(AirbrakesPersistentKey::ChosenTrajectory, 0);
+        airbrakes_state_manager->get_persistent_storage()->commit_data();
 
         entered_coast_phase = true;
         airbrakes_state_manager->log_message(std::format(
@@ -237,25 +237,20 @@ int main()
       const double dt_s = static_cast<double>(dt_ms) / 1000.0;
 #else
       constexpr double ground_temp = test_data::ground_temp;
-      const double dt_s = test_data::dt[test_data::curr_idx];
 #endif
       new_target_angle = state.calculated_angle = calculate_target_angle(
-        state.altitude, last_alt, initial_altitude, initial_velocity, state.pressure,
-        ground_temp, dt_s
+        state.altitude, state.velocity, initial_altitude, initial_velocity, state.pressure,
+        ground_temp, state.ms_since_last / 1000.0
       );
 
       airbrakes_state_manager->log_message(std::format(
         "calculate_target_angle({}, {}, {}, {}, {}, {}, {}) = {}",
-        state.altitude, last_alt, initial_altitude, initial_velocity,
-        state.pressure, ground_temp, dt_s, new_target_angle
+        state.altitude, state.velocity, initial_altitude, initial_velocity, state.pressure,
+        ground_temp, state.ms_since_last / 1000.0, new_target_angle
       ));
 
       new_target_pos = encoder_pos_from_angle(new_target_angle);
-      if (abs(new_target_pos - state.calculated_encoder_pos) < 2)
-      {
-        new_target_pos = state.calculated_encoder_pos;
-      }
-      state.calculated_encoder_pos = new_target_pos;;
+      state.calculated_encoder_pos = new_target_pos;
     }
     else
     {
@@ -264,11 +259,11 @@ int main()
       new_target_pos = 0;
     }
 
-    if (new_target_pos != state.calculated_encoder_pos && is_coast_phase)
+    if (is_coast_phase)
     {
-      if (queue_is_full(&core1::core0_ready_queue))
+      if (queue_is_full(&core1::encoder_target_queue))
       {
-        queue_remove_blocking(&core1::core0_ready_queue, nullptr);
+        queue_remove_blocking(&core1::encoder_target_queue, nullptr);
       }
       queue_add_blocking(&core1::encoder_target_queue, &new_target_pos);
     }

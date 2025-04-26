@@ -9,23 +9,21 @@
 #include "airbrakes_state_manager.h"
 #include "pin_outs.h"
 
-double calculate_target_angle(double current_alt, double prev_alt, double init_alt, double init_vel,
-                              const double curr_press, double T0, const double dt)
+double calculate_target_angle(double current_alt, const double current_vel, double init_alt, double init_vel,
+                              const double curr_press, double t0, const double dt)
 {
   // Constants
-  constexpr double weight = 25.07f; // lb
+  constexpr double weight = 25.72f; // lb
   constexpr double mass = weight / 32.2f; // slug
 
   constexpr double L = .0065; // temperature lapse rate in Kelvin/m
   constexpr double R = 287.06; // specific gas constant J/(kg*K)
-  T0 = T0 + 273.15; // C to K
+  t0 = t0 + 273.15; // C to K
 
   current_alt = current_alt * 3.28084; // ft
-  prev_alt = prev_alt * 3.28084; // ft
   init_alt = init_alt * 3.28084; // ft
   init_vel = init_vel * 3.28084; // ft/s
-
-  const double vel = (current_alt - prev_alt) / dt; // ft/s
+  double vel = current_vel * 3.28084; // ft/s
 
   static bool did_matrix_init = false;
   static size_t chosen_trajectory_idx = 0;
@@ -109,9 +107,9 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
 
   // Velocity error and required deceleration
   const double vel_err = vel - vel_ideal_interp;
-  const double tau = dt;
+  const double tau = dt * 5;
   const double req_decel = vel_err / tau;
-  const double rho = curr_press / (R * (T0 - current_alt / 3.28084 * L)) / 515.4;
+  const double rho = curr_press / (R * (t0 - current_alt / 3.28084 * L)) / 515.4;
   const double cd_area_req = (2 * mass * req_decel) / (rho * std::pow(vel, 2));
 
   static std::vector<double> angle_range, cd_area_range;
@@ -122,7 +120,7 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
     const std::unique_ptr<std::vector<double>> cd_range(new std::vector<double>(angle_range.size()));
     const std::unique_ptr<std::vector<double>> area_range(new std::vector<double>(angle_range.size()));
 
-    for (double a = 0; a <= 55.05; a += 0.1)
+    for (double a = 0; a <= MAX_TARGET_ANGLE + 0.5; a += 0.1)
     {
       angle_range.push_back(a);
     }
@@ -175,17 +173,12 @@ double calculate_target_angle(double current_alt, double prev_alt, double init_a
   const double slope_drag = (y2_drag - y1_drag) / (x2_drag - x1_drag);
   const double desired_angle = y1_drag + slope_drag * (cd_area_req - x1_drag);
 
-  return std::clamp(desired_angle, 0.0, 55.0);
+  return std::clamp(desired_angle, 0.0, static_cast<double>(MAX_TARGET_ANGLE));
 }
 
 int32_t encoder_pos_from_angle(const double angle)
 {
-  return static_cast<int32_t>(3.3387 * angle);
-}
-
-double angle_from_encoder_pos(const int32_t encoderPos)
-{
-  return encoderPos / 3.3387;
+  return static_cast<int32_t>(std::pow(-0.000952 * angle, 3) + std::pow(0.084948 * angle, 2) + 1.503048 * angle);
 }
 
 void airbrakes_open()

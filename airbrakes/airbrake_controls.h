@@ -547,11 +547,10 @@ const std::vector<std::vector<float>> V = {
   }
 };
 
-double calculate_target_angle(double current_alt, double prev_alt, double init_alt, double init_vel, double curr_press,
-                              double T0, double dt);
+double calculate_target_angle(double current_alt, double current_vel, double init_alt, double init_vel,
+                              double curr_press, double t0, double dt);
 
 [[nodiscard]] int32_t encoder_pos_from_angle(double angle);
-[[nodiscard]] double angle_from_encoder_pos(int32_t encoderPos);
 
 void airbrakes_open();
 void airbrakes_close();

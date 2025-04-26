@@ -15,7 +15,7 @@ void core1::launch_core1()
 
   queue_init(&core0_ready_queue, 1, 1);
   queue_init(&core1_ready_queue, 1, 1);
-  queue_init(&encoder_target_queue, 4, 16);
+  queue_init(&encoder_target_queue, sizeof(int32_t), 16);
 
   critical_section_init(&target_access_cs);
   critical_section_init(&encoder_pos_cs);

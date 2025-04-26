@@ -3,8 +3,10 @@
 #include <pico/critical_section.h>
 #include <pico/util/queue.h>
 
-#define MAX_ENCODER_POS 171
+#define MAX_ENCODER_POS 180
 #define MIN_ENCODER_POS 0
+#define MAX_TARGET_ANGLE 55
+
 #define ZERO_BUTTON_THRESHOLD 15
 
 #define MIN_BUTTON_PRESS_MS 250
@@ -20,7 +22,6 @@ namespace core1 {
     inline critical_section_t target_access_cs, encoder_pos_cs;
     inline bool angle_override_active = false;
     inline int32_t current_encoder_pos = MAX_ENCODER_POS, target_encoder_pos;
-    inline bool require_zero_threshold = true;
 
     void launch_core1();
     void core1_main();
