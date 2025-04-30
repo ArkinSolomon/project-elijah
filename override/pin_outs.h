@@ -20,7 +20,8 @@
 #define SPI0_RX_PIN 16
 
 #define SD_CS_PIN 0
-#define BMP_CS_PIN 20
+// #define BMP_CS_PIN 20
+#define BMP_CS_PIN 21 // Replacement
 
 #define SPI1_SCK_PIN 10
 #define SPI1_TX_PIN 11

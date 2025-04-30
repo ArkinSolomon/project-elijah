@@ -12,7 +12,7 @@
 
 #include "pin_outs.h"
 
-void aprs::transmitAllData(const PayloadState& state, double apogee)
+void aprs::transmit_all_data(const PayloadState& state, double apogee)
 {
   if (!abp)
   {
@@ -21,47 +21,38 @@ void aprs::transmitAllData(const PayloadState& state, double apogee)
   }
 
   const tm& tmLand = state.time_inst;
-  std::string orientation = "Not Available";
-  const double x = state.accel_x;
-  const double y = state.accel_y;
-  const double z = state.accel_z;
-  if (abs(x) > abs(y) && abs(x) > abs(z) && x > 0) orientation = "Port-Facing";
-  if (abs(x) > abs(y) && abs(x) > abs(z) && x < 0) orientation = "Starboard-Facing";
-  if (abs(y) > abs(x) && abs(y) > abs(z) && y > 0) orientation = "Inverted";
-  if (abs(y) > abs(x) && abs(y) > abs(z) && y < 0) orientation = "Upright";
-  if (abs(z) > abs(x) && abs(z) > abs(y) && z > 0) orientation = "Sky-Facing";
-  if (abs(z) > abs(x) && abs(z) > abs(y) && z < 0) orientation = "Ground-Facing";
+  const std::string orientation = get_transmit_orientation(state);
 
   gpio_put(RADIO_PTT_PIN, false);
-  transmit_data = std::format("  Test transmission on {}/{}/{}. ", tmLand.tm_mon, tmLand.tm_mday,
-                              tmLand.tm_year + 1980);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  Test transmission on {}/{}/{}. ", tmLand.tm_mon, tmLand.tm_mday,
+                             tmLand.tm_year + 1980);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
 
-  transmit_data = std::format("  Current Temperature: {:.1f} degC ", state.temperature);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  Current Temperature: {:.1f} degC ", state.temperature);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
 
-  transmit_data = std::format("  Apogee Reached: {:.1f} meters ", apogee);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  Apogee Reached: {:.1f} meters ", apogee);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
 
-  transmit_data = std::format("  STEMnaut Orientation: {} ({:.3f}, {:.3f}, {:.3f})", orientation, x, y, z);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  STEMnaut Orientation: {} ({:.3f}, {:.3f}, {:.3f})", orientation, state.accel_x, state.accel_y, state.accel_z);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
 
-  transmit_data = std::format("  Time of Landing: {}:{} ", tmLand.tm_hour, tmLand.tm_min);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  Time of Landing: {}:{} ", tmLand.tm_hour, tmLand.tm_min);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
 
-  transmit_data = std::format("  Battery Level: {:.1f}% ", state.bat_percent);
-  elijah_state_framework::log_serial_message(transmit_data);
-  transmitData(abp, transmit_data);
+  transmit_str = std::format("  Battery Level: {:.1f}% ({:.2f} volts) ", state.bat_percent, state.bat_voltage);
+  payload_state_manager->log_message(transmit_str);
+  transmit_data(abp, transmit_str);
   sleep_ms(50);
   gpio_put(RADIO_PTT_PIN, true);
 }
 
-void aprs::transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string& data)
+void aprs::transmit_data(audio_buffer_pool_t* audio_buffer_pool, const std::string& data)
 {
   sleep_ms(500);
   aprs_pico_sendAPRS(audio_buffer_pool,
@@ -76,4 +67,38 @@ void aprs::transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::strin
                      '\\', // APRS symbol table: Secondary
                      'O', // APRS symbol code:  Rocket
                      128u); // Volume    (0 ... 256)
+}
+
+std::string aprs::get_transmit_orientation(const PayloadState& state)
+{
+  std::string orientation = "Not Available";
+  const double x = state.accel_x;
+  const double y = state.accel_y;
+  const double z = state.accel_z;
+
+  if (abs(x) > abs(y) && abs(x) > abs(z) && x > 0)
+  {
+    orientation = "Port-Facing";
+  }
+  else if (abs(x) > abs(y) && abs(x) > abs(z) && x < 0)
+  {
+    orientation = "Starboard-Facing";
+  }
+  else if (abs(y) > abs(x) && abs(y) > abs(z) && y > 0)
+  {
+    orientation = "Inverted";
+  }
+  else if (abs(y) > abs(x) && abs(y) > abs(z) && y < 0)
+  {
+    orientation = "Upright";
+  }
+  else if (abs(z) > abs(x) && abs(z) > abs(y) && z > 0)
+  {
+    orientation = "Ground-Facing";
+  }
+  else if (abs(z) > abs(x) && abs(z) > abs(y) && z < 0)
+  {
+    orientation = "Sky-Facing";
+  }
+  return orientation;
 }

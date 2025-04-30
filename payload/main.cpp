@@ -6,6 +6,7 @@
 #include <pico/time.h>
 #include <pico/util/queue.h>
 
+#include "aprs.h"
 #include "core1.h"
 #include "pin_outs.h"
 #include "payload_state_manager.h"
@@ -47,12 +48,9 @@ int main()
     next_update_time = delayed_by_ms(get_absolute_time(), 30);
     payload_state_manager->check_for_commands();
 
-    if (payload_state_manager->get_current_flight_phase() != elijah_state_framework::std_helpers::StandardFlightPhase::LANDED)
-    {
-      bmp280->update(state);
-      mpu6050->update(state);
-      reliable_clock->update(state);
-    }
+    bmp280->update(state);
+    mpu6050->update(state);
+    reliable_clock->update(state);
 
     state.bat_voltage = battery->get_voltage();
     state.bat_percent = battery->calc_charge_percent(state.bat_voltage) * 100;

@@ -5,6 +5,7 @@
 #include "core1.h"
 #include "override_state_manager.h"
 #include "override_sensors.h"
+#include "../airbrakes/airbrake_controls.h"
 
 #ifdef USE_TEST_DATA
 #include "test_data.h"
@@ -41,12 +42,8 @@ int main()
     next_update_time = delayed_by_ms(get_absolute_time(), 30);
     override_state_manager->check_for_commands();
 
-    if (override_state_manager->get_current_flight_phase() !=
-      elijah_state_framework::std_helpers::StandardFlightPhase::LANDED)
-    {
-      bmp280->update(state);
-      mpu6050->update(state);
-    }
+    bmp280->update(state);
+    mpu6050->update(state);
 
 #ifdef USE_TEST_DATA
     OVERWRITE_STATE_WITH_TEST_DATA()

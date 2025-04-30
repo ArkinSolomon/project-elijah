@@ -11,6 +11,15 @@
 #include "test_data.h"
 #endif
 
+// struct ABCoreData
+// {
+//   int32_t encoder_pos, encoder_targ;
+//   int32_t press;
+//   float az, vel, dt;
+// };
+
+// std::vector<ABCoreData> core_d;
+
 int main()
 {
   flash_safe_execute_core_init();
@@ -94,7 +103,9 @@ int main()
     if (is_coast_phase && last_accel_mag > 100 && accel_mag > 2 * last_accel_mag)
     {
       airbrakes_state_manager->log_message(
-        std::format("Acceleration doubled in one time step from last {}m/s^2 to {}m/s^2 (and last acceleration magnitude was > 100m/s^2)", last_accel_mag, accel_mag),
+        std::format(
+          "Acceleration doubled in one time step from last {}m/s^2 to {}m/s^2 (and last acceleration magnitude was > 100m/s^2)",
+          last_accel_mag, accel_mag),
         elijah_state_framework::LogLevel::Warning);
       state.accel_x = last_ax;
       state.accel_y = last_ay;
@@ -144,10 +155,16 @@ int main()
       }
 
       rit = airbrakes_state_manager->get_state_history().rbegin();
+      uint64_t avg_press = 0;
+      double avg_temp = 0;
       double avg_ax = 0, avg_ay = 0, avg_az = 0;
       for (size_t i = 0; i < accel_samples; ++i)
       {
         const AirbrakesState& eval_state = *(rit + i);
+
+        avg_press += eval_state.pressure;
+        avg_temp += eval_state.temperature;
+
         avg_ax += eval_state.accel_x;
         avg_ay += eval_state.accel_y;
         avg_az += eval_state.accel_z;
@@ -156,18 +173,24 @@ int main()
       avg_ay /= accel_samples;
       avg_az /= accel_samples;
 
+      avg_press /= accel_samples;
+      avg_temp /= accel_samples;
+
       additional_ax_calib = -avg_ax;
       additional_ay_calib = -avg_ay;
       additional_az_calib = -avg_az;
       airbrakes_state_manager->log_message(std::format(
-        "Additional calibration values calculated from {} samples: x = {}, y = {}, z = {} (all m/s^2)",
-        accel_samples, additional_ax_calib, additional_ay_calib, additional_az_calib));
+        "Additional calibration values calculated from {} samples: x = {}, y = {}, z = {} (all m/s^2), ground pressure = {}Pa, grount temp = {}degC",
+        accel_samples, additional_ax_calib, additional_ay_calib, additional_az_calib, avg_press, avg_temp));
       airbrakes_state_manager->get_persistent_storage()->set_double(AirbrakesPersistentKey::AdditionalAccelXCalib,
                                                                     additional_ax_calib);
       airbrakes_state_manager->get_persistent_storage()->set_double(AirbrakesPersistentKey::AdditionalAccelYCalib,
                                                                     additional_ay_calib);
       airbrakes_state_manager->get_persistent_storage()->set_double(AirbrakesPersistentKey::AdditionalAccelZCalib,
                                                                     additional_az_calib);
+      airbrakes_state_manager->get_persistent_storage()->set_int32(AirbrakesPersistentKey::GroundPressure, avg_press);
+      airbrakes_state_manager->get_persistent_storage()->
+                               set_double(AirbrakesPersistentKey::GroundTemperature, avg_temp);
       airbrakes_state_manager->get_persistent_storage()->commit_data();
       last_modified_az += additional_ax_calib;
 
@@ -188,7 +211,8 @@ int main()
       }
 
       airbrakes_state_manager->log_message(std::format(
-        "Retroactivly calculated velocity from integration: {} m/s (without current state), by integrating {} states", state.velocity,
+        "Retroactively calculated velocity from integration: {} m/s (without current state), by integrating {} states",
+        state.velocity,
         airbrakes_state_manager->get_state_history().size() - launch_point_off));
 
       airbrakes_state_manager->release_state_history();
@@ -215,8 +239,18 @@ int main()
     if (is_launch_phase || is_coast_phase)
     {
       state.velocity += (state.modified_accel_z + last_modified_az) * (state.ms_since_last / 1000) / 2;
-      airbrakes_state_manager->log_message(std::format("az {} m/s^2, az+: {} m/s^2, vel: {} m/s, expect: {} m/s, dt: {} s",test_data::accel_z[test_data::curr_idx], state.modified_accel_z, state.velocity,
-                                                       test_data::vel_expect[test_data::curr_idx], state.ms_since_last / 1000));
+      airbrakes_state_manager->log_message(std::format("az+: {} m/s^2, vel: {} m/s, dt: {} s"
+#ifdef USE_TEST_DATA
+                                                       ", expected vel: {} m/s"
+#endif
+                                                       ,
+                                                       state.modified_accel_z, state.velocity,
+                                                       state.ms_since_last / 1000
+#ifdef USE_TEST_DATA
+                                                       , test_data::vel_expect[test_data::curr_idx]
+#endif
+
+      ));
     }
 
     if (is_coast_phase)
@@ -281,6 +315,27 @@ int main()
     critical_section_enter_blocking(&core1::encoder_pos_cs);
     state.curr_encoder_pos = core1::current_encoder_pos;
     critical_section_exit(&core1::encoder_pos_cs);
+
+    // if (is_launch_phase || is_coast_phase)
+    // {
+    //   ABCoreData d = {
+    //     state.curr_encoder_pos,
+    //     state.target_encoder_pos,
+    //     state.pressure,
+    //     static_cast<float>(state.modified_accel_z),
+    //     static_cast<float>(state.velocity),
+    //     static_cast<float>(state.ms_since_last / 1000.0)
+    //   };
+    //   core_d.push_back(d);
+    // }
+    //
+    // if (stdio_usb_connected() && !core_d.empty())
+    // {
+    //   for (const auto& d : core_d)
+    //   {
+    //     elijah_state_framework::log_serial_message(std::format("{}, {}, {}, {}, {}, {}", d.encoder_pos, d.encoder_targ, d.press, d.az, d.vel, d.dt));
+    //   }
+    // }
 
     airbrakes_state_manager->state_changed(state);
     airbrakes_state_manager->check_for_log_write();

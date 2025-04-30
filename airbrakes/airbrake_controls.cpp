@@ -29,7 +29,7 @@ double calculate_target_angle(double current_alt, const double current_vel, doub
   if (!did_choose_trajectory)
   {
     const uint8_t saved_trajectory = airbrakes_state_manager->get_persistent_storage()->get_uint8(
-   AirbrakesPersistentKey::ChosenTrajectory);
+      AirbrakesPersistentKey::ChosenTrajectory);
     if ((saved_trajectory & 0x80) > 0)
     {
       chosen_trajectory_idx = saved_trajectory & 0x7F;
@@ -181,7 +181,7 @@ double calculate_target_angle(double current_alt, const double current_vel, doub
 
 int32_t encoder_pos_from_angle(const double angle)
 {
-  return static_cast<int32_t>(std::pow(-0.000952 * angle, 3) + std::pow(0.084948 * angle, 2) + 1.503048 * angle);
+  return static_cast<int32_t>(-0.000952 * std::pow(angle, 3) + 0.084948 * std::pow(angle, 2) + 1.503048 * angle);
 }
 
 void airbrakes_open()

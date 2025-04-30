@@ -8,8 +8,9 @@
 namespace aprs
 {
     inline audio_buffer_pool_t* abp = nullptr;
-    inline std::string transmit_data;
+    inline std::string transmit_str;
 
-    void transmitAllData(const PayloadState& state, double apogee);
-    void transmitData(audio_buffer_pool_t* audio_buffer_pool, const std::string& data);
+    void transmit_all_data(const PayloadState& state, double apogee);
+    void transmit_data(audio_buffer_pool_t* audio_buffer_pool, const std::string& data);
+    std::string get_transmit_orientation(const PayloadState& state);
 }

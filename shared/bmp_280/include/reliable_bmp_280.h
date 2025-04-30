@@ -15,6 +15,7 @@
   oss_temp(oss_temp)
 
 #define MAX_EXPECTED_SPEED_M_PER_S 200
+#define MIN_PRESSURE 79000
 
 FRAMEWORK_TEMPLATE_DECL
 class ReliableBMP280 : public elijah_state_framework::ReliableComponentHelper<FRAMEWORK_TEMPLATE_TYPES>
@@ -108,6 +109,11 @@ std::string ReliableBMP280<FRAMEWORK_TEMPLATE_TYPES>::on_update(TStateData& stat
   if (!bmp.read_press_temp_alt(pressure, temperature, altitude, ground_pressure, ground_temperature))
   {
     return "Failed to read pressure/temperature/altitude";
+  }
+
+  if (pressure < MIN_PRESSURE)
+  {
+    return std::format("Pressure too low, {}Pa < {}Pa", pressure, MIN_PRESSURE);
   }
 
   if (ground_pressure != last_ground_pressure || ground_temperature != last_ground_temperature)

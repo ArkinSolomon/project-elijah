@@ -54,12 +54,13 @@ void core1::core1_main()
     {
       if (!did_land)
       {
+        payload_state_manager->log_message("Core 1 land detected");
         const tm original_land_time_inst = land_state.time_inst;
         land_state = payload_state_manager->get_state_history().front();
 
         if (did_land_previously)
         {
-          elijah_state_framework::log_serial_message("Using previous land time");
+          payload_state_manager->log_message("Using previous land time");
           land_state.time_inst = original_land_time_inst;
         }
         payload_state_manager->get_persistent_storage()->set_time(PayloadPersistentKey::LandTime, land_state.time_inst);
@@ -70,7 +71,7 @@ void core1::core1_main()
       payload_state_manager->log_message("Transmit!");
 
       const double apogee = payload_state_manager->get_flight_phase_controller()->get_apogee();
-      aprs::transmitAllData(land_state, static_cast<int32_t>(apogee));
+      aprs::transmit_all_data(land_state, static_cast<int32_t>(apogee));
       next_transmission_time = delayed_by_ms(get_absolute_time(), TRANSMISSION_DELAY_MS);
 
       payload_state_manager->log_message("Transmission complete!");

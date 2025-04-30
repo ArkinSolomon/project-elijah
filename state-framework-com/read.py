@@ -4,12 +4,13 @@ from typing import Any
 from framework.readable.readable_file import ReadableFile
 from framework.state_framework import StateFramework
 
-file = '/Users/arkinsolomon/Downloads/Payload - Primary/pdf'
-csv_path = '/Users/arkinsolomon/Downloads/dump.csv'
+#Override/launch-ce35d40b95f83bba
+file = '/Users/arkinsolomon/Desktop/payload'
+csv_path = '/Users/arkinsolomon/Downloads/ignore.csv'
 
 with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
     readable = ReadableFile(f)
-    f.read(9)
+    f.read(10)
     sf = StateFramework.generate_framework_configuration(readable)
 
     print(f'Reading data for {sf.application_name}')
@@ -18,7 +19,6 @@ with open(file, 'rb') as f, open(csv_path, 'w', newline='') as csv_file:
 
     var_defs = [(var_def.display_name, var_def.display_unit, var_def.variable_id) for var_def in sf.variable_definitions]
     writer.writerow([f'{var_def[0]} {var_def[1]}' for var_def in var_defs])
-
     last_seq: int = -1
     while True:
         packets_read, phase_changed, logs = sf.update(readable, 1)
